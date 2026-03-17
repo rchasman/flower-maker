@@ -1,92 +1,96 @@
-import { useState, useEffect, useCallback } from 'react'
-import { connect, getConnection, onConnectionChange } from './connection.ts'
-import type { ConnectionState } from './connection.ts'
+import { useState, useEffect } from "react";
+import { connect, getConnection, onConnectionChange } from "./connection.ts";
+import type { ConnectionState } from "./connection.ts";
 import type {
   DbConnection,
   FlowerSession,
-  FlowerSpec,
   User,
   FlowerOrder,
   ChatMessage,
   LeaderboardEntry,
   FitnessScore,
   Environment,
-} from './types.ts'
+} from "./types.ts";
 
 export function useSpacetimeDB() {
-  const [state, setState] = useState<ConnectionState>('disconnected')
-  const [conn, setConn] = useState<DbConnection | null>(getConnection())
+  const [state, setState] = useState<ConnectionState>("disconnected");
+  const [conn, setConn] = useState<DbConnection | null>(getConnection());
 
   useEffect(() => {
     const unsub = onConnectionChange((s, c) => {
-      setState(s)
-      setConn(c)
-    })
+      setState(s);
+      setConn(c);
+    });
     // Attempt connection on mount
-    connect().catch(() => {})
-    return () => { unsub() }
-  }, [])
+    connect().catch(() => {});
+    return () => {
+      unsub();
+    };
+  }, []);
 
-  return { state, conn }
+  return { state, conn };
 }
 
 // Generic hook for subscribing to a SpacetimeDB table
 function useTable<T>(
   conn: DbConnection | null,
-  tableName: keyof DbConnection['db'],
+  tableName: keyof DbConnection["db"],
 ): T[] {
-  const [rows, setRows] = useState<T[]>([])
+  const [rows, setRows] = useState<T[]>([]);
 
   useEffect(() => {
-    if (!conn) return
+    if (!conn) return;
     const table = conn.db[tableName] as unknown as {
-      iter(): Iterable<T>
-      onInsert(cb: (ctx: unknown, row: T) => void): void
-      onDelete(cb: (ctx: unknown, row: T) => void): void
-    }
+      iter(): Iterable<T>;
+      onInsert(cb: (ctx: unknown, row: T) => void): void;
+      onDelete(cb: (ctx: unknown, row: T) => void): void;
+    };
 
     // Load initial data
-    setRows([...table.iter()])
+    setRows([...table.iter()]);
 
     // Subscribe to changes
-    const refresh = () => setRows([...table.iter()])
-    table.onInsert(refresh)
-    table.onDelete(refresh)
-  }, [conn, tableName])
+    const refresh = () => setRows([...table.iter()]);
+    table.onInsert(refresh);
+    table.onDelete(refresh);
+  }, [conn, tableName]);
 
-  return rows
+  return rows;
 }
 
 export function useFlowerSessions(conn: DbConnection | null) {
-  return useTable<FlowerSession>(conn, 'flower_session')
+  return useTable<FlowerSession>(conn, "flower_session");
 }
 
 export function useUsers(conn: DbConnection | null) {
-  return useTable<User>(conn, 'user')
+  return useTable<User>(conn, "user");
 }
 
 export function useOrders(conn: DbConnection | null) {
-  return useTable<FlowerOrder>(conn, 'flower_order')
+  return useTable<FlowerOrder>(conn, "flower_order");
 }
 
 export function useChatMessages(conn: DbConnection | null) {
-  return useTable<ChatMessage>(conn, 'chat_message')
+  return useTable<ChatMessage>(conn, "chat_message");
 }
 
 export function useLeaderboard(conn: DbConnection | null) {
-  return useTable<LeaderboardEntry>(conn, 'leaderboard_entry')
+  return useTable<LeaderboardEntry>(conn, "leaderboard_entry");
 }
 
 export function useFitnessScores(conn: DbConnection | null) {
-  return useTable<FitnessScore>(conn, 'fitness_score')
+  return useTable<FitnessScore>(conn, "fitness_score");
 }
 
 export function useEnvironments(conn: DbConnection | null) {
-  return useTable<Environment>(conn, 'environment')
+  return useTable<Environment>(conn, "environment");
 }
 
-export function useMyIdentity(conn: DbConnection | null): string | null {
+export function useMyIdentity(_conn: DbConnection | null): string | null {
   // Identity comes from the connection token — stored in localStorage
-  const token = typeof window !== 'undefined' ? localStorage.getItem('spacetimedb_token') : null
-  return token ? 'self' : null // Placeholder — real identity comes from onConnect callback
+  const token =
+    typeof window !== "undefined"
+      ? localStorage.getItem("spacetimedb_token")
+      : null;
+  return token ? "self" : null; // Placeholder — real identity comes from onConnect callback
 }

@@ -14,17 +14,6 @@ const MODULE_NAME = process.env.SPACETIMEDB_MODULE ?? "flower-maker";
 const AGENT_NAME = process.env.AGENT_NAME ?? "flora-bot";
 const TICK_INTERVAL_MS = 10_000; // act every 10 seconds
 
-const FLOWER_PROMPTS = [
-  "a hardy alpine edelweiss with frost-resistant petals and deep roots",
-  "a bioluminescent deep-sea orchid with ethereal glow and pulsing veins",
-  "a massive tropical hibiscus with fiery red gradients and heavy pollen",
-  "a delicate desert wildflower that thrives in extreme heat with minimal water",
-  "a nocturnal moonflower with prismatic aura and moth-attracting fragrance",
-  "a storm-resistant ironweed with rigid stems and mycorrhizal root networks",
-  "a dancing lavender that sways dramatically in wind with sweet fragrance",
-  "a sunflower hybrid with maximum pollinator attraction and towering height",
-];
-
 async function main() {
   console.log(`[agent] ${AGENT_NAME} starting...`);
   console.log(`[agent] Connecting to ${SPACETIMEDB_URI} / ${MODULE_NAME}`);
@@ -32,7 +21,7 @@ async function main() {
   // Dynamic import — the module_bindings would be shared with the client
   // For now, use the SpacetimeDB SDK directly
   try {
-    const sdk = await import("spacetimedb");
+    const _sdk = await import("spacetimedb");
 
     // Connection would use the generated bindings:
     // const conn = sdk.DbConnection.builder()
@@ -86,10 +75,5 @@ Agent Loop (every ${TICK_INTERVAL_MS / 1000}s):
 `);
 }
 
-function randomPrompt(): string {
-  const idx = Math.floor(Math.random() * FLOWER_PROMPTS.length);
-  return FLOWER_PROMPTS[idx] ?? FLOWER_PROMPTS[0]!;
-}
-
-main();
+void main();
 describeAgentLoop();
