@@ -1,4 +1,7 @@
+pub mod animation;
 pub mod catalog;
-pub mod growth;
+pub mod environment;
+pub mod fitness;
 pub mod genetics;
 pub mod physics;
+pub mod templates;
