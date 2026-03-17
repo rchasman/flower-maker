@@ -79,7 +79,7 @@ export function PartEditor({ sessionId, specJson }: PartEditorProps) {
     if (!conn || Object.keys(overrides).length === 0) return;
 
     Object.entries(overrides).forEach(([path, value]) => {
-      conn.reducers["fork_part"]?.(sessionId, path, value, path);
+      conn.reducers.forkPart({ sessionId: BigInt(sessionId), partPath: path, overrideJson: value, forkedFrom: path });
     });
 
     setOverrides({});

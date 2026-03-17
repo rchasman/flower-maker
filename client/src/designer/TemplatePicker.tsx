@@ -53,7 +53,7 @@ export function TemplatePicker({ conn }: TemplatePickerProps) {
         <button
           key={t.name}
           onClick={() => {
-            conn?.reducers["create_session"]?.(t.name, 0, 0);
+            conn?.reducers.createSession({ prompt: t.name });
           }}
           disabled={!conn}
           style={{
