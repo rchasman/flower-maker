@@ -48,7 +48,7 @@ export async function connect(): Promise<DbConnection> {
     const builder = mod.DbConnection.builder() as any
     const conn = builder
       .withUri(SPACETIMEDB_URI)
-      .withModuleName(SPACETIMEDB_MODULE)
+      .withDatabaseName(SPACETIMEDB_MODULE)
       .withToken(savedToken)
       .onConnect((...args: unknown[]) => {
         const token = args[2] as string | undefined;
