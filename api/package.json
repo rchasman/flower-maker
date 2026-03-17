@@ -3,16 +3,20 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "dev": "portless api.flower-maker bun run --hot index.ts",
+    "check": "tsc --noEmit"
+  },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "catalog:"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.58",
-    "ai": "^6.0.116",
+    "ai": "catalog:",
     "hono": "^4.12.8",
-    "zod": "^4.3.6"
+    "zod": "catalog:"
   }
 }

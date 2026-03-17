@@ -1,0 +1,40 @@
+{
+  "name": "flower-maker",
+  "private": true,
+  "type": "module",
+  "workspaces": {
+    "packages": [
+      "client",
+      "api",
+      "agents"
+    ],
+    "catalog": {
+      "@types/bun": "latest",
+      "ai": "^6.0.116",
+      "typescript": "^5.9.3",
+      "zod": "^4.3.6",
+      "spacetimedb": "^2.0.4"
+    }
+  },
+  "scripts": {
+    "dev": "mkdir -p .logs && trap 'kill 0' EXIT && bun run dev:spacetime > .logs/spacetime.log 2>&1 & bun run dev:api > .logs/api.log 2>&1 & bun run dev:client",
+    "dev:client": "bun run --filter client dev",
+    "dev:api": "bun run --filter api dev",
+    "dev:spacetime": "portless db.flower-maker sh -c 'spacetime start --listen-addr 0.0.0.0:$PORT'",
+    "dev:agent": "bun run --filter flower-agents agent",
+    "build": "bun run --filter '*' build",
+    "check": "bun run --parallel check:type lint check:format",
+    "check:type": "bun run --filter '*' check",
+    "lint": "bunx oxlint --type-aware",
+    "lint:fix": "bunx oxlint --type-aware --fix",
+    "fmt": "bunx oxfmt .",
+    "check:format": "bunx oxfmt --check .",
+    "outdated": "bun outdated --filter '*'",
+    "update": "bun update --filter '*'"
+  },
+  "devDependencies": {
+    "oxfmt": "^0.41.0",
+    "oxlint": "^1.56.0",
+    "oxlint-tsgolint": "^0.17.0"
+  }
+}

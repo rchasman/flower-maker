@@ -8,30 +8,31 @@
  * The agent uses the same TS SDK as the browser client.
  */
 
-const SPACETIMEDB_URI = process.env.SPACETIMEDB_URI ?? 'ws://localhost:3000'
-const MODULE_NAME = process.env.SPACETIMEDB_MODULE ?? 'flower-maker'
-const AGENT_NAME = process.env.AGENT_NAME ?? 'flora-bot'
-const TICK_INTERVAL_MS = 10_000 // act every 10 seconds
+const SPACETIMEDB_URI =
+  process.env.SPACETIMEDB_URI ?? "ws://db.flower-maker.localhost:1355";
+const MODULE_NAME = process.env.SPACETIMEDB_MODULE ?? "flower-maker";
+const AGENT_NAME = process.env.AGENT_NAME ?? "flora-bot";
+const TICK_INTERVAL_MS = 10_000; // act every 10 seconds
 
 const FLOWER_PROMPTS = [
-  'a hardy alpine edelweiss with frost-resistant petals and deep roots',
-  'a bioluminescent deep-sea orchid with ethereal glow and pulsing veins',
-  'a massive tropical hibiscus with fiery red gradients and heavy pollen',
-  'a delicate desert wildflower that thrives in extreme heat with minimal water',
-  'a nocturnal moonflower with prismatic aura and moth-attracting fragrance',
-  'a storm-resistant ironweed with rigid stems and mycorrhizal root networks',
-  'a dancing lavender that sways dramatically in wind with sweet fragrance',
-  'a sunflower hybrid with maximum pollinator attraction and towering height',
-]
+  "a hardy alpine edelweiss with frost-resistant petals and deep roots",
+  "a bioluminescent deep-sea orchid with ethereal glow and pulsing veins",
+  "a massive tropical hibiscus with fiery red gradients and heavy pollen",
+  "a delicate desert wildflower that thrives in extreme heat with minimal water",
+  "a nocturnal moonflower with prismatic aura and moth-attracting fragrance",
+  "a storm-resistant ironweed with rigid stems and mycorrhizal root networks",
+  "a dancing lavender that sways dramatically in wind with sweet fragrance",
+  "a sunflower hybrid with maximum pollinator attraction and towering height",
+];
 
 async function main() {
-  console.log(`[agent] ${AGENT_NAME} starting...`)
-  console.log(`[agent] Connecting to ${SPACETIMEDB_URI} / ${MODULE_NAME}`)
+  console.log(`[agent] ${AGENT_NAME} starting...`);
+  console.log(`[agent] Connecting to ${SPACETIMEDB_URI} / ${MODULE_NAME}`);
 
   // Dynamic import — the module_bindings would be shared with the client
   // For now, use the SpacetimeDB SDK directly
   try {
-    const sdk = await import('spacetimedb')
+    const sdk = await import("spacetimedb");
 
     // Connection would use the generated bindings:
     // const conn = sdk.DbConnection.builder()
@@ -43,18 +44,21 @@ async function main() {
     //   })
     //   .build()
 
-    console.log(`[agent] SDK loaded. Waiting for generated bindings...`)
-    console.log(`[agent] Run 'spacetime generate' first, then update this script.`)
-    console.log(`[agent] Agent behavior:`)
-    console.log(`  1. Set name to "${AGENT_NAME}"`)
-    console.log(`  2. Every ${TICK_INTERVAL_MS / 1000}s: create a flower from random prompt`)
-    console.log(`  3. When 2+ designing sessions: merge the oldest two`)
-    console.log(`  4. When a merge reaches bouquet level: place order`)
-    console.log(`  5. Optimize for highest fitness in target environment`)
-
+    console.log(`[agent] SDK loaded. Waiting for generated bindings...`);
+    console.log(
+      `[agent] Run 'spacetime generate' first, then update this script.`,
+    );
+    console.log(`[agent] Agent behavior:`);
+    console.log(`  1. Set name to "${AGENT_NAME}"`);
+    console.log(
+      `  2. Every ${TICK_INTERVAL_MS / 1000}s: create a flower from random prompt`,
+    );
+    console.log(`  3. When 2+ designing sessions: merge the oldest two`);
+    console.log(`  4. When a merge reaches bouquet level: place order`);
+    console.log(`  5. Optimize for highest fitness in target environment`);
   } catch (err) {
-    console.error('[agent] Failed to load SDK:', err)
-    console.log('[agent] Install: cd agents && bun install')
+    console.error("[agent] Failed to load SDK:", err);
+    console.log("[agent] Install: cd agents && bun install");
   }
 }
 
@@ -79,13 +83,13 @@ Agent Loop (every ${TICK_INTERVAL_MS / 1000}s):
    call: place_order(sessionId, 'Agent', 'Auto-order by ${AGENT_NAME}')
 
 6. After order → start fresh
-`)
+`);
 }
 
 function randomPrompt(): string {
-  const idx = Math.floor(Math.random() * FLOWER_PROMPTS.length)
-  return FLOWER_PROMPTS[idx] ?? FLOWER_PROMPTS[0]!
+  const idx = Math.floor(Math.random() * FLOWER_PROMPTS.length);
+  return FLOWER_PROMPTS[idx] ?? FLOWER_PROMPTS[0]!;
 }
 
-main()
-describeAgentLoop()
+main();
+describeAgentLoop();
