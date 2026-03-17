@@ -6,6 +6,6 @@
     "agent": "bun run agent.ts"
   },
   "dependencies": {
-    "spacetimedb": "^2.0.4"
+    "spacetimedb": "catalog:"
   }
 }
