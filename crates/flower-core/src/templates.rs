@@ -580,7 +580,9 @@ pub fn tulip() -> FlowerTemplate {
     }
 }
 
-/// Returns the initial 5 flower templates. Expand to 50+ later.
+/// Returns all 50+ flower templates (5 initial + 41 extended).
 pub fn all_templates() -> Vec<FlowerTemplate> {
-    vec![rose(), sunflower(), daisy(), orchid(), tulip()]
+    let mut templates = vec![rose(), sunflower(), daisy(), orchid(), tulip()];
+    templates.extend(crate::templates_extended::extended_templates());
+    templates
 }

@@ -5,3 +5,4 @@ pub mod fitness;
 pub mod genetics;
 pub mod physics;
 pub mod templates;
+pub mod templates_extended;
