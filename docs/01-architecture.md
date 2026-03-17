@@ -1,142 +1,86 @@
 # Architecture
 
+## What This Is
+
+flower-maker is an interactive marketing site for a programmatic flowers ordering API. The real product is a flowers API for humans and AI agents to order flowers programmatically. This app is the experience layer.
+
 ## System Overview
 
-flower-maker is four processes that communicate through two channels:
-
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ Browser (per user)                                           │
-│                                                               │
-│   React UI ◄──── useTable() ────► SpacetimeDB TS SDK         │
-│      │                                  │                     │
-│      │                                  │ onInsert/onUpdate   │
-│      │                                  ▼                     │
-│      │                            WASM Module                 │
-│      │                          (rapier2d physics)            │
-│      │                                  │                     │
-│      │                                  │ SharedArrayBuffer   │
-│      │                                  ▼                     │
-│      └──────────────────────►  PixiJS Canvas                  │
-│                                                               │
-└──────────────────────┬────────────────────────────────────────┘
-                       │ WebSocket
-                       ▼
-              SpacetimeDB Server ◄────── Hono API (AI calls)
+Browser
+├── Homepage Grid (PixiJS)
+│   ├── Virtualized grid of ALL user zones
+│   ├── Live-updating via SpacetimeDB subscriptions
+│   ├── Your zone centered + highlighted
+│   └── Click to enter designer
+│
+├── Designer (React overlay)
+│   ├── Left: Template picker + AI chat
+│   ├── Center: PixiJS canvas with WASM physics
+│   ├── Right: Orders, parts editor, fitness, leaderboard, chat
+│   └── Bottom: Session selector bar
+│
+├── SpacetimeDB TS SDK (WebSocket)
+│   ├── useTable() hooks for reactive state
+│   └── onInsert/onUpdate → WASM bridge
+│
+└── WASM Module (Rust, rapier2d)
+    ├── Single-zone physics (your designer only)
+    ├── Collision detection → merge events
+    └── Bloom-in / wilt-out animations
+
+Server
+├── SpacetimeDB Module (Rust → WASM)
+│   ├── 12 tables: users, sessions, specs, orders, environments,
+│   │   fitness scores, leaderboards, chat, skins, emotes
+│   ├── 20+ reducers: CRUD, merge, fitness, gamification
+│   └── genetics::cross() for deterministic breeding
+│
+└── Hono API (Bun)
+    ├── POST /api/flower/generate (AI streams FlowerSpec)
+    ├── POST /api/flower/combine (AI describes merge result)
+    └── POST /api/flower/order (JSON payload — the real product)
 ```
 
-**Channel 1: SpacetimeDB WebSocket** — all game state flows here. Table subscriptions push every flower session, part definition, and order to every connected client in real time. Reducers are the only way to mutate state.
+## Key Design Choices
 
-**Channel 2: SharedArrayBuffer** — the WASM physics simulation writes sprite transforms (x, y, rotation, scale, sprite_id, color, alpha) into a double-buffered SharedArrayBuffer. PixiJS reads it every frame. No serialization, no copying — just typed array reads.
+**Per-player zones, not shared physics.** Each player has their own zone. No cross-player collision. The multiplayer aspect is observation — everyone sees everyone else's zones on the homepage grid.
 
-## Why This Split
+**rapier2d runs only in your designer.** The homepage grid is pure rendering from SpacetimeDB data. Physics only matters when you're dragging flowers together to merge.
 
-The naive approach would be: SpacetimeDB pushes positions, PixiJS renders them. But that means:
-- 60fps × N flowers × network round trips = unplayable latency
-- SpacetimeDB would need to run physics server-side for every client's viewport
+**AI decides merges, genetics scores fitness.** When two flowers collide, the AI generates what the combination becomes (narrative, adornments). The genetics system (`cross()`) breeds the child FlowerSpec deterministically. The fitness system scores the child against abstract environments for leaderboards.
 
-Instead, SpacetimeDB handles **logical state** (which flowers exist, what parts they have, who owns them) and the client handles **visual state** (where they are on screen, how they're moving, collision detection). SpacetimeDB is the source of truth for what exists. WASM is the source of truth for where it is right now.
-
-When a merge happens (detected client-side by WASM), the client calls a SpacetimeDB reducer to make it official. All other clients then receive the merge as a table update.
-
-## Process Responsibilities
-
-### SpacetimeDB Server (Rust → WASM)
-
-Runs inside SpacetimeDB's WASM sandbox. No filesystem, no network, no timers.
-
-- **Tables**: PartDefinition, FlowerSession, FlowerInstance, FlowerOrder
-- **Reducers**: CRUD operations, merge logic, catalog seeding
-- **Validation**: only the owner can modify their session, only valid part IDs, etc.
-- **Lifecycle**: track connected/disconnected clients
-
-### WASM Module (Rust → wasm-bindgen)
-
-Runs in the browser's WASM runtime. Has access to web APIs via web-sys.
-
-- **rapier2d world**: one rigid body per flower session, collision groups
-- **Collision detection**: when two flowers overlap for >500ms → emit merge event
-- **Buffer writer**: every tick, writes sprite transforms to SharedArrayBuffer
-- **Viewport culling**: sleeps physics bodies outside the visible area
-
-### PixiJS Renderer
-
-Pure rendering layer. No game logic.
-
-- Reads SharedArrayBuffer positions every frame
-- Groups sprites by texture atlas page for instanced drawing
-- Manages sprite containers (flower → parts hierarchy)
-- Handles viewport pan/zoom/scroll
-- Plays merge particle effects
-
-### React UI
-
-Standard React over the canvas.
-
-- SpacetimeDB `useTable()` hooks for reactive data
-- AI chat panel (streams flower specs)
-- Part catalog browser with fork/edit
-- Flower designer (assemble from parts)
-- Order flow and live order feed
-
-### Hono API (Bun)
-
-Stateless AI proxy. No database access.
-
-- `POST /api/flower/generate` — streams a new flower spec from an LLM
-- `POST /api/flower/combine` — generates what a merge should become
-- Uses Vercel AI SDK with AI Gateway for model routing
+**JSON order payloads are the product.** When you place an order, the output is a structured JSON payload demonstrating what a programmatic flower order looks like. This is the bridge to the flowers API.
 
 ## Data Flow: Creating a Flower
 
-```
-1. User describes flower in AI chat
-2. React calls POST /api/flower/generate
-3. Hono streams structured FlowerSpec via AI SDK streamText
-4. React receives spec, calls SpacetimeDB reducer: create_session(spec)
-5. SpacetimeDB creates FlowerSession + FlowerInstance rows
-6. All clients receive onInsert callback
-7. Each client's bridge.ts calls wasm.add_flower(id, x, y, sprite_id)
-8. WASM creates rapier2d rigid body
-9. Next physics tick: WASM writes position to SharedArrayBuffer
-10. Next render frame: PixiJS reads buffer, creates sprite, draws it
-```
+1. User types description in AI chat
+2. POST /api/flower/generate streams a FlowerSpec from Claude
+3. Client calls `create_session` reducer with the spec
+4. SpacetimeDB creates FlowerSession + FlowerSpec rows
+5. All clients receive the update via subscription
+6. Homepage grid shows a new zone thumbnail
+7. In the designer, WASM adds a physics body
 
-Time from reducer commit to pixel on every client's screen: ~50ms (one SpacetimeDB subscription update + one physics tick + one render frame).
+## Data Flow: Merging
 
-## Data Flow: Merging Flowers
+1. User drags flower A into flower B in their designer
+2. rapier2d detects collision (500ms threshold)
+3. Client calls POST /api/flower/combine with both specs
+4. AI generates arrangement description
+5. Client calls `merge_sessions` reducer
+6. Server: genetics::cross() creates child spec, archives parents
+7. Server: evaluates fitness in all environments, updates leaderboard
+8. All clients see: old flowers wilt out, new arrangement blooms in
 
-```
-1. WASM detects collision between flower A and flower B (overlap >500ms)
-2. wasm.get_merge_events() returns [{a: 42, b: 17}]
-3. JS game loop calls handleMerge(42, 17)
-4. handleMerge fetches flower data from SpacetimeDB local cache
-5. Calls POST /api/flower/combine with both flowers' part lists
-6. AI generates arrangement description + adornments
-7. JS calls SpacetimeDB reducer: merge_sessions(42, 17, arrangement_json)
-8. Reducer creates new combined session, archives originals
-9. All clients receive: onDelete(42), onDelete(17), onInsert(new_session)
-10. WASM removes old bodies, adds new combined body
-11. PixiJS plays merge particle effect at collision point
-12. New arrangement sprite appears
-```
+## Shared Rust Crate
 
-Only the client that detected the collision initiates the merge. If two clients detect the same collision simultaneously, SpacetimeDB's transactional reducers ensure only one merge succeeds (the second will fail because the original sessions are already archived).
+`flower-core` compiles into both the SpacetimeDB module and the browser WASM:
 
-## Shared Rust Crate: flower-core
-
-The `flower-core` crate is compiled to both targets:
-
-```
-flower-core (rlib)
-├── parts.rs        ─── compiled into ──→ server/spacetimedb (cdylib, WASM for SpacetimeDB)
-├── catalog.rs      ─── compiled into ──→ crates/client-wasm (cdylib, WASM for browser)
-├── combination.rs
-└── physics.rs
-
-Feature flags:
-  "spacetimedb" → adds SpacetimeDB derives (used by server)
-  "wasm"        → adds wasm-bindgen derives (used by client-wasm)
-```
-
-Same types, same combination logic, different framework annotations. The server uses flower-core to validate merges. The client uses it to predict merges locally.
+- `catalog.rs` — FlowerSpec type system (451 lines, 30+ enums)
+- `genetics.rs` — deterministic crossbreeding
+- `fitness.rs` — score FlowerSpec against Environment
+- `environment.rs` — 6 abstract environments (tropical, alpine, etc.)
+- `animation.rs` — bloom-in / wilt-out state machine
+- `templates.rs` — 50+ real flower types with default FlowerSpec values
+- `physics.rs` — world-level wind and light
