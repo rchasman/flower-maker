@@ -1,165 +1,170 @@
 # flower-maker
 
-A massively multiplayer flower combination game. Everyone connected sees everyone else's flowers on a shared infinite canvas. Drag flowers into each other to combine them — an AI decides what the combination becomes.
+An interactive marketing site for a programmatic flowers ordering API. Design bouquets, see everyone else designing live, and place real orders as JSON payloads.
 
-**1 flower** is a stem. **3 flowers** get wrapped. **10 flowers** become a bouquet. **50+** becomes an installation. Every merge is unique because an LLM generates the arrangement description, adornments, and visual identity based on what you combined.
-
-Orders — placed by humans or AI agents — appear as completed arrangements on the background canvas for everyone to see.
+The real product is a flowers API for humans and AI agents to order flowers programmatically. This app is the experience layer — where people and autonomous AI agents create, combine, and order flower arrangements in a massively multiplayer live grid.
 
 ## How It Works
 
 ```
-You pick flowers from a catalog of 50+ real types
-      |
-You drag them onto the shared canvas
-      |
-Other people's flowers are there too, physics-simulated
-      |
-When flowers collide and overlap → they merge
-      |
-AI generates what the combination becomes
-      |
-New arrangement appears — everyone sees it
-      |
-At any point, you can order what you've built
+HOMEPAGE — the live grid
+┌────┬────┬────┬────┬────┬────┐
+│    │    │    │    │    │    │  everyone's zones
+├────┼────┼────┼────┼────┼────┤  live-updating in real-time
+│    │ YOU│    │    │    │    │  yours is centered + highlighted
+├────┼────┼────┼────┼────┼────┤  click to enter your designer
+│    │    │    │    │    │    │
+└────┴────┴────┴────┴────┴────┘
+
+YOUR DESIGNER — zoom-to-edit
+┌─────────────────────────────┐
+│ Pick from 50+ flower types  │  each type rooted in real botany
+│ Drop into your zone         │  AI generates a unique FlowerSpec
+│ Drag flowers together       │  physics collision → merge
+│ AI decides the combination  │  arrangement progresses in levels
+│ Fork/tweak any part         │  forkable part catalog
+│ Place order → JSON payload  │  the real product
+└─────────────────────────────┘
 ```
+
+Each player has their own zone. No cross-player collision — the multiplayer aspect is observation. Everyone sees everyone else's zones live-updating. The swarm of hundreds of humans + AI agents simultaneously creating flowers is the spectacle.
+
+## The Merge Mechanic
+
+Drag your flowers together in your zone. Physics detects the collision. AI generates what the combination becomes.
+
+| Count | Level | Unlocks |
+|-------|-------|---------|
+| 1 | Stem | Single flower |
+| 2-3 | Group | Plastic wrap |
+| 4-6 | Bunch | Tissue paper, ribbon |
+| 7-9 | Arrangement | Vase |
+| 10+ | Bouquet | Full wrap, bow, card |
+| 20+ | Centerpiece | Stand, greenery |
+| 50+ | Installation | Structure, lighting |
+
+## The Metagame
+
+Genetic fitness scoring across abstract environments (tropical, alpine, desert, nocturnal, storm). When you merge flowers, `genetics::cross()` creates a child — deterministic, based on parent traits. The child gets scored against every environment. Leaderboards track the fittest flowers per environment.
+
+Over time, the population evolves through a swarm of human and AI minds combining flowers — emergent evolution.
+
+## Orders → JSON Payloads
+
+The real output. When you order a bouquet, the app generates a structured JSON payload:
+
+```json
+{
+  "api_version": "v1",
+  "order": {
+    "arrangement": {
+      "flowers": [
+        { "type": "rose", "color": "deep_red", "quantity": 6 },
+        { "type": "baby_breath", "color": "white", "quantity": 10 }
+      ],
+      "level": "bouquet",
+      "adornments": ["kraft_paper_wrap", "satin_ribbon"],
+      "description": "A romantic sunset bouquet..."
+    },
+    "metadata": {
+      "generation": 3,
+      "fitness_scores": { "temperate": 87.2, "tropical": 62.1 },
+      "lineage": ["Rose x Sunflower", "Hybrid x Baby's Breath"]
+    }
+  }
+}
+```
+
+This demonstrates what a programmatic flower order looks like for the flowers API.
 
 ## Stack
 
 | Layer | Tech | Role |
 |-------|------|------|
 | Multiplayer state | [SpacetimeDB](https://spacetimedb.com) (Rust) | Real-time table sync over WebSocket |
-| Client physics | Rust → WASM ([rapier2d](https://rapier.rs)) | Collision detection, merge events |
-| Rendering | [PixiJS](https://pixijs.com) + custom shaders | Background canvas with all flowers |
-| UI | React 19 + TypeScript | Designer, catalog, orders, AI chat |
+| Client physics | Rust WASM ([rapier2d](https://rapier.rs)) | Per-zone collision detection, merge events |
+| Rendering | [PixiJS](https://pixijs.com) + custom shaders | Homepage grid + designer canvas |
+| UI | React 19 + TypeScript | Designer, catalog, orders, social |
 | AI | [Vercel AI SDK](https://sdk.vercel.ai) + Anthropic | Flower generation, merge descriptions |
-| API | [Hono](https://hono.dev) on Bun | AI streaming endpoints |
+| API | [Hono](https://hono.dev) on Bun | AI streaming + order endpoints |
 
 ## Architecture
 
 ```
 Browser
-├── React UI (DOM overlay)
-│   ├── AI Chat ─── streams flower specs via json-render
-│   ├── Part Catalog ─── browse 50+ types, fork & customize
-│   ├── Designer ─── assemble flowers from parts
-│   └── Orders ─── submit, live feed of all orders
+├── Homepage: PixiJS grid of ALL user zones (virtualized, scrollable)
+│   └── Live-updating via SpacetimeDB subscriptions
+│
+├── Designer: React overlay (zoom-to-edit your zone)
+│   ├── Template picker, AI chat, part editor
+│   ├── rapier2d physics for merge collisions (WASM)
+│   └── Order → JSON payload
 │
 ├── SpacetimeDB TS SDK (WebSocket)
-│   ├── useTable() hooks → React state
-│   └── onUpdate callbacks → WASM bridge
+│   └── useTable() hooks for all game state
 │
-├── WASM Module (Rust, rapier2d)
-│   ├── Physics simulation (collision, merge detection)
-│   └── Writes sprite transforms → SharedArrayBuffer
-│
-└── PixiJS Canvas (fullscreen background)
-    ├── Reads SharedArrayBuffer each frame
-    ├── Instanced sprite rendering
-    └── Scrollable/zoomable infinite canvas
+└── WASM Module (single-zone physics only)
 
 Server
-├── SpacetimeDB Module (Rust → WASM)
-│   ├── Authoritative game state
-│   ├── Part catalog, sessions, orders
-│   └── Merge reducer (combine two sessions)
+├── SpacetimeDB (Rust WASM)
+│   ├── 8+ tables: users, sessions, specs, orders, fitness, leaderboards
+│   ├── 20+ reducers: CRUD, merge, fitness evaluation, gamification
+│   └── XP, skins, emotes, chat
 │
 └── Hono API (Bun)
-    ├── POST /api/flower/generate (AI stream)
-    └── POST /api/flower/combine (merge description)
+    ├── POST /api/flower/generate
+    ├── POST /api/flower/combine
+    └── POST /api/order
 ```
 
-## The Merge Mechanic
+## AI Agents
 
-The core game loop:
+Autonomous AI agents connect as SpacetimeDB clients alongside humans. They have their own zones on the grid, create flowers, merge them, optimize for fitness leaderboards, and place orders — demonstrating the API's agent-readiness.
 
-1. **Collision** — rapier2d detects two flowers overlapping for a threshold duration
-2. **AI combination** — the API sends the flower types to an LLM which generates what the combination should become (arrangement style, adornments, narrative)
-3. **SpacetimeDB merge** — a reducer creates the new combined session and archives the originals
-4. **Broadcast** — all connected clients see old flowers disappear and the new arrangement materialize
-5. **Progression** — arrangements level up as they absorb more flowers
+## Gamification
 
-| Count | Level | Unlocks |
-|-------|-------|---------|
-| 1 | Stem | Single flower |
-| 2-3 | Group | Plastic wrap, rubber band |
-| 4-6 | Bunch | Tissue paper, ribbon |
-| 7-9 | Arrangement | Vase, decorative paper |
-| 10+ | Bouquet | Full wrap, bow, card |
-| 20+ | Centerpiece | Stand, candelabra, greenery |
-| 50+ | Installation | Structure, lighting, space design |
-
-Each level transition triggers an AI call. The AI knows what flowers are in the arrangement and generates a description of what it's become — the adornments, the color harmony, the mood.
-
-## Part Catalog
-
-50+ real flower types seeded from botanical taxonomy. Every standard part can be **forked** by any user — modify the colors, physics, visuals — creating a personal variant that others can discover and adopt.
-
-Fork chains track lineage. Popular forks surface naturally.
+- XP from orders and merges
+- 5 skin tiers: Seedling → Petal Pusher → Garden Keeper → Bloom Lord → Eternal Flower
+- Emote unlocks at order milestones (3→Sparkle, 10→Rain, 25→Bloom, 50→Dance, 100→Pollinate)
+- Global chat with emotes
 
 ## Quickstart
 
 ```bash
-# Prerequisites: Rust, Bun, SpacetimeDB CLI
+# Prerequisites: Rust, Bun, SpacetimeDB CLI, wasm-pack
 
-# Start SpacetimeDB locally
 spacetime start
-
-# Publish the server module
 spacetime publish flower-maker --module-path server/spacetimedb
 
-# Generate TypeScript bindings
 spacetime generate --lang typescript \
   --out-dir client/src/spacetime/module_bindings \
   --module-path server/spacetimedb
 
-# Build the WASM client module
 cd crates/client-wasm && wasm-pack build --target web --out-dir ../../client/src/wasm/pkg
-
-# Install client dependencies
-cd client && bun install
-
-# Install API dependencies
-cd api && bun install
-
-# Start the API server
-cd api && bun run --hot index.ts
-
-# Start the client dev server
-cd client && bun run dev
+cd ../../client && bun install && bun run dev
+cd ../api && bun install && bun run --hot index.ts
 ```
 
 ## Project Structure
 
 ```
 flower-maker/
-├── Cargo.toml                  # Rust workspace
 ├── crates/
-│   ├── flower-core/            # Shared: part types, combination rules, physics presets
-│   └── client-wasm/            # Browser WASM: rapier2d simulation, SharedArrayBuffer
-├── server/
-│   └── spacetimedb/            # SpacetimeDB module: tables, reducers, catalog
-├── client/                     # React + PixiJS + SpacetimeDB TS SDK
-│   └── src/
-│       ├── spacetime/          # Connection, hooks, WASM bridge
-│       ├── canvas/             # PixiJS renderer, viewport, merge effects
-│       ├── wasm/               # WASM loader, game loop
-│       ├── ai/                 # Flower chat, merge prompts
-│       ├── catalog/            # Part browser, editor, fork UI
-│       ├── designer/           # Flower assembly UI
-│       ├── orders/             # Order flow, live feed
-│       └── session/            # Identity, connected users
-├── api/                        # Hono on Bun: AI streaming endpoints
-└── docs/                       # Architecture, schemas, guides
+│   ├── flower-core/            # Shared Rust: FlowerSpec types, genetics, fitness, templates
+│   └── client-wasm/            # Browser WASM: rapier2d physics, SharedArrayBuffer
+├── server/spacetimedb/         # SpacetimeDB module: tables, reducers, gamification
+├── client/src/                 # React + PixiJS: homepage grid, designer, orders, social
+├── api/                        # Hono on Bun: AI streaming + order endpoints
+└── docs/                       # Architecture docs
 ```
 
 ## Related Repos
 
 | Repo | What | Reused Here |
 |------|------|-------------|
-| `hyper-flowers` | Flower search & preview (Next.js, FloristOne API) | 50+ flower taxonomy, color/occasion/style metadata |
-| `flower-core` | AI flower image generator (FLUX models) | Prompt engineering system, flower data model |
-| `normalflowers` | ISLO manifesto & developer API vision | Order model, agent-first API design, pricing logic |
+| `hyper-flowers` | Flower search + preview (Next.js) | 50+ flower taxonomy for templates |
+| `flower-core` | AI flower image generator (FLUX) | Prompt engineering patterns |
+| `normalflowers` | ISLO manifesto + API vision | Order model, agent-first design |
 
 ## License
 
