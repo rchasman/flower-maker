@@ -128,7 +128,7 @@ flower-maker/
 │   │   └── src/
 │   │       ├── lib.rs
 │   │       ├── parts.rs        # Part types, kinds, metadata
-│   │       ├── catalog.rs      # 50+ flower definitions
+│   │       ├── catalog.rs      # 45 flower definitions
 │   │       ├── combination.rs  # Merge rules, level progression
 │   │       └── physics.rs      # Physics preset per archetype
 │   │

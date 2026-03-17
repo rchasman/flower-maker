@@ -4,7 +4,7 @@
 
 Each flower is a unique AI-generated FlowerSpec with 451 lines of type definitions covering 9 subsystems: petals, reproductive, structure, foliage, ornamentation, roots, aura, personality, and color gradients.
 
-The 50+ real flower types (rose, sunflower, daisy, etc.) serve as **templates** — pre-filled FlowerSpec defaults rooted in real botany. The AI uses these as starting points and varies from them.
+The 45 real flower types (rose, sunflower, daisy, etc.) serve as **templates** — pre-filled FlowerSpec defaults rooted in real botany. The AI uses these as starting points and varies from them.
 
 ## Templates
 
@@ -14,7 +14,7 @@ Each FlowerTemplate has:
 - Color variants, occasions, seasons
 - Physics archetype (Upright, Bushy, Delicate, Sturdy)
 
-Initial 5: Rose, Sunflower, Daisy, Orchid, Tulip. Expanding to 50+.
+Initial 5: Rose, Sunflower, Daisy, Orchid, Tulip. Expanding to 45.
 
 ## Forking
 

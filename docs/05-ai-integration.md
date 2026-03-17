@@ -7,7 +7,7 @@ AI is invoked at two moments:
 1. **New flower** — user describes what they want, AI generates a structured flower spec
 2. **Merge** — two flowers collide, AI generates what the combination becomes
 
-Both use Vercel AI SDK's `streamText` with structured output via `Output.object()`. Both stream through the Hono API layer.
+Both use Vercel AI SDK's `streamText` via the Hono API layer. The schema is embedded in the prompt (not `Output.object()` — structured output is a future upgrade).
 
 ## POST /api/flower/generate
 
@@ -19,13 +19,12 @@ User: "a dramatic arrangement of deep purple irises with silver accents"
 POST /api/flower/generate
        │
 streamText({
-  model: 'anthropic/claude-sonnet-4.6',
+  model: anthropic('claude-sonnet-4.6'),
   system: FLORIST_SYSTEM_PROMPT,
   prompt: userMessage,
-  output: Output.object({ schema: FlowerSpecSchema })
 })
        │
-Streamed to client as structured JSON (json-render)
+Streamed to client as plain text (FlowerSpec JSON)
        │
 Client creates SpacetimeDB session from the spec
 ```
@@ -38,7 +37,7 @@ const FlowerSpecSchema = z.object({
   flowers: z
     .array(
       z.object({
-        type: z.string().describe("Flower type from the 50+ catalog"),
+        type: z.string().describe("Flower type from the 45 catalog"),
         color: z.string().describe("Specific color variant"),
         quantity: z.number().int().min(1).max(20),
       }),
@@ -63,7 +62,7 @@ const FlowerSpecSchema = z.object({
 
 The AI acts as an expert florist with knowledge of:
 
-- All 50+ flower types and their characteristics
+- All 45 flower types and their characteristics
 - Color theory and harmony
 - Seasonal availability
 - Occasion appropriateness
@@ -101,10 +100,9 @@ Client gathers flower data from SpacetimeDB local cache:
 POST /api/flower/combine
        │
 streamText({
-  model: 'anthropic/claude-sonnet-4.6',
+  model: anthropic('claude-sonnet-4.6'),
   system: COMBINATION_SYSTEM_PROMPT,
-  prompt: combinationDetails,
-  output: Output.object({ schema: ArrangementSchema })
+  prompt: combinationDetails,  // schema shape embedded in prompt
 })
        │
 Client calls merge_sessions reducer with the AI result
@@ -133,10 +131,9 @@ const ArrangementSchema = z.object({
     .array(z.string())
     .describe("Physical additions: wrap type, ribbon, vase, stand, etc."),
   sprite_hints: z.object({
-    wrap_color: z.string().optional(),
-    accent_style: z.string().optional(),
     dominant_color: z.string(),
     secondary_color: z.string().optional(),
+    accent_style: z.string().optional(),
   }),
   harmony_note: z
     .string()

@@ -8,7 +8,7 @@ flower-maker is an interactive marketing site for a programmatic flowers orderin
 
 ```
 Browser
-├── Homepage Grid (PixiJS)
+├── Homepage Grid (React)
 │   ├── Virtualized grid of ALL user zones
 │   ├── Live-updating via SpacetimeDB subscriptions
 │   ├── Your zone centered + highlighted
@@ -16,7 +16,7 @@ Browser
 │
 ├── Designer (React overlay)
 │   ├── Left: Template picker + AI chat
-│   ├── Center: PixiJS canvas with WASM physics
+│   ├── Center: Canvas area (WASM physics scaffolded, PixiJS renderer pending)
 │   ├── Right: Orders, parts editor, fitness, leaderboard, chat
 │   └── Bottom: Session selector bar
 │
@@ -33,7 +33,7 @@ Server
 ├── SpacetimeDB Module (Rust → WASM)
 │   ├── 12 tables: users, sessions, specs, orders, environments,
 │   │   fitness scores, leaderboards, chat, skins, emotes
-│   ├── 20+ reducers: CRUD, merge, fitness, gamification
+│   ├── 17 reducers: CRUD, merge, fitness, gamification
 │   └── genetics::cross() for deterministic breeding
 │
 └── Hono API (Bun)
@@ -82,5 +82,5 @@ Server
 - `fitness.rs` — score FlowerSpec against Environment
 - `environment.rs` — 6 abstract environments (tropical, alpine, etc.)
 - `animation.rs` — bloom-in / wilt-out state machine
-- `templates.rs` — 50+ real flower types with default FlowerSpec values
+- `templates.rs` — 45 real flower types with default FlowerSpec values
 - `physics.rs` — world-level wind and light

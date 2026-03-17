@@ -18,7 +18,7 @@ HOMEPAGE — the live grid
 
 YOUR DESIGNER — zoom-to-edit
 ┌─────────────────────────────┐
-│ Pick from 50+ flower types  │  each type rooted in real botany
+│ Pick from 45 flower types   │  each type rooted in real botany
 │ Drop into your zone         │  AI generates a unique FlowerSpec
 │ Drag flowers together       │  physics collision → merge
 │ AI decides the combination  │  arrangement progresses in levels
@@ -108,7 +108,7 @@ Browser
 Server
 ├── SpacetimeDB (Rust WASM)
 │   ├── 8+ tables: users, sessions, specs, orders, fitness, leaderboards
-│   ├── 20+ reducers: CRUD, merge, fitness evaluation, gamification
+│   ├── 17 reducers: CRUD, merge, fitness evaluation, gamification
 │   └── XP, skins, emotes, chat
 │
 └── Hono API (Bun)
@@ -162,7 +162,7 @@ flower-maker/
 
 | Repo            | What                              | Reused Here                       |
 | --------------- | --------------------------------- | --------------------------------- |
-| `hyper-flowers` | Flower search + preview (Next.js) | 50+ flower taxonomy for templates |
+| `hyper-flowers` | Flower search + preview (Next.js) | 45 flower taxonomy for templates  |
 | `flower-core`   | AI flower image generator (FLUX)  | Prompt engineering patterns       |
 | `normalflowers` | ISLO manifesto + API vision       | Order model, agent-first design   |
 

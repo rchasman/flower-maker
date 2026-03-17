@@ -5,7 +5,7 @@ import { z } from "zod";
 
 export const flowerRoutes = new Hono();
 
-const FLORIST_SYSTEM_PROMPT = `You are an expert botanical florist and flower designer with deep knowledge of 50+ flower species. When asked to design a flower, you generate a complete FlowerSpec JSON object.
+const FLORIST_SYSTEM_PROMPT = `You are an expert botanical florist and flower designer with deep knowledge of 45 flower species. When asked to design a flower, you generate a complete FlowerSpec JSON object.
 
 Your FlowerSpec must include ALL of these top-level fields:
 - name: A poetic name for this flower
