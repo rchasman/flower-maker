@@ -2,22 +2,33 @@ import { useState } from 'react'
 import { useSession } from '../session/SessionProvider.tsx'
 import { useFlowerSessions } from '../spacetime/hooks.ts'
 import { TemplatePicker } from './TemplatePicker.tsx'
+import { FlowerChat } from '../ai/FlowerChat.tsx'
+import { OrderFlow } from '../orders/OrderFlow.tsx'
+import { OrderFeed } from '../orders/OrderFeed.tsx'
+import { FitnessBreakdown } from '../metagame/FitnessBreakdown.tsx'
+import { Leaderboard } from '../metagame/Leaderboard.tsx'
+import { Chat } from '../social/Chat.tsx'
+import { ConnectedUsers } from '../social/ConnectedUsers.tsx'
+import type { FlowerSession } from '../spacetime/types.ts'
 
 interface DesignerViewProps {
   onBackToGrid: () => void
 }
 
+type RightPanel = 'order' | 'fitness' | 'leaderboard' | 'chat'
+
 export function DesignerView({ onBackToGrid }: DesignerViewProps) {
   const { conn } = useSession()
   const sessions = useFlowerSessions(conn)
   const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [rightPanel, setRightPanel] = useState<RightPanel>('order')
 
-  // Filter to only your designing sessions (placeholder — needs identity)
   const mySessions = sessions.filter((s) => s.status === 'Designing')
+  const selected: FlowerSession | null = mySessions.find((s) => s.id === selectedId) ?? null
 
   return (
     <div style={{ width: '100%', height: '100%', display: 'flex' }}>
-      {/* Left sidebar — template picker */}
+      {/* Left sidebar — templates + AI chat */}
       <aside style={{
         width: '280px',
         borderRight: '1px solid #262626',
@@ -26,27 +37,33 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
         overflow: 'hidden',
       }}>
         <div style={{
-          padding: '1rem',
+          padding: '0.75rem 1rem',
           borderBottom: '1px solid #262626',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
         }}>
-          <h2 style={{ fontSize: '0.875rem', fontWeight: 500 }}>Templates</h2>
+          <h2 style={{ fontSize: '0.875rem', fontWeight: 500 }}>flower-maker</h2>
           <button
             onClick={onBackToGrid}
             style={{
-              background: 'none',
-              border: 'none',
-              color: '#737373',
-              cursor: 'pointer',
-              fontSize: '0.75rem',
+              background: 'none', border: 'none',
+              color: '#737373', cursor: 'pointer', fontSize: '0.75rem',
             }}
           >
             ← Grid
           </button>
         </div>
-        <TemplatePicker />
+
+        {/* Templates section */}
+        <div style={{ flex: '0 0 auto', maxHeight: '40%', overflow: 'auto' }}>
+          <TemplatePicker />
+        </div>
+
+        {/* AI chat section */}
+        <div style={{ flex: 1, minHeight: 0, borderTop: '1px solid #262626' }}>
+          <FlowerChat onFlowerGenerated={(spec) => console.log('[ai] flower generated:', spec.slice(0, 100))} />
+        </div>
       </aside>
 
       {/* Center — canvas area */}
@@ -54,13 +71,10 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
         position: 'relative',
       }}>
         <div style={{
-          width: '100%',
-          height: '100%',
+          flex: 1,
           background: '#0d0d0d',
           display: 'flex',
           alignItems: 'center',
@@ -68,22 +82,17 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
           color: '#404040',
           fontSize: '0.8125rem',
         }}>
-          Designer canvas with rapier2d physics will render here
+          PixiJS designer canvas · drag flowers to merge
         </div>
 
-        {/* My flowers list */}
+        {/* Bottom bar — my flowers */}
         {mySessions.length > 0 && (
           <div style={{
-            position: 'absolute',
-            bottom: '1rem',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            display: 'flex',
-            gap: '0.5rem',
-            background: '#1a1a1a',
             padding: '0.5rem',
-            borderRadius: '0.5rem',
-            border: '1px solid #262626',
+            borderTop: '1px solid #262626',
+            display: 'flex',
+            gap: '0.375rem',
+            overflow: 'auto',
           }}>
             {mySessions.map((s) => (
               <button
@@ -91,54 +100,89 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
                 onClick={() => setSelectedId(s.id)}
                 style={{
                   padding: '0.375rem 0.75rem',
-                  background: selectedId === s.id ? '#262626' : 'transparent',
-                  border: 'none',
+                  background: selectedId === s.id ? '#262626' : '#141414',
+                  border: `1px solid ${selectedId === s.id ? '#404040' : '#1a1a1a'}`,
                   borderRadius: '0.25rem',
                   color: selectedId === s.id ? '#e5e5e5' : '#737373',
                   cursor: 'pointer',
-                  fontSize: '0.75rem',
+                  fontSize: '0.6875rem',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
                 }}
               >
-                {s.prompt.slice(0, 15)}...
+                {s.prompt.slice(0, 20)}{s.prompt.length > 20 ? '...' : ''}
+                <span style={{ color: '#525252', marginLeft: '0.375rem' }}>
+                  lvl{s.arrangement_level}
+                </span>
               </button>
             ))}
           </div>
         )}
       </main>
 
-      {/* Right sidebar — properties / orders (placeholder) */}
+      {/* Right sidebar — contextual panels */}
       <aside style={{
         width: '280px',
         borderLeft: '1px solid #262626',
-        padding: '1rem',
         display: 'flex',
         flexDirection: 'column',
-        gap: '1rem',
+        overflow: 'hidden',
       }}>
-        <h2 style={{ fontSize: '0.875rem', fontWeight: 500 }}>Properties</h2>
-        {selectedId ? (
-          <p style={{ color: '#737373', fontSize: '0.75rem' }}>
-            Session #{selectedId} selected. Part editor + fitness display will render here.
-          </p>
-        ) : (
-          <p style={{ color: '#525252', fontSize: '0.75rem' }}>
-            Select a flower or pick a template to start.
-          </p>
-        )}
+        {/* Panel tabs */}
+        <div style={{
+          display: 'flex',
+          borderBottom: '1px solid #262626',
+        }}>
+          {([
+            ['order', 'Order'],
+            ['fitness', 'Fitness'],
+            ['leaderboard', 'Board'],
+            ['chat', 'Chat'],
+          ] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setRightPanel(key)}
+              style={{
+                flex: 1,
+                padding: '0.5rem',
+                background: rightPanel === key ? '#1a1a1a' : 'transparent',
+                border: 'none',
+                borderBottom: rightPanel === key ? '2px solid #525252' : '2px solid transparent',
+                color: rightPanel === key ? '#e5e5e5' : '#525252',
+                cursor: 'pointer',
+                fontSize: '0.6875rem',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
-        <div style={{ marginTop: 'auto' }}>
-          <button style={{
-            width: '100%',
-            padding: '0.625rem',
-            background: '#166534',
-            color: '#e5e5e5',
-            border: 'none',
-            borderRadius: '0.375rem',
-            cursor: 'pointer',
-            fontSize: '0.8125rem',
-          }}>
-            Place Order →
-          </button>
+        {/* Panel content */}
+        <div style={{ flex: 1, overflow: 'auto', padding: '0.75rem' }}>
+          {rightPanel === 'order' && <OrderFlow session={selected} />}
+          {rightPanel === 'fitness' && <FitnessBreakdown sessionId={selectedId} />}
+          {rightPanel === 'leaderboard' && <Leaderboard />}
+          {rightPanel === 'chat' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', height: '100%' }}>
+              <ConnectedUsers />
+              <div style={{ flex: 1, minHeight: 0, borderTop: '1px solid #1a1a1a', paddingTop: '0.5rem' }}>
+                <Chat />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Order feed at bottom */}
+        <div style={{
+          borderTop: '1px solid #262626',
+          maxHeight: '120px',
+          overflow: 'auto',
+        }}>
+          <div style={{ padding: '0.375rem 0.75rem', fontSize: '0.625rem', color: '#525252', fontWeight: 500 }}>
+            Recent Orders
+          </div>
+          <OrderFeed />
         </div>
       </aside>
     </div>
