@@ -9,13 +9,14 @@ import { FitnessBreakdown } from '../metagame/FitnessBreakdown.tsx'
 import { Leaderboard } from '../metagame/Leaderboard.tsx'
 import { Chat } from '../social/Chat.tsx'
 import { ConnectedUsers } from '../social/ConnectedUsers.tsx'
+import { PartEditor } from './PartEditor.tsx'
 import type { FlowerSession } from '../spacetime/types.ts'
 
 interface DesignerViewProps {
   onBackToGrid: () => void
 }
 
-type RightPanel = 'order' | 'fitness' | 'leaderboard' | 'chat'
+type RightPanel = 'order' | 'parts' | 'fitness' | 'leaderboard' | 'chat'
 
 export function DesignerView({ onBackToGrid }: DesignerViewProps) {
   const { conn } = useSession()
@@ -135,6 +136,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
         }}>
           {([
             ['order', 'Order'],
+            ['parts', 'Parts'],
             ['fitness', 'Fitness'],
             ['leaderboard', 'Board'],
             ['chat', 'Chat'],
@@ -161,6 +163,12 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
         {/* Panel content */}
         <div style={{ flex: 1, overflow: 'auto', padding: '0.75rem' }}>
           {rightPanel === 'order' && <OrderFlow session={selected} />}
+          {rightPanel === 'parts' && selected && (
+            <PartEditor sessionId={selected.id} specJson={'{}'} />
+          )}
+          {rightPanel === 'parts' && !selected && (
+            <div style={{ color: '#404040', fontSize: '0.6875rem' }}>Select a flower to edit parts.</div>
+          )}
           {rightPanel === 'fitness' && <FitnessBreakdown sessionId={selectedId} />}
           {rightPanel === 'leaderboard' && <Leaderboard />}
           {rightPanel === 'chat' && (
