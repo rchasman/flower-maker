@@ -10,7 +10,9 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-import { EmoteKind } from "./types";
+import {
+  EmoteKind,
+} from "./types";
 
 export default {
   get emote() {

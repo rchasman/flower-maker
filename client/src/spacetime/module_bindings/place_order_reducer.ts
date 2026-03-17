@@ -10,7 +10,9 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-import { OrderSource } from "./types";
+import {
+  OrderSource,
+} from "./types";
 
 export default {
   sessionId: __t.u64(),

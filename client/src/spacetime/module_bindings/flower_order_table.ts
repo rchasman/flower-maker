@@ -9,7 +9,10 @@ import {
   type AlgebraicTypeType as __AlgebraicTypeType,
   type Infer as __Infer,
 } from "spacetimedb";
-import { OrderSource } from "./types";
+import {
+  OrderSource,
+} from "./types";
+
 
 export default __t.row({
   id: __t.u64().primaryKey(),

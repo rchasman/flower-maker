@@ -68,266 +68,156 @@ import UserSkinRow from "./user_skin_table";
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema({
-  chat_message: __table(
-    {
-      name: "chat_message",
-      indexes: [
-        {
-          accessor: "id",
-          name: "chat_message_id_idx_btree",
-          algorithm: "btree",
-          columns: ["id"],
-        },
-      ],
-      constraints: [
-        { name: "chat_message_id_key", constraint: "unique", columns: ["id"] },
-      ],
-    },
-    ChatMessageRow,
-  ),
-  emote_unlock: __table(
-    {
-      name: "emote_unlock",
-      indexes: [
-        {
-          accessor: "id",
-          name: "emote_unlock_id_idx_btree",
-          algorithm: "btree",
-          columns: ["id"],
-        },
-      ],
-      constraints: [
-        { name: "emote_unlock_id_key", constraint: "unique", columns: ["id"] },
-      ],
-    },
-    EmoteUnlockRow,
-  ),
-  environment: __table(
-    {
-      name: "environment",
-      indexes: [
-        {
-          accessor: "id",
-          name: "environment_id_idx_btree",
-          algorithm: "btree",
-          columns: ["id"],
-        },
-      ],
-      constraints: [
-        { name: "environment_id_key", constraint: "unique", columns: ["id"] },
-      ],
-    },
-    EnvironmentRow,
-  ),
-  fitness_score: __table(
-    {
-      name: "fitness_score",
-      indexes: [
-        {
-          accessor: "idx_fitness_env",
-          name: "fitness_score_environment_id_idx_btree",
-          algorithm: "btree",
-          columns: ["environmentId"],
-        },
-        {
-          accessor: "id",
-          name: "fitness_score_id_idx_btree",
-          algorithm: "btree",
-          columns: ["id"],
-        },
-        {
-          accessor: "idx_fitness_session",
-          name: "fitness_score_session_id_idx_btree",
-          algorithm: "btree",
-          columns: ["sessionId"],
-        },
-      ],
-      constraints: [
-        { name: "fitness_score_id_key", constraint: "unique", columns: ["id"] },
-      ],
-    },
-    FitnessScoreRow,
-  ),
-  flower_order: __table(
-    {
-      name: "flower_order",
-      indexes: [
-        {
-          accessor: "id",
-          name: "flower_order_id_idx_btree",
-          algorithm: "btree",
-          columns: ["id"],
-        },
-        {
-          accessor: "idx_order_session",
-          name: "flower_order_session_id_idx_btree",
-          algorithm: "btree",
-          columns: ["sessionId"],
-        },
-      ],
-      constraints: [
-        { name: "flower_order_id_key", constraint: "unique", columns: ["id"] },
-      ],
-    },
-    FlowerOrderRow,
-  ),
-  flower_session: __table(
-    {
-      name: "flower_session",
-      indexes: [
-        {
-          accessor: "id",
-          name: "flower_session_id_idx_btree",
-          algorithm: "btree",
-          columns: ["id"],
-        },
-      ],
-      constraints: [
-        {
-          name: "flower_session_id_key",
-          constraint: "unique",
-          columns: ["id"],
-        },
-      ],
-    },
-    FlowerSessionRow,
-  ),
-  flower_spec: __table(
-    {
-      name: "flower_spec",
-      indexes: [
-        {
-          accessor: "session_id",
-          name: "flower_spec_session_id_idx_btree",
-          algorithm: "btree",
-          columns: ["sessionId"],
-        },
-      ],
-      constraints: [
-        {
-          name: "flower_spec_session_id_key",
-          constraint: "unique",
-          columns: ["sessionId"],
-        },
-      ],
-    },
-    FlowerSpecRow,
-  ),
-  leaderboard_entry: __table(
-    {
-      name: "leaderboard_entry",
-      indexes: [
-        {
-          accessor: "idx_lb_env",
-          name: "leaderboard_entry_environment_id_idx_btree",
-          algorithm: "btree",
-          columns: ["environmentId"],
-        },
-        {
-          accessor: "id",
-          name: "leaderboard_entry_id_idx_btree",
-          algorithm: "btree",
-          columns: ["id"],
-        },
-      ],
-      constraints: [
-        {
-          name: "leaderboard_entry_id_key",
-          constraint: "unique",
-          columns: ["id"],
-        },
-      ],
-    },
-    LeaderboardEntryRow,
-  ),
-  part_override: __table(
-    {
-      name: "part_override",
-      indexes: [
-        {
-          accessor: "id",
-          name: "part_override_id_idx_btree",
-          algorithm: "btree",
-          columns: ["id"],
-        },
-        {
-          accessor: "idx_override_session",
-          name: "part_override_session_id_idx_btree",
-          algorithm: "btree",
-          columns: ["sessionId"],
-        },
-      ],
-      constraints: [
-        { name: "part_override_id_key", constraint: "unique", columns: ["id"] },
-      ],
-    },
-    PartOverrideRow,
-  ),
-  skin_definition: __table(
-    {
-      name: "skin_definition",
-      indexes: [
-        {
-          accessor: "id",
-          name: "skin_definition_id_idx_btree",
-          algorithm: "btree",
-          columns: ["id"],
-        },
-      ],
-      constraints: [
-        {
-          name: "skin_definition_id_key",
-          constraint: "unique",
-          columns: ["id"],
-        },
-      ],
-    },
-    SkinDefinitionRow,
-  ),
-  user: __table(
-    {
-      name: "user",
-      indexes: [
-        {
-          accessor: "identity",
-          name: "user_identity_idx_btree",
-          algorithm: "btree",
-          columns: ["identity"],
-        },
-      ],
-      constraints: [
-        {
-          name: "user_identity_key",
-          constraint: "unique",
-          columns: ["identity"],
-        },
-      ],
-    },
-    UserRow,
-  ),
-  user_skin: __table(
-    {
-      name: "user_skin",
-      indexes: [
-        {
-          accessor: "id",
-          name: "user_skin_id_idx_btree",
-          algorithm: "btree",
-          columns: ["id"],
-        },
-        {
-          accessor: "idx_uskin_owner",
-          name: "user_skin_owner_idx_btree",
-          algorithm: "btree",
-          columns: ["owner"],
-        },
-      ],
-      constraints: [
-        { name: "user_skin_id_key", constraint: "unique", columns: ["id"] },
-      ],
-    },
-    UserSkinRow,
-  ),
+  chat_message: __table({
+    name: 'chat_message',
+    indexes: [
+      { accessor: 'id', name: 'chat_message_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'chat_message_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, ChatMessageRow),
+  emote_unlock: __table({
+    name: 'emote_unlock',
+    indexes: [
+      { accessor: 'id', name: 'emote_unlock_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'emote_unlock_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, EmoteUnlockRow),
+  environment: __table({
+    name: 'environment',
+    indexes: [
+      { accessor: 'id', name: 'environment_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'environment_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, EnvironmentRow),
+  fitness_score: __table({
+    name: 'fitness_score',
+    indexes: [
+      { accessor: 'idx_fitness_env', name: 'fitness_score_environment_id_idx_btree', algorithm: 'btree', columns: [
+        'environmentId',
+      ] },
+      { accessor: 'id', name: 'fitness_score_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'idx_fitness_session', name: 'fitness_score_session_id_idx_btree', algorithm: 'btree', columns: [
+        'sessionId',
+      ] },
+    ],
+    constraints: [
+      { name: 'fitness_score_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, FitnessScoreRow),
+  flower_order: __table({
+    name: 'flower_order',
+    indexes: [
+      { accessor: 'id', name: 'flower_order_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'idx_order_session', name: 'flower_order_session_id_idx_btree', algorithm: 'btree', columns: [
+        'sessionId',
+      ] },
+    ],
+    constraints: [
+      { name: 'flower_order_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, FlowerOrderRow),
+  flower_session: __table({
+    name: 'flower_session',
+    indexes: [
+      { accessor: 'id', name: 'flower_session_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'flower_session_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, FlowerSessionRow),
+  flower_spec: __table({
+    name: 'flower_spec',
+    indexes: [
+      { accessor: 'session_id', name: 'flower_spec_session_id_idx_btree', algorithm: 'btree', columns: [
+        'sessionId',
+      ] },
+    ],
+    constraints: [
+      { name: 'flower_spec_session_id_key', constraint: 'unique', columns: ['sessionId'] },
+    ],
+  }, FlowerSpecRow),
+  leaderboard_entry: __table({
+    name: 'leaderboard_entry',
+    indexes: [
+      { accessor: 'idx_lb_env', name: 'leaderboard_entry_environment_id_idx_btree', algorithm: 'btree', columns: [
+        'environmentId',
+      ] },
+      { accessor: 'id', name: 'leaderboard_entry_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'leaderboard_entry_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, LeaderboardEntryRow),
+  part_override: __table({
+    name: 'part_override',
+    indexes: [
+      { accessor: 'id', name: 'part_override_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'idx_override_session', name: 'part_override_session_id_idx_btree', algorithm: 'btree', columns: [
+        'sessionId',
+      ] },
+    ],
+    constraints: [
+      { name: 'part_override_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, PartOverrideRow),
+  skin_definition: __table({
+    name: 'skin_definition',
+    indexes: [
+      { accessor: 'id', name: 'skin_definition_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'skin_definition_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, SkinDefinitionRow),
+  user: __table({
+    name: 'user',
+    indexes: [
+      { accessor: 'identity', name: 'user_identity_idx_btree', algorithm: 'btree', columns: [
+        'identity',
+      ] },
+    ],
+    constraints: [
+      { name: 'user_identity_key', constraint: 'unique', columns: ['identity'] },
+    ],
+  }, UserRow),
+  user_skin: __table({
+    name: 'user_skin',
+    indexes: [
+      { accessor: 'id', name: 'user_skin_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'idx_uskin_owner', name: 'user_skin_owner_idx_btree', algorithm: 'btree', columns: [
+        'owner',
+      ] },
+    ],
+    constraints: [
+      { name: 'user_skin_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, UserSkinRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
@@ -348,7 +238,8 @@ const reducersSchema = __reducers(
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */
-const proceduresSchema = __procedures();
+const proceduresSchema = __procedures(
+);
 
 /** The remote SpacetimeDB module schema, both runtime and type information. */
 const REMOTE_MODULE = {
@@ -365,33 +256,24 @@ const REMOTE_MODULE = {
 >;
 
 /** The tables available in this remote SpacetimeDB module. Each table reference doubles as a query builder. */
-export const tables: __QueryBuilder<typeof tablesSchema.schemaType> =
-  __makeQueryBuilder(tablesSchema.schemaType);
+export const tables: __QueryBuilder<typeof tablesSchema.schemaType> = __makeQueryBuilder(tablesSchema.schemaType);
 
 /** The reducers available in this remote SpacetimeDB module. */
-export const reducers = __convertToAccessorMap(
-  reducersSchema.reducersType.reducers,
-);
+export const reducers = __convertToAccessorMap(reducersSchema.reducersType.reducers);
 
 /** The context type returned in callbacks for all possible events. */
 export type EventContext = __EventContextInterface<typeof REMOTE_MODULE>;
 /** The context type returned in callbacks for reducer events. */
-export type ReducerEventContext = __ReducerEventContextInterface<
-  typeof REMOTE_MODULE
->;
+export type ReducerEventContext = __ReducerEventContextInterface<typeof REMOTE_MODULE>;
 /** The context type returned in callbacks for subscription events. */
-export type SubscriptionEventContext = __SubscriptionEventContextInterface<
-  typeof REMOTE_MODULE
->;
+export type SubscriptionEventContext = __SubscriptionEventContextInterface<typeof REMOTE_MODULE>;
 /** The context type returned in callbacks for error events. */
 export type ErrorContext = __ErrorContextInterface<typeof REMOTE_MODULE>;
 /** The subscription handle type to manage active subscriptions created from a {@link SubscriptionBuilder}. */
 export type SubscriptionHandle = __SubscriptionHandleImpl<typeof REMOTE_MODULE>;
 
 /** Builder class to configure a new subscription to the remote SpacetimeDB instance. */
-export class SubscriptionBuilder extends __SubscriptionBuilderImpl<
-  typeof REMOTE_MODULE
-> {}
+export class SubscriptionBuilder extends __SubscriptionBuilderImpl<typeof REMOTE_MODULE> {}
 
 /** Builder class to configure a new database connection to the remote SpacetimeDB instance. */
 export class DbConnectionBuilder extends __DbConnectionBuilder<DbConnection> {}
@@ -400,11 +282,7 @@ export class DbConnectionBuilder extends __DbConnectionBuilder<DbConnection> {}
 export class DbConnection extends __DbConnectionImpl<typeof REMOTE_MODULE> {
   /** Creates a new {@link DbConnectionBuilder} to configure and connect to the remote SpacetimeDB instance. */
   static builder = (): DbConnectionBuilder => {
-    return new DbConnectionBuilder(
-      REMOTE_MODULE,
-      (config: __DbConnectionConfig<typeof REMOTE_MODULE>) =>
-        new DbConnection(config),
-    );
+    return new DbConnectionBuilder(REMOTE_MODULE, (config: __DbConnectionConfig<typeof REMOTE_MODULE>) => new DbConnection(config));
   };
 
   /** Creates a new {@link SubscriptionBuilder} to configure a subscription to the remote SpacetimeDB instance. */
@@ -412,3 +290,4 @@ export class DbConnection extends __DbConnectionImpl<typeof REMOTE_MODULE> {
     return new SubscriptionBuilder(this);
   };
 }
+

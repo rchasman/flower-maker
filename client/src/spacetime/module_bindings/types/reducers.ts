@@ -22,13 +22,9 @@ import UpdatePartOverrideReducer from "../update_part_override_reducer";
 
 export type CompleteSessionParams = __Infer<typeof CompleteSessionReducer>;
 export type CreateSessionParams = __Infer<typeof CreateSessionReducer>;
-export type DeletePartOverrideParams = __Infer<
-  typeof DeletePartOverrideReducer
->;
+export type DeletePartOverrideParams = __Infer<typeof DeletePartOverrideReducer>;
 export type EquipSkinParams = __Infer<typeof EquipSkinReducer>;
-export type EvaluateSessionFitnessParams = __Infer<
-  typeof EvaluateSessionFitnessReducer
->;
+export type EvaluateSessionFitnessParams = __Infer<typeof EvaluateSessionFitnessReducer>;
 export type ForkPartParams = __Infer<typeof ForkPartReducer>;
 export type MergeSessionsParams = __Infer<typeof MergeSessionsReducer>;
 export type PlaceOrderParams = __Infer<typeof PlaceOrderReducer>;
@@ -36,6 +32,5 @@ export type SendChatParams = __Infer<typeof SendChatReducer>;
 export type SendEmoteParams = __Infer<typeof SendEmoteReducer>;
 export type SetNameParams = __Infer<typeof SetNameReducer>;
 export type UpdateFlowerSpecParams = __Infer<typeof UpdateFlowerSpecReducer>;
-export type UpdatePartOverrideParams = __Infer<
-  typeof UpdatePartOverrideReducer
->;
+export type UpdatePartOverrideParams = __Infer<typeof UpdatePartOverrideReducer>;
+
