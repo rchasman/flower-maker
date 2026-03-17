@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use crate::catalog::*;
 use serde::{Deserialize, Serialize};
 
@@ -27,11 +28,12 @@ pub struct Mutation {
 
 /// Cross two flower specs to produce offspring. Deterministic given a seed.
 pub fn cross(parent_a: &FlowerSpec, parent_b: &FlowerSpec, seed: u64) -> FlowerSpec {
-    // Simple deterministic PRNG
-    let mut rng = seed;
-    let mut next = || -> f64 {
-        rng = rng.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-        (rng >> 33) as f64 / (1u64 << 31) as f64
+    // Simple deterministic PRNG (Cell for interior mutability so multiple closures can share)
+    let rng = Cell::new(seed);
+    let next = || -> f64 {
+        let v = rng.get().wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        rng.set(v);
+        (v >> 33) as f64 / (1u64 << 31) as f64
     };
 
     let pick_color = |a: &Color, b: &Color| -> Color {
