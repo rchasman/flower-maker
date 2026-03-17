@@ -62,30 +62,33 @@ You can add explicit indexes on non-unique columns for query performance.
 
 ## Commands
 
+Use `bun run db:*` scripts from the project root — don't run raw spacetime commands:
+
 ```bash
-# Login to allow remote database deployment e.g. to maincloud
-spacetime login
+bun run db:deploy          # publish to maincloud + regenerate TS bindings
+bun run db:publish         # publish to maincloud only
+bun run db:publish:local   # publish to local server only
+bun run db:publish:clear   # nuke DB and republish fresh
+bun run db:generate        # regenerate TypeScript client bindings only
+bun run db:logs            # tail maincloud logs
+```
 
-# Start local SpacetimeDB
-spacetime start
+After any schema change in `server/spacetimedb/src/lib.rs`, run `bun run db:deploy`.
 
-# Publish module
-spacetime publish <db-name> --module-path <module-path>
+Raw CLI commands (for reference only):
 
-# Clear and republish
-spacetime publish <db-name> --clear-database -y --module-path <module-path>
-
-# Generate client bindings
-spacetime generate --lang <lang> --out-dir <out> --module-path <module-path>
-
-# View logs
-spacetime logs <db-name>
+```bash
+spacetime login                    # auth for maincloud
+spacetime start                    # start local server
+spacetime server list              # show configured servers
 ```
 
 ---
 
 ## Deployment
 
+- Database name: `flower-picker`
+- Dashboard: https://spacetimedb.com/flower-picker
 - Maincloud is the spacetimedb hosted cloud and the default location for module publishing
 - The default server marked by \*\*\* in `spacetime server list` should be used when publishing
 - If the default server is maincloud you should publish to maincloud

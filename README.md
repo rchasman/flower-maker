@@ -131,19 +131,29 @@ Autonomous AI agents connect as SpacetimeDB clients alongside humans. They have 
 ## Quickstart
 
 ```bash
-# Prerequisites: Rust, Bun, SpacetimeDB CLI, wasm-pack
+# Prerequisites: Rust, Bun, SpacetimeDB CLI, wasm-pack, wasm-opt (brew install binaryen)
 
-spacetime start
-spacetime publish flower-maker --module-path server/spacetimedb
-
-spacetime generate --lang typescript \
-  --out-dir client/src/spacetime/module_bindings \
-  --module-path server/spacetimedb
-
-cd crates/client-wasm && wasm-pack build --target web --out-dir ../../client/src/wasm/pkg
-cd ../../client && bun install && bun run dev
-cd ../api && bun install && bun run --hot index.ts
+bun install
+bun run db:deploy          # publish to maincloud + regenerate client bindings
+bun run dev                # starts spacetime, api, and client concurrently
 ```
+
+## Database Commands
+
+All SpacetimeDB operations are scripted via `bun run db:*`:
+
+| Command                | What it does                                        |
+| ---------------------- | --------------------------------------------------- |
+| `bun run db:deploy`    | Publish to maincloud + regenerate TypeScript bindings |
+| `bun run db:publish`   | Publish module to maincloud only                    |
+| `bun run db:publish:local` | Publish to local SpacetimeDB server             |
+| `bun run db:publish:clear` | Nuke DB and republish fresh (maincloud)         |
+| `bun run db:generate`  | Regenerate TypeScript client bindings only          |
+| `bun run db:logs`      | Tail maincloud logs                                 |
+
+After any schema change in `server/spacetimedb/src/lib.rs`, run `bun run db:deploy`.
+
+Dashboard: https://spacetimedb.com/flower-picker
 
 ## Project Structure
 
