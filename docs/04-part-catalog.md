@@ -9,6 +9,7 @@ The 50+ real flower types (rose, sunflower, daisy, etc.) serve as **templates** 
 ## Templates
 
 Each FlowerTemplate has:
+
 - Botanically accurate FlowerSpec defaults
 - Color variants, occasions, seasons
 - Physics archetype (Upright, Bushy, Delicate, Sturdy)
@@ -23,9 +24,9 @@ Forks are per-session, identified by JSON path (e.g., `personality.hardiness`).
 
 ## Physics Archetypes
 
-| Archetype | Mass | Drag | Collider | Examples |
-|-----------|------|------|----------|----------|
-| Upright | 1.0 | 0.3 | 0.4 | Rose, Tulip, Iris |
-| Bushy | 1.5 | 0.5 | 0.7 | Hydrangea, Peony |
-| Delicate | 0.5 | 0.8 | 0.3 | Daisy, Freesia |
-| Sturdy | 2.0 | 0.2 | 0.6 | Sunflower, Protea |
+| Archetype | Mass | Drag | Collider | Examples          |
+| --------- | ---- | ---- | -------- | ----------------- |
+| Upright   | 1.0  | 0.3  | 0.4      | Rose, Tulip, Iris |
+| Bushy     | 1.5  | 0.5  | 0.7      | Hydrangea, Peony  |
+| Delicate  | 0.5  | 0.8  | 0.3      | Daisy, Freesia    |
+| Sturdy    | 2.0  | 0.2  | 0.6      | Sunflower, Protea |

@@ -8,12 +8,12 @@
 
 ## Language-Specific Rules
 
-| Language | Rule File |
-|----------|-----------|
-| **TypeScript/React** | `spacetimedb-typescript.mdc` (MANDATORY) |
-| **Rust** | `spacetimedb-rust.mdc` (MANDATORY) |
-| **C#** | `spacetimedb-csharp.mdc` (MANDATORY) |
-| **Migrating 1.0 → 2.0** | `spacetimedb-migration-2.0.mdc` |
+| Language                | Rule File                                |
+| ----------------------- | ---------------------------------------- |
+| **TypeScript/React**    | `spacetimedb-typescript.mdc` (MANDATORY) |
+| **Rust**                | `spacetimedb-rust.mdc` (MANDATORY)       |
+| **C#**                  | `spacetimedb-csharp.mdc` (MANDATORY)     |
+| **Migrating 1.0 → 2.0** | `spacetimedb-migration-2.0.mdc`          |
 
 ---
 
@@ -44,6 +44,7 @@ When implementing a feature that spans backend and client:
 ## Index System
 
 SpacetimeDB automatically creates indexes for:
+
 - Primary key columns
 - Columns marked as unique
 
@@ -52,6 +53,7 @@ You can add explicit indexes on non-unique columns for query performance.
 **Index names must be unique across your entire module (all tables).** If two tables have indexes with the same declared name → conflict error.
 
 **Schema ↔ Code coupling:**
+
 - Your query code references indexes by name
 - If you add/remove/rename an index in the schema, update all code that uses it
 - Removing an index without updating queries causes runtime errors
@@ -85,7 +87,7 @@ spacetime logs <db-name>
 ## Deployment
 
 - Maincloud is the spacetimedb hosted cloud and the default location for module publishing
-- The default server marked by *** in `spacetime server list` should be used when publishing
+- The default server marked by \*\*\* in `spacetime server list` should be used when publishing
 - If the default server is maincloud you should publish to maincloud
 - Publishing to maincloud is free of charge
 - When publishing to maincloud the database dashboard will be at the url: https://spacetimedb.com/@<username>/<database-name>
@@ -109,7 +111,6 @@ spacetime logs <db-name>
 - Do NOT touch unrelated files, configs, or dependencies
 - Do NOT invent new SpacetimeDB APIs — use only what exists in docs or this repo
 - Do NOT add restrictions the prompt didn't ask for — if "users can do X", implement X for all users
-
 
 # SpacetimeDB Rust SDK
 
@@ -289,6 +290,7 @@ if is_eraser { ... }
 The SpacetimeDB Rust client SDK uses blocking I/O. If mixing with async runtimes (Tokio, async-std), use `spawn_blocking` or run the SDK on a dedicated thread to avoid blocking the async executor.
 
 ### 14. Wrong Schedule Syntax
+
 ```rust
 // ❌ WRONG — `schedule` is not a valid table type
 #[table(name = tick_timer, schedule(reducer = tick, column = scheduled_at))]
@@ -296,24 +298,25 @@ The SpacetimeDB Rust client SDK uses blocking I/O. If mixing with async runtimes
 // ✅ CORRECT — `scheduled` is a valid table type
 #[table(name = tick_timer, scheduled(reducer = tick, column = scheduled_at))]
 ```
+
 ---
 
 ## 1) Common Mistakes Table
 
 ### Server-side errors
 
-| Wrong | Right | Error |
-|-------|-------|-------|
-| `#[derive(SpacetimeType)]` on `#[table]` | Remove it — macro handles this | Conflicting derive macros |
-| `ctx.db.player` (field access) | `ctx.db.player()` (method) | "no field `player` on type" |
-| `ctx.db.player().find(id)` | `ctx.db.player().id().find(&id)` | Must access via index |
-| `&mut ReducerContext` | `&ReducerContext` | Wrong context type |
-| Missing `use spacetimedb::Table;` | Add import | "no method named `insert`" |
-| `#[table(accessor = "my_table")]` | `#[table(accessor = my_table)]` | String literals not allowed |
-| Missing `public` on table | Add `public` flag | Clients can't subscribe |
-| `#[spacetimedb::reducer]` | `#[reducer]` after import | Wrong attribute path |
-| Network/filesystem in reducer | Use procedures instead | Sandbox violation |
-| Panic for expected errors | Return `Result<(), String>` | WASM instance destroyed |
+| Wrong                                    | Right                            | Error                       |
+| ---------------------------------------- | -------------------------------- | --------------------------- |
+| `#[derive(SpacetimeType)]` on `#[table]` | Remove it — macro handles this   | Conflicting derive macros   |
+| `ctx.db.player` (field access)           | `ctx.db.player()` (method)       | "no field `player` on type" |
+| `ctx.db.player().find(id)`               | `ctx.db.player().id().find(&id)` | Must access via index       |
+| `&mut ReducerContext`                    | `&ReducerContext`                | Wrong context type          |
+| Missing `use spacetimedb::Table;`        | Add import                       | "no method named `insert`"  |
+| `#[table(accessor = "my_table")]`        | `#[table(accessor = my_table)]`  | String literals not allowed |
+| Missing `public` on table                | Add `public` flag                | Clients can't subscribe     |
+| `#[spacetimedb::reducer]`                | `#[reducer]` after import        | Wrong attribute path        |
+| Network/filesystem in reducer            | Use procedures instead           | Sandbox violation           |
+| Panic for expected errors                | Return `Result<(), String>`      | WASM instance destroyed     |
 
 ---
 
@@ -336,10 +339,10 @@ pub struct Task { ... }
 pub struct User {
     #[primary_key]
     identity: Identity,
-    
+
     #[unique]
     username: Option<String>,
-    
+
     online: bool,
 }
 
@@ -348,7 +351,7 @@ pub struct Message {
     #[primary_key]
     #[auto_inc]
     id: u64,
-    
+
     sender: Identity,
     text: String,
     sent: Timestamp,
@@ -408,7 +411,7 @@ pub fn send_message(ctx: &ReducerContext, text: String) -> Result<(), String> {
     if text.is_empty() {
         return Err("Message cannot be empty".to_string());
     }
-    
+
     // Insert returns the inserted row
     let row = ctx.db.message().insert(Message {
         id: 0,  // auto-inc placeholder
@@ -416,7 +419,7 @@ pub fn send_message(ctx: &ReducerContext, text: String) -> Result<(), String> {
         text,
         sent: ctx.timestamp,
     });
-    
+
     log::info!("Message {} sent by {:?}", row.id, ctx.sender);
     Ok(())
 }
@@ -430,13 +433,13 @@ pub fn set_name(ctx: &ReducerContext, name: String) -> Result<(), String> {
     // Find existing row
     let user = ctx.db.user().identity().find(ctx.sender)
         .ok_or("User not found")?;
-    
+
     // ✅ CORRECT — spread existing row, override specific fields
     ctx.db.user().identity().update(User {
         name: Some(name),
         ..user  // Preserves identity, online, etc.
     });
-    
+
     Ok(())
 }
 
@@ -503,7 +506,7 @@ ctx.rng             // Deterministic RNG (use instead of rand)
 // Primary key lookup
 let user = ctx.db.user().identity().find(ctx.sender);
 
-// Unique column lookup  
+// Unique column lookup
 let user = ctx.db.user().username().find(&"alice".to_string());
 
 if let Some(user) = user {
@@ -519,10 +522,10 @@ pub struct Message {
     #[primary_key]
     #[auto_inc]
     id: u64,
-    
+
     #[index(btree)]
     room_id: u64,
-    
+
     text: String,
 }
 
@@ -589,7 +592,7 @@ pub struct CleanupJob {
     #[primary_key]
     #[auto_inc]
     scheduled_id: u64,
-    
+
     scheduled_at: ScheduleAt,
     target_id: u64,
 }
@@ -706,12 +709,12 @@ fn save_external_data(ctx: &mut ProcedureContext, url: String) -> Result<(), Str
 
 ### Key differences from reducers
 
-| Reducers | Procedures |
-|----------|------------|
+| Reducers                      | Procedures                        |
+| ----------------------------- | --------------------------------- |
 | `&ReducerContext` (immutable) | `&mut ProcedureContext` (mutable) |
-| Direct `ctx.db` access | Must use `ctx.with_tx()` |
-| No HTTP/network | HTTP allowed |
-| No return values | Can return data |
+| Direct `ctx.db` access        | Must use `ctx.with_tx()`          |
+| No HTTP/network               | HTTP allowed                      |
+| No return values              | Can return data                   |
 
 ---
 

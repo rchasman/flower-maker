@@ -44,7 +44,9 @@ export async function connect(): Promise<DbConnection> {
     const mod = await import("./module_bindings/index.ts");
     const savedToken = localStorage.getItem(TOKEN_KEY) ?? undefined;
 
-    const conn = mod.DbConnection.builder()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- SDK builder API varies by version
+    const builder = mod.DbConnection.builder() as any
+    const conn = builder
       .withUri(SPACETIMEDB_URI)
       .withModuleName(SPACETIMEDB_MODULE)
       .withToken(savedToken)

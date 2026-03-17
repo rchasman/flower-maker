@@ -33,15 +33,15 @@ Each player has their own zone. No cross-player collision — the multiplayer as
 
 Drag your flowers together in your zone. Physics detects the collision. AI generates what the combination becomes.
 
-| Count | Level | Unlocks |
-|-------|-------|---------|
-| 1 | Stem | Single flower |
-| 2-3 | Group | Plastic wrap |
-| 4-6 | Bunch | Tissue paper, ribbon |
-| 7-9 | Arrangement | Vase |
-| 10+ | Bouquet | Full wrap, bow, card |
-| 20+ | Centerpiece | Stand, greenery |
-| 50+ | Installation | Structure, lighting |
+| Count | Level        | Unlocks              |
+| ----- | ------------ | -------------------- |
+| 1     | Stem         | Single flower        |
+| 2-3   | Group        | Plastic wrap         |
+| 4-6   | Bunch        | Tissue paper, ribbon |
+| 7-9   | Arrangement  | Vase                 |
+| 10+   | Bouquet      | Full wrap, bow, card |
+| 20+   | Centerpiece  | Stand, greenery      |
+| 50+   | Installation | Structure, lighting  |
 
 ## The Metagame
 
@@ -79,14 +79,14 @@ This demonstrates what a programmatic flower order looks like for the flowers AP
 
 ## Stack
 
-| Layer | Tech | Role |
-|-------|------|------|
-| Multiplayer state | [SpacetimeDB](https://spacetimedb.com) (Rust) | Real-time table sync over WebSocket |
-| Client physics | Rust WASM ([rapier2d](https://rapier.rs)) | Per-zone collision detection, merge events |
-| Rendering | [PixiJS](https://pixijs.com) + custom shaders | Homepage grid + designer canvas |
-| UI | React 19 + TypeScript | Designer, catalog, orders, social |
-| AI | [Vercel AI SDK](https://sdk.vercel.ai) + Anthropic | Flower generation, merge descriptions |
-| API | [Hono](https://hono.dev) on Bun | AI streaming + order endpoints |
+| Layer             | Tech                                               | Role                                       |
+| ----------------- | -------------------------------------------------- | ------------------------------------------ |
+| Multiplayer state | [SpacetimeDB](https://spacetimedb.com) (Rust)      | Real-time table sync over WebSocket        |
+| Client physics    | Rust WASM ([rapier2d](https://rapier.rs))          | Per-zone collision detection, merge events |
+| Rendering         | [PixiJS](https://pixijs.com) + custom shaders      | Homepage grid + designer canvas            |
+| UI                | React 19 + TypeScript                              | Designer, catalog, orders, social          |
+| AI                | [Vercel AI SDK](https://sdk.vercel.ai) + Anthropic | Flower generation, merge descriptions      |
+| API               | [Hono](https://hono.dev) on Bun                    | AI streaming + order endpoints             |
 
 ## Architecture
 
@@ -160,11 +160,11 @@ flower-maker/
 
 ## Related Repos
 
-| Repo | What | Reused Here |
-|------|------|-------------|
+| Repo            | What                              | Reused Here                       |
+| --------------- | --------------------------------- | --------------------------------- |
 | `hyper-flowers` | Flower search + preview (Next.js) | 50+ flower taxonomy for templates |
-| `flower-core` | AI flower image generator (FLUX) | Prompt engineering patterns |
-| `normalflowers` | ISLO manifesto + API vision | Order model, agent-first design |
+| `flower-core`   | AI flower image generator (FLUX)  | Prompt engineering patterns       |
+| `normalflowers` | ISLO manifesto + API vision       | Order model, agent-first design   |
 
 ## License
 

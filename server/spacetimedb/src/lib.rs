@@ -235,20 +235,14 @@ pub fn init(ctx: &ReducerContext) {
         });
     }
 
-    // Seed environments for fitness leaderboards
-    let envs = vec![
-        ("Tropical", r#"{"name":"Tropical","light":0.9,"wind":0.2,"temperature":0.85,"moisture":0.9,"altitude":0.1,"pollinator_density":0.95}"#),
-        ("Alpine", r#"{"name":"Alpine","light":0.7,"wind":0.8,"temperature":0.2,"moisture":0.4,"altitude":0.95,"pollinator_density":0.3}"#),
-        ("Desert", r#"{"name":"Desert","light":1.0,"wind":0.5,"temperature":0.95,"moisture":0.05,"altitude":0.3,"pollinator_density":0.15}"#),
-        ("Temperate", r#"{"name":"Temperate","light":0.6,"wind":0.4,"temperature":0.5,"moisture":0.6,"altitude":0.2,"pollinator_density":0.7}"#),
-        ("Nocturnal", r#"{"name":"Nocturnal","light":0.05,"wind":0.1,"temperature":0.35,"moisture":0.7,"altitude":0.15,"pollinator_density":0.4}"#),
-        ("Storm", r#"{"name":"Storm","light":0.3,"wind":0.95,"temperature":0.4,"moisture":0.85,"altitude":0.2,"pollinator_density":0.1}"#),
-    ];
-    for (name, config) in &envs {
+    // Seed environments from flower-core canonical definitions
+    let envs = flower_core::environment::all_environments();
+    for env in &envs {
+        let config_json = serde_json::to_string(env).unwrap_or_default();
         ctx.db.environment().insert(Environment {
             id: 0,
-            name: name.to_string(),
-            config_json: config.to_string(),
+            name: env.name.clone(),
+            config_json,
             is_active: true,
             created_at: ctx.timestamp,
         });
@@ -434,8 +428,9 @@ pub fn place_order(ctx: &ReducerContext, session_id: u64, source: OrderSource, n
     // Check skin unlocks
     for skin in ctx.db.skin_definition().iter() {
         if new_xp >= skin.unlock_xp {
-            let already_unlocked = ctx.db.user_skin().iter()
-                .any(|us| us.owner == ctx.sender() && us.skin_id == skin.id);
+            let already_unlocked = ctx.db.user_skin().idx_uskin_owner()
+                .filter(&ctx.sender())
+                .any(|us| us.skin_id == skin.id);
             if !already_unlocked {
                 ctx.db.user_skin().insert(UserSkin {
                     id: 0,

@@ -10,14 +10,14 @@ All clients subscribe to the same tables. When any player creates a flower, merg
 
 ## What's Shared vs Local
 
-| Data | Shared (SpacetimeDB) | Local (client) |
-|------|---------------------|----------------|
-| Which flowers exist | Yes | — |
-| FlowerSpec data | Yes | — |
-| Canvas positions | Yes | — |
-| Physics simulation | — | Yes (your zone only) |
-| Merge detection | — | Yes (your zone only) |
-| Orders, chat, fitness | Yes | — |
+| Data                  | Shared (SpacetimeDB) | Local (client)       |
+| --------------------- | -------------------- | -------------------- |
+| Which flowers exist   | Yes                  | —                    |
+| FlowerSpec data       | Yes                  | —                    |
+| Canvas positions      | Yes                  | —                    |
+| Physics simulation    | —                    | Yes (your zone only) |
+| Merge detection       | —                    | Yes (your zone only) |
+| Orders, chat, fitness | Yes                  | —                    |
 
 ## Identity
 

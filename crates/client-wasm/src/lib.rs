@@ -5,6 +5,7 @@ mod animation;
 use flower_core::catalog::FlowerSpec;
 use flower_core::animation::FlowerAnimation;
 use flower_core::physics::GardenPhysics;
+use flower_core::templates::PhysicsArchetype;
 use simulation::PhysicsWorld;
 use merge::MergeTracker;
 use wasm_bindgen::prelude::*;
@@ -45,8 +46,17 @@ impl GardenSimulation {
                 flower.spec = spec;
                 self.world.set_position(flower.body_handle, x, y);
             } else {
-                let radius = 0.5; // base collider radius
-                let mass = 1.0;
+                // Derive physics from stem properties as a proxy for archetype
+                let is_heavy = spec.structure.stem.thickness > 0.4;
+                let is_tall = spec.structure.stem.height > 0.8;
+                let archetype = match (is_heavy, is_tall) {
+                    (true, true) => PhysicsArchetype::Sturdy,
+                    (true, false) => PhysicsArchetype::Bushy,
+                    (false, true) => PhysicsArchetype::Upright,
+                    (false, false) => PhysicsArchetype::Delicate,
+                };
+                let radius = archetype.collider_radius() as f32;
+                let mass = archetype.mass() as f32;
                 let handle = self.world.add_body(x, y, radius, mass, session_id);
                 self.flowers.push(FlowerInstance {
                     session_id,
@@ -90,14 +100,15 @@ impl GardenSimulation {
             flower.anim.tick(&flower.spec, dt64, wind);
         }
 
-        // Remove flowers whose wilt animation completed
-        let to_remove: Vec<u64> = self.flowers.iter()
-            .filter(|f| f.anim.is_gone())
-            .map(|f| f.session_id)
-            .collect();
-        for sid in to_remove {
-            self.remove_flower(sid);
-        }
+        // Remove flowers whose wilt animation completed (single pass)
+        self.flowers.retain(|f| {
+            if f.anim.is_gone() {
+                self.world.remove_body(f.body_handle);
+                false
+            } else {
+                true
+            }
+        });
 
         self.flowers.len() as u32
     }
