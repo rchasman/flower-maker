@@ -1,4 +1,5 @@
 use spacetimedb::{Identity, ReducerContext, SpacetimeType, Table, Timestamp};
+use spacetimedb::rand::Rng;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Custom Types
@@ -44,6 +45,10 @@ pub struct FlowerSession {
     prompt: String,
     canvas_x: f64,
     canvas_y: f64,
+    arrangement_level: u32,   // 1=stem, 3=group, 10=bouquet, etc.
+    flower_count: u32,
+    generation: u32,          // how many merges deep
+    fitness_json: String,     // serialized fitness scores per environment
 }
 
 #[spacetimedb::table(accessor = flower_spec, public)]
@@ -58,7 +63,7 @@ pub struct FlowerSpec {
 #[spacetimedb::table(
     accessor = part_override,
     public,
-    index(name = idx_override_session, btree(columns = [session_id]))
+    index(name = "idx_override_session", accessor = idx_override_session, btree(columns = [session_id]))
 )]
 pub struct FlowerPartOverride {
     #[primary_key]
@@ -74,7 +79,7 @@ pub struct FlowerPartOverride {
 #[spacetimedb::table(
     accessor = flower_order,
     public,
-    index(name = idx_order_session, btree(columns = [session_id]))
+    index(name = "idx_order_session", accessor = idx_order_session, btree(columns = [session_id]))
 )]
 pub struct FlowerOrder {
     #[primary_key]
@@ -85,6 +90,54 @@ pub struct FlowerOrder {
     ordered_at: Timestamp,
     source: OrderSource,
     note: Option<String>,
+}
+
+// ── Metagame: Environments, Fitness, Leaderboards ────────────────────────
+
+#[spacetimedb::table(accessor = environment, public)]
+pub struct Environment {
+    #[primary_key]
+    #[auto_inc]
+    id: u64,
+    name: String,
+    config_json: String,
+    is_active: bool,
+    created_at: Timestamp,
+}
+
+#[spacetimedb::table(
+    accessor = fitness_score,
+    public,
+    index(name = "idx_fitness_env", accessor = idx_fitness_env, btree(columns = [environment_id])),
+    index(name = "idx_fitness_session", accessor = idx_fitness_session, btree(columns = [session_id]))
+)]
+pub struct FitnessScore {
+    #[primary_key]
+    #[auto_inc]
+    id: u64,
+    session_id: u64,
+    environment_id: u64,
+    score: f64,
+    generation: u32,
+    evaluated_at: Timestamp,
+}
+
+#[spacetimedb::table(
+    accessor = leaderboard_entry,
+    public,
+    index(name = "idx_lb_env", accessor = idx_lb_env, btree(columns = [environment_id]))
+)]
+pub struct LeaderboardEntry {
+    #[primary_key]
+    #[auto_inc]
+    id: u64,
+    environment_id: u64,
+    session_id: u64,
+    owner: Identity,
+    score: f64,
+    rank: u32,
+    flower_name: String,
+    updated_at: Timestamp,
 }
 
 // ── Chat ──────────────────────────────────────────────────────────────────
@@ -117,7 +170,7 @@ pub struct SkinDefinition {
 #[spacetimedb::table(
     accessor = user_skin,
     public,
-    index(name = idx_uskin_owner, btree(columns = [owner]))
+    index(name = "idx_uskin_owner", accessor = idx_uskin_owner, btree(columns = [owner]))
 )]
 pub struct UserSkin {
     #[primary_key]
@@ -146,14 +199,14 @@ pub struct EmoteUnlock {
 fn require_session_owner(ctx: &ReducerContext, session_id: u64) -> Result<FlowerSession, String> {
     let session = ctx.db.flower_session().id().find(session_id)
         .ok_or_else(|| "Session not found".to_string())?;
-    if session.owner != ctx.sender {
+    if session.owner != ctx.sender() {
         return Err("Not the session owner".to_string());
     }
     Ok(session)
 }
 
 fn require_user(ctx: &ReducerContext) -> Result<User, String> {
-    ctx.db.user().identity().find(ctx.sender)
+    ctx.db.user().identity().find(ctx.sender())
         .ok_or_else(|| "User not found".to_string())
 }
 
@@ -182,19 +235,37 @@ pub fn init(ctx: &ReducerContext) {
         });
     }
 
-    // Seed default emote unlocks (Wave is free for everyone)
-    log::info!("flower-maker module initialized with {} skins", 5);
+    // Seed environments for fitness leaderboards
+    let envs = vec![
+        ("Tropical", r#"{"name":"Tropical","light":0.9,"wind":0.2,"temperature":0.85,"moisture":0.9,"altitude":0.1,"pollinator_density":0.95}"#),
+        ("Alpine", r#"{"name":"Alpine","light":0.7,"wind":0.8,"temperature":0.2,"moisture":0.4,"altitude":0.95,"pollinator_density":0.3}"#),
+        ("Desert", r#"{"name":"Desert","light":1.0,"wind":0.5,"temperature":0.95,"moisture":0.05,"altitude":0.3,"pollinator_density":0.15}"#),
+        ("Temperate", r#"{"name":"Temperate","light":0.6,"wind":0.4,"temperature":0.5,"moisture":0.6,"altitude":0.2,"pollinator_density":0.7}"#),
+        ("Nocturnal", r#"{"name":"Nocturnal","light":0.05,"wind":0.1,"temperature":0.35,"moisture":0.7,"altitude":0.15,"pollinator_density":0.4}"#),
+        ("Storm", r#"{"name":"Storm","light":0.3,"wind":0.95,"temperature":0.4,"moisture":0.85,"altitude":0.2,"pollinator_density":0.1}"#),
+    ];
+    for (name, config) in &envs {
+        ctx.db.environment().insert(Environment {
+            id: 0,
+            name: name.to_string(),
+            config_json: config.to_string(),
+            is_active: true,
+            created_at: ctx.timestamp,
+        });
+    }
+
+    log::info!("flower-maker module initialized with {} skins, {} environments", 5, envs.len());
 }
 
 #[spacetimedb::reducer(client_connected)]
 pub fn client_connected(ctx: &ReducerContext) {
-    match ctx.db.user().identity().find(ctx.sender) {
+    match ctx.db.user().identity().find(ctx.sender()) {
         Some(existing) => {
             ctx.db.user().identity().update(User { online: true, ..existing });
         }
         None => {
             ctx.db.user().insert(User {
-                identity: ctx.sender,
+                identity: ctx.sender(),
                 name: None,
                 online: true,
                 current_session_id: None,
@@ -206,18 +277,18 @@ pub fn client_connected(ctx: &ReducerContext) {
             // Everyone gets Wave emote free
             ctx.db.emote_unlock().insert(EmoteUnlock {
                 id: 0,
-                owner: ctx.sender,
+                owner: ctx.sender(),
                 emote: EmoteKind::Wave,
                 unlocked_at: ctx.timestamp,
             });
-            log::info!("New user connected: {:?}", ctx.sender);
+            log::info!("New user connected: {:?}", ctx.sender());
         }
     }
 }
 
 #[spacetimedb::reducer(client_disconnected)]
 pub fn client_disconnected(ctx: &ReducerContext) {
-    if let Some(existing) = ctx.db.user().identity().find(ctx.sender) {
+    if let Some(existing) = ctx.db.user().identity().find(ctx.sender()) {
         ctx.db.user().identity().update(User { online: false, ..existing });
     }
 }
@@ -233,17 +304,21 @@ pub fn create_session(ctx: &ReducerContext, prompt: String) -> Result<(), String
     }
 
     // Random canvas position via deterministic RNG
-    let x = (ctx.rng().gen::<u32>() % 10000) as f64 / 100.0;
-    let y = (ctx.rng().gen::<u32>() % 10000) as f64 / 100.0;
+    let x = (ctx.rng().r#gen::<u32>() % 10000) as f64 / 100.0;
+    let y = (ctx.rng().r#gen::<u32>() % 10000) as f64 / 100.0;
 
     let session = ctx.db.flower_session().insert(FlowerSession {
         id: 0,
-        owner: ctx.sender,
+        owner: ctx.sender(),
         created_at: ctx.timestamp,
         status: SessionStatus::Designing,
         prompt,
         canvas_x: x,
         canvas_y: y,
+        arrangement_level: 1,
+        flower_count: 1,
+        generation: 0,
+        fitness_json: "{}".to_string(),
     });
 
     ctx.db.flower_spec().insert(FlowerSpec {
@@ -253,7 +328,7 @@ pub fn create_session(ctx: &ReducerContext, prompt: String) -> Result<(), String
         updated_at: ctx.timestamp,
     });
 
-    if let Some(user) = ctx.db.user().identity().find(ctx.sender) {
+    if let Some(user) = ctx.db.user().identity().find(ctx.sender()) {
         ctx.db.user().identity().update(User {
             current_session_id: Some(session.id),
             ..user
@@ -331,7 +406,7 @@ pub fn place_order(ctx: &ReducerContext, session_id: u64, source: OrderSource, n
     ctx.db.flower_order().insert(FlowerOrder {
         id: 0,
         session_id,
-        orderer: ctx.sender,
+        orderer: ctx.sender(),
         ordered_at: ctx.timestamp,
         source,
         note,
@@ -343,7 +418,7 @@ pub fn place_order(ctx: &ReducerContext, session_id: u64, source: OrderSource, n
     });
 
     // Award XP for ordering
-    let mut user = require_user(ctx)?;
+    let user = require_user(ctx)?;
     let xp_award: u64 = 100;
     let new_xp = user.xp + xp_award;
     let new_level = (new_xp / 500) as u32 + 1;
@@ -360,11 +435,11 @@ pub fn place_order(ctx: &ReducerContext, session_id: u64, source: OrderSource, n
     for skin in ctx.db.skin_definition().iter() {
         if new_xp >= skin.unlock_xp {
             let already_unlocked = ctx.db.user_skin().iter()
-                .any(|us| us.owner == ctx.sender && us.skin_id == skin.id);
+                .any(|us| us.owner == ctx.sender() && us.skin_id == skin.id);
             if !already_unlocked {
                 ctx.db.user_skin().insert(UserSkin {
                     id: 0,
-                    owner: ctx.sender,
+                    owner: ctx.sender(),
                     skin_id: skin.id,
                     unlocked_at: ctx.timestamp,
                     equipped: false,
@@ -385,11 +460,11 @@ pub fn place_order(ctx: &ReducerContext, session_id: u64, source: OrderSource, n
     for (threshold, emote) in emote_milestones {
         if new_orders >= threshold {
             let already_has = ctx.db.emote_unlock().iter()
-                .any(|eu| eu.owner == ctx.sender && eu.emote == emote);
+                .any(|eu| eu.owner == ctx.sender() && eu.emote == emote);
             if !already_has {
                 ctx.db.emote_unlock().insert(EmoteUnlock {
                     id: 0,
-                    owner: ctx.sender,
+                    owner: ctx.sender(),
                     emote: emote.clone(),
                     unlocked_at: ctx.timestamp,
                 });
@@ -426,7 +501,7 @@ pub fn send_chat(ctx: &ReducerContext, text: String) -> Result<(), String> {
     }
     ctx.db.chat_message().insert(ChatMessage {
         id: 0,
-        sender: ctx.sender,
+        sender: ctx.sender(),
         text,
         sent_at: ctx.timestamp,
         emote: None,
@@ -438,14 +513,14 @@ pub fn send_chat(ctx: &ReducerContext, text: String) -> Result<(), String> {
 pub fn send_emote(ctx: &ReducerContext, emote: EmoteKind) -> Result<(), String> {
     // Verify the user owns this emote
     let has_emote = ctx.db.emote_unlock().iter()
-        .any(|eu| eu.owner == ctx.sender && eu.emote == emote);
+        .any(|eu| eu.owner == ctx.sender() && eu.emote == emote);
     if !has_emote {
         return Err("You haven't unlocked this emote yet".to_string());
     }
 
     ctx.db.chat_message().insert(ChatMessage {
         id: 0,
-        sender: ctx.sender,
+        sender: ctx.sender(),
         text: String::new(),
         sent_at: ctx.timestamp,
         emote: Some(emote),
@@ -470,14 +545,223 @@ pub fn set_name(ctx: &ReducerContext, name: String) -> Result<(), String> {
 pub fn equip_skin(ctx: &ReducerContext, skin_id: u64) -> Result<(), String> {
     // Unequip all current skins for this user
     for us in ctx.db.user_skin().iter() {
-        if us.owner == ctx.sender && us.equipped {
+        if us.owner == ctx.sender() && us.equipped {
             ctx.db.user_skin().id().update(UserSkin { equipped: false, ..us });
         }
     }
     // Equip the requested skin
     let target = ctx.db.user_skin().iter()
-        .find(|us| us.owner == ctx.sender && us.skin_id == skin_id)
+        .find(|us| us.owner == ctx.sender() && us.skin_id == skin_id)
         .ok_or_else(|| "You don't own this skin".to_string())?;
     ctx.db.user_skin().id().update(UserSkin { equipped: true, ..target });
+    Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Merge & Fitness
+// ═══════════════════════════════════════════════════════════════════════════
+
+fn arrangement_level_for_count(count: u32) -> u32 {
+    match count {
+        0..=1 => 1,
+        2..=3 => 2,
+        4..=6 => 3,
+        7..=9 => 4,
+        10..=19 => 5,
+        20..=49 => 6,
+        _ => 7,
+    }
+}
+
+#[spacetimedb::reducer]
+pub fn merge_sessions(
+    ctx: &ReducerContext,
+    session_a_id: u64,
+    session_b_id: u64,
+    ai_arrangement_json: String,
+) -> Result<(), String> {
+    // Both sessions must be owned by the caller and in Designing status
+    let session_a = require_session_owner(ctx, session_a_id)?;
+    let session_b = require_session_owner(ctx, session_b_id)?;
+
+    if session_a.status != SessionStatus::Designing {
+        return Err("Session A is not in designing state".to_string());
+    }
+    if session_b.status != SessionStatus::Designing {
+        return Err("Session B is not in designing state".to_string());
+    }
+
+    // Load specs
+    let spec_a = ctx.db.flower_spec().session_id().find(session_a_id)
+        .ok_or_else(|| "Spec A not found".to_string())?;
+    let spec_b = ctx.db.flower_spec().session_id().find(session_b_id)
+        .ok_or_else(|| "Spec B not found".to_string())?;
+
+    // Cross-breed using genetics (deterministic via ctx.rng seed)
+    let seed = ctx.rng().r#gen::<u64>();
+    let parent_a: flower_core::catalog::FlowerSpec = serde_json::from_str(&spec_a.spec_json)
+        .map_err(|e| format!("Failed to parse spec A: {e}"))?;
+    let parent_b: flower_core::catalog::FlowerSpec = serde_json::from_str(&spec_b.spec_json)
+        .map_err(|e| format!("Failed to parse spec B: {e}"))?;
+    let child = flower_core::genetics::cross(&parent_a, &parent_b, seed);
+    let child_json = serde_json::to_string(&child)
+        .map_err(|e| format!("Failed to serialize child: {e}"))?;
+
+    // Combined stats
+    let total_flowers = session_a.flower_count + session_b.flower_count;
+    let new_generation = session_a.generation.max(session_b.generation) + 1;
+    let new_level = arrangement_level_for_count(total_flowers);
+    let mid_x = (session_a.canvas_x + session_b.canvas_x) / 2.0;
+    let mid_y = (session_a.canvas_y + session_b.canvas_y) / 2.0;
+
+    // Create child session
+    let child_session = ctx.db.flower_session().insert(FlowerSession {
+        id: 0,
+        owner: ctx.sender(),
+        created_at: ctx.timestamp,
+        status: SessionStatus::Designing,
+        prompt: format!("{} × {}", session_a.prompt, session_b.prompt),
+        canvas_x: mid_x,
+        canvas_y: mid_y,
+        arrangement_level: new_level,
+        flower_count: total_flowers,
+        generation: new_generation,
+        fitness_json: "{}".to_string(),
+    });
+
+    ctx.db.flower_spec().insert(FlowerSpec {
+        session_id: child_session.id,
+        spec_json: child_json,
+        version: 0,
+        updated_at: ctx.timestamp,
+    });
+
+    // Archive parents
+    ctx.db.flower_session().id().update(FlowerSession {
+        status: SessionStatus::Complete,
+        ..session_a
+    });
+    ctx.db.flower_session().id().update(FlowerSession {
+        status: SessionStatus::Complete,
+        ..session_b
+    });
+
+    // Award XP for merging
+    if let Some(user) = ctx.db.user().identity().find(ctx.sender()) {
+        let new_xp = user.xp + 50;
+        ctx.db.user().identity().update(User {
+            xp: new_xp,
+            level: (new_xp / 500) as u32 + 1,
+            current_session_id: Some(child_session.id),
+            ..user
+        });
+    }
+
+    // Evaluate fitness in all active environments
+    evaluate_fitness_internal(ctx, child_session.id, &child);
+
+    log::info!(
+        "Merged sessions {} + {} → {} (gen {}, {} flowers, level {})",
+        session_a_id, session_b_id, child_session.id,
+        new_generation, total_flowers, new_level
+    );
+    Ok(())
+}
+
+fn evaluate_fitness_internal(
+    ctx: &ReducerContext,
+    session_id: u64,
+    spec: &flower_core::catalog::FlowerSpec,
+) {
+    let mut scores = serde_json::Map::new();
+
+    for env_row in ctx.db.environment().iter() {
+        if !env_row.is_active {
+            continue;
+        }
+        let env: flower_core::environment::Environment = match serde_json::from_str(&env_row.config_json) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+
+        let score = flower_core::fitness::evaluate(spec, &env);
+        scores.insert(env_row.name.clone(), serde_json::Value::from(score));
+
+        // Upsert fitness score
+        let existing = ctx.db.fitness_score().iter()
+            .find(|fs| fs.session_id == session_id && fs.environment_id == env_row.id);
+
+        match existing {
+            Some(fs) => {
+                ctx.db.fitness_score().id().update(FitnessScore {
+                    score,
+                    evaluated_at: ctx.timestamp,
+                    ..fs
+                });
+            }
+            None => {
+                ctx.db.fitness_score().insert(FitnessScore {
+                    id: 0,
+                    session_id,
+                    environment_id: env_row.id,
+                    score,
+                    generation: 0,
+                    evaluated_at: ctx.timestamp,
+                });
+            }
+        }
+
+        // Update leaderboard if score qualifies (top 50)
+        let lb_entries: Vec<LeaderboardEntry> = ctx.db.leaderboard_entry()
+            .idx_lb_env()
+            .filter(&env_row.id)
+            .collect();
+
+        let qualifies = lb_entries.len() < 50
+            || lb_entries.iter().any(|e| score > e.score);
+
+        if qualifies {
+            // Remove existing entry for this session if any
+            if let Some(existing_entry) = lb_entries.iter().find(|e| e.session_id == session_id) {
+                ctx.db.leaderboard_entry().id().delete(existing_entry.id);
+            } else if lb_entries.len() >= 50 {
+                // Remove lowest scoring entry
+                if let Some(lowest) = lb_entries.iter().min_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal)) {
+                    ctx.db.leaderboard_entry().id().delete(lowest.id);
+                }
+            }
+
+            ctx.db.leaderboard_entry().insert(LeaderboardEntry {
+                id: 0,
+                environment_id: env_row.id,
+                session_id,
+                owner: ctx.sender(),
+                score,
+                rank: 0, // computed on read
+                flower_name: spec.name.clone(),
+                updated_at: ctx.timestamp,
+            });
+        }
+    }
+
+    // Update fitness_json on the session
+    if let Some(session) = ctx.db.flower_session().id().find(session_id) {
+        let fitness_str = serde_json::Value::Object(scores).to_string();
+        ctx.db.flower_session().id().update(FlowerSession {
+            fitness_json: fitness_str,
+            ..session
+        });
+    }
+}
+
+#[spacetimedb::reducer]
+pub fn evaluate_session_fitness(ctx: &ReducerContext, session_id: u64) -> Result<(), String> {
+    let _session = require_session_owner(ctx, session_id)?;
+    let spec_row = ctx.db.flower_spec().session_id().find(session_id)
+        .ok_or_else(|| "Spec not found".to_string())?;
+    let spec: flower_core::catalog::FlowerSpec = serde_json::from_str(&spec_row.spec_json)
+        .map_err(|e| format!("Failed to parse spec: {e}"))?;
+
+    evaluate_fitness_internal(ctx, session_id, &spec);
     Ok(())
 }
