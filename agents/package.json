@@ -1,0 +1,11 @@
+{
+  "name": "flower-agents",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "agent": "bun run agent.ts"
+  },
+  "dependencies": {
+    "spacetimedb": "^2.0.4"
+  }
+}
