@@ -178,4 +178,3 @@ export const UserSkin = __t.object("UserSkin", {
   equipped: __t.bool(),
 });
 export type UserSkin = __Infer<typeof UserSkin>;
-

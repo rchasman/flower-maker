@@ -42,19 +42,19 @@ void main() {
 
     gl_FragColor = color;
 }
-`
+`;
 
 export interface MergeGlowUniforms {
-  uIntensity: number  // 0.0 - 1.0, animate from 1.0 to 0.0
-  uGlowColor: [number, number, number]  // RGB 0-1
-  uRadius: number  // glow spread, default 0.8
+  uIntensity: number; // 0.0 - 1.0, animate from 1.0 to 0.0
+  uGlowColor: [number, number, number]; // RGB 0-1
+  uRadius: number; // glow spread, default 0.8
 }
 
 export const MERGE_GLOW_DEFAULTS: MergeGlowUniforms = {
   uIntensity: 1.0,
-  uGlowColor: [1.0, 0.85, 0.4],  // warm gold
+  uGlowColor: [1.0, 0.85, 0.4], // warm gold
   uRadius: 0.8,
-}
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 2. PETAL TRANSLUCENCY — light passing through thin petals
@@ -90,17 +90,17 @@ void main() {
 
     gl_FragColor = color;
 }
-`
+`;
 
 export interface PetalTranslucencyUniforms {
-  uTranslucency: number  // 0.0 - 1.0
-  uLightDir: [number, number]  // normalized direction of virtual light
+  uTranslucency: number; // 0.0 - 1.0
+  uLightDir: [number, number]; // normalized direction of virtual light
 }
 
 export const PETAL_TRANSLUCENCY_DEFAULTS: PetalTranslucencyUniforms = {
   uTranslucency: 0.4,
-  uLightDir: [0.7, -0.7],  // top-right
-}
+  uLightDir: [0.7, -0.7], // top-right
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 3. DEPTH BLUR — subtle gaussian blur on distant flowers
@@ -130,42 +130,48 @@ void main() {
 
     gl_FragColor = color / total;
 }
-`
+`;
 
 export interface DepthBlurUniforms {
-  uBlurAmount: number  // 0.0 (sharp) to 5.0 (very blurry)
+  uBlurAmount: number; // 0.0 (sharp) to 5.0 (very blurry)
 }
 
 export const DEPTH_BLUR_DEFAULTS: DepthBlurUniforms = {
   uBlurAmount: 0.0,
-}
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Helper: create a PixiJS-compatible filter config object
 // ═══════════════════════════════════════════════════════════════════════════
 
 export interface ShaderConfig {
-  fragment: string
-  uniforms: Record<string, unknown>
+  fragment: string;
+  uniforms: Record<string, unknown>;
 }
 
-export function mergeGlowConfig(overrides?: Partial<MergeGlowUniforms>): ShaderConfig {
+export function mergeGlowConfig(
+  overrides?: Partial<MergeGlowUniforms>,
+): ShaderConfig {
   return {
     fragment: MERGE_GLOW_FRAG,
     uniforms: { ...MERGE_GLOW_DEFAULTS, ...overrides },
-  }
+  };
 }
 
-export function petalTranslucencyConfig(overrides?: Partial<PetalTranslucencyUniforms>): ShaderConfig {
+export function petalTranslucencyConfig(
+  overrides?: Partial<PetalTranslucencyUniforms>,
+): ShaderConfig {
   return {
     fragment: PETAL_TRANSLUCENCY_FRAG,
     uniforms: { ...PETAL_TRANSLUCENCY_DEFAULTS, ...overrides },
-  }
+  };
 }
 
-export function depthBlurConfig(overrides?: Partial<DepthBlurUniforms>): ShaderConfig {
+export function depthBlurConfig(
+  overrides?: Partial<DepthBlurUniforms>,
+): ShaderConfig {
   return {
     fragment: DEPTH_BLUR_FRAG,
     uniforms: { ...DEPTH_BLUR_DEFAULTS, ...overrides },
-  }
+  };
 }
