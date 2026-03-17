@@ -4,6 +4,7 @@ import type { ConnectionState } from "./connection.ts";
 import type {
   DbConnection,
   FlowerSession,
+  FlowerSpec,
   User,
   FlowerOrder,
   ChatMessage,
@@ -60,6 +61,10 @@ function useTable<T>(
 
 export function useFlowerSessions(conn: DbConnection | null) {
   return useTable<FlowerSession>(conn, "flower_session");
+}
+
+export function useFlowerSpecs(conn: DbConnection | null) {
+  return useTable<FlowerSpec>(conn, "flower_spec");
 }
 
 export function useUsers(conn: DbConnection | null) {

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSession } from "../session/SessionProvider.tsx";
-import { useFlowerSessions } from "../spacetime/hooks.ts";
+import { useFlowerSessions, useFlowerSpecs } from "../spacetime/hooks.ts";
 import { TemplatePicker } from "./TemplatePicker.tsx";
 import { FlowerChat } from "../ai/FlowerChat.tsx";
 import { OrderFlow } from "../orders/OrderFlow.tsx";
@@ -10,6 +10,9 @@ import { Leaderboard } from "../metagame/Leaderboard.tsx";
 import { Chat } from "../social/Chat.tsx";
 import { ConnectedUsers } from "../social/ConnectedUsers.tsx";
 import { PartEditor } from "./PartEditor.tsx";
+import { loadWasm } from "../wasm/loader.ts";
+import { startLoop, stopLoop } from "../wasm/loop.ts";
+import { wireToWasm, handleMerge } from "../spacetime/bridge.ts";
 import type { FlowerSession } from "../spacetime/types.ts";
 
 interface DesignerViewProps {
@@ -21,12 +24,48 @@ type RightPanel = "order" | "parts" | "fitness" | "leaderboard" | "chat";
 export function DesignerView({ onBackToGrid }: DesignerViewProps) {
   const { conn } = useSession();
   const sessions = useFlowerSessions(conn);
+  const specs = useFlowerSpecs(conn);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [rightPanel, setRightPanel] = useState<RightPanel>("order");
+  const [flowerCount, setFlowerCount] = useState(0);
+  const wasmInitialized = useRef(false);
 
   const mySessions = sessions.filter(s => s.status === "Designing");
   const selected: FlowerSession | null =
     mySessions.find(s => s.id === selectedId) ?? null;
+
+  // Look up the FlowerSpec for the selected session
+  const selectedSpec = selected
+    ? specs.find(s => s.session_id === selected.id)
+    : null;
+
+  // Initialize WASM simulation and game loop
+  useEffect(() => {
+    if (!conn || wasmInitialized.current) return;
+    wasmInitialized.current = true;
+
+    loadWasm().then(sim => {
+      wireToWasm(conn, sim);
+      startLoop(
+        sim,
+        event => {
+          handleMerge(conn, event.a, event.b);
+        },
+        data => {
+          setFlowerCount(data.length);
+        },
+      );
+    });
+
+    return () => {
+      stopLoop();
+    };
+  }, [conn]);
+
+  // Wire FlowerChat output to create_session reducer
+  const handleFlowerGenerated = (specJson: string) => {
+    conn?.reducers["create_session"]?.(specJson, 0, 0);
+  };
 
   return (
     <div style={{ width: "100%", height: "100%", display: "flex" }}>
@@ -68,16 +107,12 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
 
         {/* Templates section */}
         <div style={{ flex: "0 0 auto", maxHeight: "40%", overflow: "auto" }}>
-          <TemplatePicker />
+          <TemplatePicker conn={conn} />
         </div>
 
         {/* AI chat section */}
         <div style={{ flex: 1, minHeight: 0, borderTop: "1px solid #262626" }}>
-          <FlowerChat
-            onFlowerGenerated={spec =>
-              console.log("[ai] flower generated:", spec.slice(0, 100))
-            }
-          />
+          <FlowerChat onFlowerGenerated={handleFlowerGenerated} />
         </div>
       </aside>
 
@@ -101,7 +136,9 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
             fontSize: "0.8125rem",
           }}
         >
-          PixiJS designer canvas · drag flowers to merge
+          {flowerCount > 0
+            ? `${flowerCount} flowers in simulation · PixiJS renderer pending`
+            : "PixiJS designer canvas · drag flowers to merge"}
         </div>
 
         {/* Bottom bar — my flowers */}
@@ -194,7 +231,10 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
         <div style={{ flex: 1, overflow: "auto", padding: "0.75rem" }}>
           {rightPanel === "order" && <OrderFlow session={selected} />}
           {rightPanel === "parts" && selected && (
-            <PartEditor sessionId={selected.id} specJson={"{}"} />
+            <PartEditor
+              sessionId={selected.id}
+              specJson={selectedSpec?.spec_json ?? "{}"}
+            />
           )}
           {rightPanel === "parts" && !selected && (
             <div style={{ color: "#404040", fontSize: "0.6875rem" }}>

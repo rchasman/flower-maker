@@ -1,3 +1,5 @@
+import type { DbConnection } from "../spacetime/types.ts";
+
 const TEMPLATES = [
   {
     name: "Rose",
@@ -31,7 +33,11 @@ const TEMPLATES = [
   },
 ];
 
-export function TemplatePicker() {
+interface TemplatePickerProps {
+  conn: DbConnection | null;
+}
+
+export function TemplatePicker({ conn }: TemplatePickerProps) {
   return (
     <div
       style={{
@@ -47,9 +53,9 @@ export function TemplatePicker() {
         <button
           key={t.name}
           onClick={() => {
-            // TODO: call create_session reducer with template name as prompt
-            console.log(`[template] selected: ${t.name}`);
+            conn?.reducers["create_session"]?.(t.name, 0, 0);
           }}
+          disabled={!conn}
           style={{
             display: "flex",
             alignItems: "center",
@@ -58,9 +64,10 @@ export function TemplatePicker() {
             background: "#141414",
             border: "1px solid #1a1a1a",
             borderRadius: "0.375rem",
-            cursor: "pointer",
+            cursor: conn ? "pointer" : "not-allowed",
             textAlign: "left",
             color: "#e5e5e5",
+            opacity: conn ? 1 : 0.5,
             transition: "border-color 0.15s",
           }}
         >
@@ -99,7 +106,7 @@ export function TemplatePicker() {
           textAlign: "center",
         }}
       >
-        5 of 50+ templates · more coming soon
+        5 of 45 templates · more coming soon
       </div>
     </div>
   );
