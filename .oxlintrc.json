@@ -1,0 +1,52 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["unicorn", "typescript", "oxc", "import"],
+  "rules": {
+    "no-nested-ternary": "error",
+    "no-eval": "warn",
+    "no-unused-vars": "deny",
+    "no-constant-condition": "warn",
+    "no-constant-binary-expression": "warn",
+    "no-debugger": "warn",
+    "no-duplicate-case": "warn",
+    "no-empty-pattern": "warn",
+    "no-self-assign": "warn",
+    "no-unsafe-finally": "warn",
+    "no-unsafe-optional-chaining": "warn",
+    "no-unused-expressions": "warn",
+    "no-useless-catch": "warn",
+    "no-useless-escape": "warn",
+    "no-useless-rename": "warn",
+    "use-isnan": "warn",
+    "valid-typeof": "warn",
+    "oxc/bad-comparison-sequence": "warn",
+    "oxc/bad-min-max-func": "warn",
+    "oxc/const-comparisons": "warn",
+    "oxc/double-comparisons": "warn",
+    "oxc/erasing-op": "warn",
+    "oxc/missing-throw": "warn",
+    "oxc/only-used-in-recursion": "warn",
+    "oxc/uninvoked-array-callback": "warn",
+    "typescript/no-duplicate-enum-values": "warn",
+    "typescript/no-explicit-any": "deny",
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-spread": "warn",
+    "typescript/no-useless-empty-export": "warn",
+    "typescript/prefer-as-const": "warn",
+    "unicorn/no-await-in-promise-methods": "warn",
+    "unicorn/no-empty-file": "warn",
+    "unicorn/no-useless-spread": "warn",
+    "unicorn/no-useless-undefined": "warn",
+    "unicorn/prefer-node-protocol": "warn",
+    "import/no-cycle": "error"
+  },
+  "env": {
+    "browser": true,
+    "es2024": true
+  },
+  "globals": {
+    "Bun": "readonly",
+    "console": "readonly",
+    "process": "readonly"
+  }
+}

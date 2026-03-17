@@ -1,0 +1,6 @@
+{
+  "arrowParens": "avoid",
+  "printWidth": 80,
+  "sortPackageJson": false,
+  "ignorePatterns": ["target/", "dist/", "build/", "node_modules/", ".logs/"]
+}
