@@ -1088,9 +1088,17 @@ export function createArrangementPlan(
     const stemColor = stemData?.color ?? 0x2d5a27;
     const stemHalfW = Math.max(0.03, Math.min(0.08, stemThickness * 0.08));
     const stemCurvature = stemCurvatureBase + slot.stemAngle * 0.3;
+    // Extend stem slightly past the head center so the tip overlaps into the
+    // flower head, covering the BASE_OFFSET gap between center and petal ring.
+    const dx = slot.offsetX - 0;
+    const dy = slot.offsetY - baseY;
+    const stemDist = Math.sqrt(dx * dx + dy * dy);
+    const overshoot = 0.06; // push tip 6% of unit radius into the flower head
+    const tipX = stemDist > 0.01 ? slot.offsetX + (dx / stemDist) * overshoot : slot.offsetX;
+    const tipY = stemDist > 0.01 ? slot.offsetY + (dy / stemDist) * overshoot : slot.offsetY;
     const stemCmds = generateStem(
       0, baseY,
-      slot.offsetX, slot.offsetY,
+      tipX, tipY,
       stemCurvature,
       stemHalfW,
       stemColor,
