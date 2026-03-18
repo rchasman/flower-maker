@@ -2,6 +2,7 @@ import { run, scoreColor } from "../lib/utils.ts";
 import { useSession } from "../session/SessionProvider.tsx";
 import { useFlowerSessions, useOrders, useUsers } from "../spacetime/hooks.ts";
 import type { FlowerSession, User } from "../spacetime/types.ts";
+import { isVariant } from "../spacetime/types.ts";
 
 interface FlowerGridProps {
   onEnterDesigner: () => void;
@@ -10,6 +11,8 @@ interface FlowerGridProps {
 type ZoneData = {
   user: User;
   session: FlowerSession | null;
+  /** All "Designing" sessions owned by this user — for the live mini-canvas. */
+  allSessions: readonly FlowerSession[];
   incomingOrders: number;
   isYours: boolean;
 };
@@ -37,6 +40,15 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
     return acc.set(ownerKey, (acc.get(ownerKey) ?? 0) + 1);
   }, new Map());
 
+  // Group all "Designing" sessions by owner
+  const sessionsByOwner = sessions
+    .filter(s => isVariant(s.status, "Designing"))
+    .reduce<Map<string, FlowerSession[]>>((acc, s) => {
+      const key = String(s.owner);
+      const list = acc.get(key) ?? [];
+      return acc.set(key, [...list, s]);
+    }, new Map());
+
   // Build zone data: one slot per user
   const zones: readonly ZoneData[] = users
     .map((user): ZoneData => {
@@ -47,6 +59,7 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
       return {
         user,
         session: currentSession,
+        allSessions: sessionsByOwner.get(String(user.identity)) ?? [],
         incomingOrders: ordersByOwner.get(String(user.identity)) ?? 0,
         isYours: String(user.identity) === myIdentity,
       };
@@ -182,58 +195,159 @@ function arrangementName(level: number): string {
   return ARRANGEMENT_LEVELS[Math.min(level, ARRANGEMENT_LEVELS.length) - 1] ?? "Stem";
 }
 
-function ArrangementIcon({
-  level,
-  isYours,
-}: {
-  level: number;
-  isYours: boolean;
-}) {
-  const color = isYours ? "#8b8bd4" : "#525252";
-  const dimColor = isYours ? "#6b6bb4" : "#404040";
+// ── Mini canvas — live SVG replica of a user's designer canvas ───────────
 
-  // Level 1: single dot
-  if (level <= 1) {
+const HUES = ["#ff6b9d", "#c084fc", "#67e8f9", "#fbbf24", "#4ade80", "#f87171", "#a78bfa", "#38bdf8"];
+
+function sidHash(sid: number, salt: number): number {
+  return ((sid * 2654435761 + salt * 40503) >>> 0) / 4294967296;
+}
+
+function flowerColor(sid: number): string {
+  return HUES[sid % HUES.length]!;
+}
+
+function darkenHex(hex: string, factor: number): string {
+  const n = parseInt(hex.replace("#", ""), 16);
+  const r = Math.floor(((n >> 16) & 0xff) * factor);
+  const g = Math.floor(((n >> 8) & 0xff) * factor);
+  const b = Math.floor((n & 0xff) * factor);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
+}
+
+/** Render one SVG flower at a given position (matches PixiJS petal logic). */
+function SvgFlower({ sid, x, y, r }: { sid: number; x: number; y: number; r: number }) {
+  const color = flowerColor(sid);
+  const petalCount = 5 + Math.floor(sidHash(sid, 1) * 3);
+  const petalLength = 0.75 + sidHash(sid, 2) * 0.35;
+  const petalWidth = 0.28 + sidHash(sid, 3) * 0.18;
+  const rotOffset = sidHash(sid, 5) * Math.PI * 2;
+  const outerColor = darkenHex(color, 0.88);
+  const pistilColor = darkenHex(color, 0.45);
+
+  const petals = Array.from({ length: petalCount }, (_, i) => {
+    const angle = rotOffset + (i * Math.PI * 2) / petalCount;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const pLen = r * petalLength;
+    const pW = r * petalWidth;
+    const pcx = x + cos * pLen * 0.55;
+    const pcy = y + sin * pLen * 0.55;
     return (
-      <svg width="24" height="24" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="3" fill={color} />
-      </svg>
+      <ellipse
+        key={`o${i}`}
+        cx={pcx}
+        cy={pcy}
+        rx={pLen * 0.5}
+        ry={pW}
+        transform={`rotate(${(angle * 180) / Math.PI} ${pcx} ${pcy})`}
+        fill={outerColor}
+        opacity={0.9}
+      />
     );
-  }
+  });
 
-  // Level 2-3: 3 dots in a triangle
-  if (level <= 3) {
+  const innerPetals = Array.from({ length: petalCount }, (_, i) => {
+    const angle = rotOffset + (i * Math.PI * 2) / petalCount + Math.PI / petalCount;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const pLen = r * petalLength * 0.6;
+    const pW = r * petalWidth * 0.7;
+    const pcx = x + cos * pLen * 0.5;
+    const pcy = y + sin * pLen * 0.5;
     return (
-      <svg width="24" height="24" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="2.5" fill={color} />
-        <circle cx="8" cy="16" r="2" fill={dimColor} />
-        <circle cx="16" cy="16" r="2" fill={dimColor} />
-      </svg>
+      <ellipse
+        key={`i${i}`}
+        cx={pcx}
+        cy={pcy}
+        rx={pLen * 0.45}
+        ry={pW}
+        transform={`rotate(${(angle * 180) / Math.PI} ${pcx} ${pcy})`}
+        fill={color}
+        opacity={0.85}
+      />
     );
-  }
+  });
 
-  // Level 4-6: 5 dots in a ring around center
-  if (level <= 6) {
-    return (
-      <svg width="24" height="24" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="2.5" fill={color} />
-        <circle cx="12" cy="6" r="1.8" fill={dimColor} />
-        <circle cx="17" cy="10" r="1.8" fill={dimColor} />
-        <circle cx="15" cy="16" r="1.8" fill={dimColor} />
-        <circle cx="9" cy="16" r="1.8" fill={dimColor} />
-        <circle cx="7" cy="10" r="1.8" fill={dimColor} />
-      </svg>
-    );
-  }
-
-  // Level 7+: filled ring
   return (
-    <svg width="24" height="24" viewBox="0 0 24 24">
-      <circle cx="12" cy="12" r="10" fill="none" stroke={dimColor} strokeWidth="4" />
-      <circle cx="12" cy="12" r="4" fill={color} />
+    <g>
+      {petals}
+      {innerPetals}
+      <circle cx={x} cy={y} r={r * 0.28} fill={pistilColor} />
+      <circle cx={x} cy={y} r={r * 0.14} fill="#fefce8" opacity={0.6} />
+    </g>
+  );
+}
+
+/** Live mini-canvas: renders all of a user's flowers at their real positions, scaled to fit. */
+function MiniCanvas({ sessions, size }: { sessions: readonly FlowerSession[]; size: number }) {
+  if (sessions.length === 0) return null;
+
+  // Compute bounding box of all flower positions
+  const positions = sessions.map(s => ({
+    sid: Number(s.id),
+    x: Number(s.canvasX),
+    y: Number(s.canvasY),
+  }));
+
+  // If all at (0,0), spread them in a grid
+  const allZero = positions.every(p => p.x === 0 && p.y === 0);
+  const resolved = allZero
+    ? positions.map((p, i) => {
+        const cols = Math.max(1, Math.ceil(Math.sqrt(positions.length)));
+        const spacing = 80;
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        return { ...p, x: 100 + col * spacing, y: 100 + row * spacing };
+      })
+    : positions;
+
+  const xs = resolved.map(p => p.x);
+  const ys = resolved.map(p => p.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+
+  // Add padding around the bounding box
+  const pad = 30;
+  const bboxW = Math.max(maxX - minX + pad * 2, 60);
+  const bboxH = Math.max(maxY - minY + pad * 2, 60);
+  const vbX = minX - pad;
+  const vbY = minY - pad;
+
+  // Flower radius scales with how many there are (smaller when crowded)
+  const flowerR = Math.max(6, Math.min(14, bboxW / (sessions.length + 1)));
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox={`${vbX} ${vbY} ${bboxW} ${bboxH}`}
+      style={{ borderRadius: "0.25rem" }}
+    >
+      <rect x={vbX} y={vbY} width={bboxW} height={bboxH} fill="#0d0d0d" />
+      {resolved.map(p => (
+        <SvgFlower key={p.sid} sid={p.sid} x={p.x} y={p.y} r={flowerR} />
+      ))}
     </svg>
   );
 }
+
+/** Empty zone placeholder — subtle crosshair. */
+function EmptyZoneIcon({ isYours }: { isYours: boolean }) {
+  const color = isYours ? "#6b6bb4" : "#333";
+  return (
+    <svg width="40" height="40" viewBox="0 0 40 40">
+      <line x1="20" y1="10" x2="20" y2="30" stroke={color} strokeWidth="1" />
+      <line x1="10" y1="20" x2="30" y2="20" stroke={color} strokeWidth="1" />
+      <line x1="13" y1="13" x2="27" y2="27" stroke={color} strokeWidth="0.5" />
+      <line x1="27" y1="13" x2="13" y2="27" stroke={color} strokeWidth="0.5" />
+    </svg>
+  );
+}
+
+// ── Zone card ────────────────────────────────────────────────────────────
 
 function ZoneCard({
   zone,
@@ -242,19 +356,21 @@ function ZoneCard({
   zone: ZoneData;
   onClick?: () => void;
 }) {
-  const { user, session, incomingOrders, isYours } = zone;
+  const { user, session, allSessions, incomingOrders, isYours } = zone;
   const level = session ? Number(session.arrangementLevel) : 0;
-  const flowerCount = session ? Number(session.flowerCount) : 0;
+  const flowerCount = allSessions.length;
 
   const displayName = run(() => {
-    if (isYours && session) return `Your Zone -- ${arrangementName(level)}`;
+    if (isYours && session) return `Your Zone`;
     if (isYours) return "Your Zone";
     return user.name ?? "Anonymous";
   });
 
   const subtitle = run(() => {
-    if (session && flowerCount > 0) {
-      return `${flowerCount} ${flowerCount === 1 ? "flower" : "flowers"}`;
+    if (session) {
+      const name = session.prompt.slice(0, 20);
+      const levelName = arrangementName(level);
+      return `${name} -- ${levelName}`;
     }
     if (!user.online && incomingOrders > 0) {
       return `${incomingOrders} orders`;
@@ -281,7 +397,7 @@ function ZoneCard({
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: "0.5rem",
+        gap: "0.25rem",
         cursor: onClick ? "pointer" : "default",
         transition: "border-color 0.15s",
         fontSize: "0.75rem",
@@ -289,7 +405,11 @@ function ZoneCard({
         opacity: user.online ? 1 : 0.6,
       }}
     >
-      <ArrangementIcon level={level} isYours={isYours} />
+      {allSessions.length > 0 ? (
+        <MiniCanvas sessions={allSessions} size={100} />
+      ) : (
+        <EmptyZoneIcon isYours={isYours} />
+      )}
 
       <span
         style={{
@@ -297,6 +417,7 @@ function ZoneCard({
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
+          fontWeight: isYours ? 500 : 400,
         }}
       >
         {displayName}
@@ -306,7 +427,7 @@ function ZoneCard({
         <span
           style={{
             fontSize: "0.625rem",
-            color: "#404040",
+            color: isYours ? "#7b7bc4" : "#404040",
             maxWidth: "90%",
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -317,9 +438,12 @@ function ZoneCard({
         </span>
       )}
 
-      <span style={{ fontSize: "0.5625rem", color: "#333" }}>
-        {session ? arrangementName(level) : `lvl ${Number(user.level)}`}
-      </span>
+      {flowerCount > 0 && (
+        <span style={{ fontSize: "0.5625rem", color: "#333" }}>
+          {flowerCount} {flowerCount === 1 ? "flower" : "flowers"}
+          {session ? ` -- ${arrangementName(level)}` : ""}
+        </span>
+      )}
     </div>
   );
 }
