@@ -66,7 +66,7 @@ function drawCmds(g: Graphics, cmds: readonly DrawCmd[], scale: number): void {
   }
 }
 
-/** Draw a flower from its pre-computed plan. */
+/** Draw a flower from its pre-computed plan (stem, leaves, then head). */
 function drawFlowerFromPlan(
   g: Graphics,
   plan: FlowerPlan,
@@ -75,7 +75,20 @@ function drawFlowerFromPlan(
 ) {
   const scale = r;
 
-  // Sepals (behind everything)
+  // Stem (behind everything)
+  if (plan.stem) {
+    drawCmds(g, plan.stem.cmds, scale);
+    g.fill({ color: plan.stem.color, alpha: alpha * 0.9 });
+  }
+
+  // Leaves
+  plan.leaves.map((leaf) => {
+    drawCmds(g, leaf.cmds, scale);
+    g.fill({ color: leaf.color, alpha: alpha * 0.85 });
+    return null;
+  });
+
+  // Sepals
   plan.sepals.map((sepal) => {
     drawCmds(g, sepal.cmds, scale);
     g.fill({ color: sepal.color, alpha: alpha * 0.85 });
@@ -96,7 +109,6 @@ function drawFlowerFromPlan(
   plan.center.stamens.map((s) => {
     const sx = Math.cos(s.angle) * s.length * scale;
     const sy = Math.sin(s.angle) * s.length * scale;
-    // Filament line
     g.moveTo(0, 0);
     g.lineTo(sx, sy);
     g.stroke({
@@ -104,7 +116,6 @@ function drawFlowerFromPlan(
       width: Math.max(0.3, scale * 0.02),
       alpha: alpha * 0.7,
     });
-    // Anther dot
     g.circle(sx, sy, s.antherRadius * scale);
     g.fill({ color: s.antherColor, alpha });
     return null;
@@ -170,6 +181,8 @@ function drawArrangementFromPlan(
         ...member.flowerPlan.center,
         stamens: member.flowerPlan.center.stamens.map((s) => ({ ...s })),
       },
+      stem: null,
+      leaves: [],
     };
 
     // Draw sepals
@@ -230,7 +243,7 @@ function offsetCmd(cmd: DrawCmd, dx: number, dy: number): DrawCmd {
   }
 }
 
-const FLOWER_BASE_RADIUS = 14;
+const FLOWER_BASE_RADIUS = 90;
 const SELECTION_RING_PAD = 6;
 
 export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
@@ -340,8 +353,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           // (WASM extracts petal_color from spec and passes it in the render buffer)
           const liveColor = resolveColor(flower);
 
-          // Arrangements need a bigger hit area
-          const hitRadius = isArrangement ? r * 2.5 : r * 1.3;
+          // Expand hit area to cover stem + head
+          const hitRadius = isArrangement ? r * 2.5 : r * 1.8;
           g.hitArea = new Circle(0, 0, hitRadius);
 
           g.clear();
