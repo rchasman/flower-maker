@@ -303,6 +303,72 @@ pub fn complete_session(ctx: &ReducerContext, session_id: u64) -> Result<(), Str
     Ok(())
 }
 
+#[spacetimedb::reducer]
+pub fn remove_constituent(ctx: &ReducerContext, session_id: u64, constituent_index: u32) -> Result<(), String> {
+    let session = require_session_owner(ctx, session_id)?;
+
+    // Gather all constituent overrides for this session, sorted by index
+    let mut constituents: Vec<(u64, u32)> = ctx.db.part_override().iter()
+        .filter(|o| o.session_id == session_id && o.part_path.starts_with("constituent:"))
+        .filter_map(|o| {
+            let idx: u32 = o.part_path.strip_prefix("constituent:")?.parse().ok()?;
+            Some((o.id, idx))
+        })
+        .collect();
+    constituents.sort_by_key(|&(_, idx)| idx);
+
+    if constituents.len() <= 1 {
+        return Err("Cannot remove the last flower from a session".to_string());
+    }
+
+    // Find the override to delete
+    let target = constituents.iter()
+        .find(|&&(_, idx)| idx == constituent_index)
+        .ok_or_else(|| format!("Constituent {} not found", constituent_index))?;
+    let target_id = target.0;
+
+    ctx.db.part_override().id().delete(target_id);
+
+    // Re-index remaining constituents to be contiguous (0, 1, 2, ...)
+    let remaining: Vec<(u64, String)> = ctx.db.part_override().iter()
+        .filter(|o| o.session_id == session_id && o.part_path.starts_with("constituent:"))
+        .map(|o| (o.id, o.part_path.clone()))
+        .collect();
+
+    // Sort by original index to preserve order
+    let mut remaining_sorted: Vec<(u64, u32)> = remaining.iter()
+        .filter_map(|(id, path)| {
+            let idx: u32 = path.strip_prefix("constituent:")?.parse().ok()?;
+            Some((*id, idx))
+        })
+        .collect();
+    remaining_sorted.sort_by_key(|&(_, idx)| idx);
+
+    for (new_idx, &(oid, _)) in remaining_sorted.iter().enumerate() {
+        let existing = ctx.db.part_override().id().find(oid)
+            .ok_or_else(|| "Override disappeared".to_string())?;
+        let new_path = format!("constituent:{new_idx}");
+        if existing.part_path != new_path {
+            ctx.db.part_override().id().update(FlowerPartOverride {
+                part_path: new_path,
+                ..existing
+            });
+        }
+    }
+
+    // Update session flower count and arrangement level
+    let new_count = remaining_sorted.len() as u32;
+    let new_level = arrangement_level_for_count(new_count);
+    ctx.db.flower_session().id().update(FlowerSession {
+        flower_count: new_count,
+        arrangement_level: new_level,
+        ..session
+    });
+
+    log::info!("Removed constituent {} from session {} ({} remaining)", constituent_index, session_id, new_count);
+    Ok(())
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Chat & Emotes
 // ═══════════════════════════════════════════════════════════════════════════
