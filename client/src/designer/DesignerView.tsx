@@ -10,6 +10,8 @@ import { Leaderboard } from "../metagame/Leaderboard.tsx";
 import { Chat } from "../social/Chat.tsx";
 import { ConnectedUsers } from "../social/ConnectedUsers.tsx";
 import { PartEditor } from "./PartEditor.tsx";
+import { FlowerCanvas } from "./FlowerCanvas.tsx";
+import type { FlowerCanvasHandle } from "./FlowerCanvas.tsx";
 import { loadWasm } from "../wasm/loader.ts";
 import { startLoop, stopLoop } from "../wasm/loop.ts";
 import { wireToWasm, handleMerge } from "../spacetime/bridge.ts";
@@ -30,6 +32,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
   const [rightPanel, setRightPanel] = useState<RightPanel>("order");
   const [flowerCount, setFlowerCount] = useState(0);
   const wasmInitialized = useRef(false);
+  const canvasRef = useRef<FlowerCanvasHandle>(null);
 
   const mySessions = sessions.filter(s => isVariant(s.status, "Designing"));
   const selected: FlowerSession | null =
@@ -52,6 +55,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
         },
         data => {
           setFlowerCount(data.length);
+          canvasRef.current?.updateFlowers(data);
         },
       );
     });
@@ -123,20 +127,26 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
           position: "relative",
         }}
       >
-        <div
-          style={{
-            flex: 1,
-            background: "#0d0d0d",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#404040",
-            fontSize: "0.8125rem",
-          }}
-        >
-          {flowerCount > 0
-            ? `${flowerCount} flowers in simulation · PixiJS renderer pending`
-            : "PixiJS designer canvas · drag flowers to merge"}
+        <div style={{ flex: 1, position: "relative" }}>
+          <FlowerCanvas
+            ref={canvasRef}
+            selectedId={selectedId}
+            onFlowerClick={setSelectedId}
+          />
+          {flowerCount > 0 && (
+            <div
+              style={{
+                position: "absolute",
+                bottom: 8,
+                left: 12,
+                color: "#525252",
+                fontSize: "0.6875rem",
+                pointerEvents: "none",
+              }}
+            >
+              {flowerCount} flowers
+            </div>
+          )}
         </div>
 
         {/* Bottom bar — my flowers */}
