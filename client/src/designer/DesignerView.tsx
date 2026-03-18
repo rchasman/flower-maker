@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "../session/SessionProvider.tsx";
 import { useFlowerSessions, useFlowerSpecs } from "../spacetime/hooks.ts";
 import { TemplatePicker } from "./TemplatePicker.tsx";
@@ -12,7 +12,7 @@ import { ConnectedUsers } from "../social/ConnectedUsers.tsx";
 import { PartEditor } from "./PartEditor.tsx";
 import { FlowerCanvas } from "./FlowerCanvas.tsx";
 import type { FlowerCanvasHandle } from "./FlowerCanvas.tsx";
-import { loadWasm } from "../wasm/loader.ts";
+import { loadWasm, type GardenSim } from "../wasm/loader.ts";
 import { startLoop, stopLoop } from "../wasm/loop.ts";
 import { wireToWasm, handleMerge } from "../spacetime/bridge.ts";
 import type { FlowerSession } from "../spacetime/types.ts";
@@ -33,6 +33,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
   const [flowerCount, setFlowerCount] = useState(0);
   const wasmInitialized = useRef(false);
   const canvasRef = useRef<FlowerCanvasHandle>(null);
+  const simRef = useRef<GardenSim | null>(null);
 
   const mySessions = sessions.filter(s => isVariant(s.status, "Designing"));
   const selected: FlowerSession | null =
@@ -47,6 +48,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     wasmInitialized.current = true;
 
     loadWasm().then(sim => {
+      simRef.current = sim;
       wireToWasm(conn, sim);
       startLoop(
         sim,
@@ -64,6 +66,14 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
       stopLoop();
     };
   }, [conn]);
+
+  const handleFlowerDrag = useCallback((sid: number, x: number, y: number) => {
+    simRef.current?.set_body_position(BigInt(sid), x, y);
+  }, []);
+
+  const handleFlowerDragEnd = useCallback((_sid: number) => {
+    // Drag complete — physics takes over naturally via damping
+  }, []);
 
   const handleFlowerGenerated = (specJson: string) => {
     conn?.reducers.createSession({ prompt: specJson });
@@ -132,6 +142,8 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
             ref={canvasRef}
             selectedId={selectedId}
             onFlowerClick={setSelectedId}
+            onFlowerDrag={handleFlowerDrag}
+            onFlowerDragEnd={handleFlowerDragEnd}
           />
           {flowerCount > 0 && (
             <div

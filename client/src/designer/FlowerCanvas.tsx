@@ -9,6 +9,8 @@ export interface FlowerCanvasHandle {
 
 interface FlowerCanvasProps {
   onFlowerClick?: (sid: number) => void;
+  onFlowerDrag?: (sid: number, x: number, y: number) => void;
+  onFlowerDragEnd?: (sid: number) => void;
   selectedId?: number | null;
 }
 
@@ -46,15 +48,20 @@ const FLOWER_BASE_RADIUS = 14;
 const SELECTION_RING_PAD = 6;
 
 export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
-  function FlowerCanvas({ onFlowerClick, selectedId }, ref) {
+  function FlowerCanvas({ onFlowerClick, onFlowerDrag, onFlowerDragEnd, selectedId }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const appRef = useRef<Application | null>(null);
     const flowerGraphicsRef = useRef<Map<number, Graphics>>(new Map());
     const stageContainerRef = useRef<Container | null>(null);
     const selectedIdRef = useRef(selectedId);
+    const dragRef = useRef<{ sid: number } | null>(null);
+    const onFlowerDragRef = useRef(onFlowerDrag);
+    const onFlowerDragEndRef = useRef(onFlowerDragEnd);
 
-    // Keep selectedId ref in sync without re-running effects
+    // Keep refs in sync without re-running effects
     selectedIdRef.current = selectedId;
+    onFlowerDragRef.current = onFlowerDrag;
+    onFlowerDragEndRef.current = onFlowerDragEnd;
 
     const updateFlowers = useCallback((data: FlowerRenderData[]) => {
       const stage = stageContainerRef.current;
@@ -81,7 +88,11 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           g.eventMode = "static";
           g.cursor = "pointer";
           const sid = flower.sid;
-          g.on("pointerdown", () => onFlowerClick?.(sid));
+          g.on("pointerdown", (e) => {
+            onFlowerClick?.(sid);
+            dragRef.current = { sid };
+            e.stopPropagation();
+          });
           graphics.set(flower.sid, g);
           stage.addChild(g);
         }
@@ -202,6 +213,33 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         const flowerContainer = new Container();
         app.stage.addChild(flowerContainer);
         stageContainerRef.current = flowerContainer;
+
+        // Stage-level drag handlers
+        app.stage.eventMode = "static";
+        app.stage.hitArea = app.screen;
+
+        app.stage.on("pointermove", (e) => {
+          const drag = dragRef.current;
+          if (!drag) return;
+          const pos = e.global;
+          onFlowerDragRef.current?.(drag.sid, pos.x, pos.y);
+        });
+
+        app.stage.on("pointerup", () => {
+          const drag = dragRef.current;
+          if (drag) {
+            onFlowerDragEndRef.current?.(drag.sid);
+            dragRef.current = null;
+          }
+        });
+
+        app.stage.on("pointerupoutside", () => {
+          const drag = dragRef.current;
+          if (drag) {
+            onFlowerDragEndRef.current?.(drag.sid);
+            dragRef.current = null;
+          }
+        });
       });
 
       return () => {

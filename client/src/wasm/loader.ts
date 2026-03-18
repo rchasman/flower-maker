@@ -19,6 +19,8 @@ export interface GardenSim {
   write_to_buffer?(buf: Float32Array): number;
   /** Required Float32Array length for render buffer allocation. */
   render_buffer_size?(): number;
+  /** Set the physics body position for a flower (drag interaction). */
+  set_body_position(session_id: bigint, x: number, y: number): void;
   flower_count(): number;
   wind_x(): number;
   wind_y(): number;
@@ -60,6 +62,13 @@ function createStub(): GardenSim {
     },
     remove_flower(sid: bigint) {
       flowers.delete(Number(sid));
+    },
+    set_body_position(sid: bigint, x: number, y: number) {
+      const f = flowers.get(Number(sid));
+      if (f) {
+        f.x = x;
+        f.y = y;
+      }
     },
     tick() {
       return flowers.size;

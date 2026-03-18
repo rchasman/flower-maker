@@ -175,6 +175,13 @@ impl GardenSimulation {
         self.flowers.len() as u32
     }
 
+    /// Set the physics body position for a flower (used for drag interaction).
+    pub fn set_body_position(&mut self, session_id: u64, x: f32, y: f32) {
+        if let Some(flower) = self.flowers.iter().find(|f| f.session_id == session_id) {
+            self.world.set_position(flower.body_handle, x, y);
+        }
+    }
+
     pub fn wind_x(&self) -> f64 { self.physics.wind_x }
     pub fn wind_y(&self) -> f64 { self.physics.wind_y }
     pub fn ambient_light(&self) -> f64 { self.physics.ambient_light }
