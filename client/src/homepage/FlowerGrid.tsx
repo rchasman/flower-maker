@@ -18,13 +18,11 @@ type ZoneData = {
 };
 
 export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
-  const { state, conn } = useSession();
+  const { state, conn, identityHex } = useSession();
   const sessions = useFlowerSessions(conn);
   const users = useUsers(conn);
   const orders = useOrders(conn);
   const onlineCount = users.filter(u => u.online).length;
-
-  const { identityHex } = useSession();
 
   // Build a session lookup by id for O(1) access
   const sessionById = sessions.reduce<Map<string, FlowerSession>>(

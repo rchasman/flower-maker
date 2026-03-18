@@ -17,8 +17,27 @@ export function NameGate({ children }: NameGateProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Still connecting — show nothing
-  if (state !== "connected" || !conn) return null;
+  // Show connection status while waiting
+  if (state !== "connected" || !conn) {
+    return (
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#0a0a0a",
+          color: "#525252",
+          fontSize: "0.8125rem",
+        }}
+      >
+        {state === "connecting"
+          ? "Connecting to SpacetimeDB..."
+          : "Not connected — start SpacetimeDB and refresh"}
+      </div>
+    );
+  }
 
   // User already has a name — pass through
   if (myUser?.name) return <>{children}</>;
