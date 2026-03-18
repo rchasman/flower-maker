@@ -83,8 +83,12 @@ function drawFlowerFromPlan(
 
   // Leaves
   plan.leaves.map((leaf) => {
+    // Fill
     drawCmds(g, leaf.cmds, scale);
-    g.fill({ color: leaf.color, alpha: alpha * 0.85 });
+    g.fill({ color: leaf.color, alpha: alpha * 0.9 });
+    // Veins (midrib + side veins)
+    drawCmds(g, leaf.veins, scale);
+    g.stroke({ color: darkenColor(leaf.color, 0.55), width: Math.max(0.4, scale * 0.012), alpha: alpha * 0.6 });
     return null;
   });
 

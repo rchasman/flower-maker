@@ -3,7 +3,7 @@ import { useSession } from "../session/SessionProvider.tsx";
 import { useFlowerSessions, useFlowerSpecs, useOrders, useUsers, usePartOverrides } from "../spacetime/hooks.ts";
 import type { FlowerSession, FlowerSpec, FlowerPartOverride, User } from "../spacetime/types.ts";
 import { isVariant } from "../spacetime/types.ts";
-import { createFlowerPlan, createArrangementPlan, cmdsToSvgD, hexString } from "../flower/render.ts";
+import { createFlowerPlan, createArrangementPlan, cmdsToSvgD, hexString, darkenColor } from "../flower/render.ts";
 
 interface FlowerGridProps {
   onEnterDesigner: () => void;
@@ -237,12 +237,20 @@ function SvgFlower({ sid, x, y, r, specJson, plan: precomputedPlan }: { sid: num
 
       {/* Leaves */}
       {plan.leaves.map((leaf, i) => (
-        <path
-          key={`leaf-${i}`}
-          d={cmdsToSvgD(leaf.cmds, x, y, scale)}
-          fill={hexString(leaf.color)}
-          opacity={0.85}
-        />
+        <g key={`leaf-${i}`}>
+          <path
+            d={cmdsToSvgD(leaf.cmds, x, y, scale)}
+            fill={hexString(leaf.color)}
+            opacity={0.9}
+          />
+          <path
+            d={cmdsToSvgD(leaf.veins, x, y, scale)}
+            fill="none"
+            stroke={hexString(darkenColor(leaf.color, 0.6))}
+            strokeWidth={Math.max(0.3, scale * 0.015)}
+            opacity={0.7}
+          />
+        </g>
       ))}
 
       {/* Sepals */}
@@ -323,12 +331,20 @@ function SvgArrangement({ x, y, r, constituents, level }: {
       {/* Leaves */}
       {plan.members.map((member, mi) =>
         member.leaves.map((leaf, li) => (
-          <path
-            key={`leaf-${mi}-${li}`}
-            d={cmdsToSvgD(leaf.cmds, x, y, scale)}
-            fill={hexString(leaf.color)}
-            opacity={0.85}
-          />
+          <g key={`leaf-${mi}-${li}`}>
+            <path
+              d={cmdsToSvgD(leaf.cmds, x, y, scale)}
+              fill={hexString(leaf.color)}
+              opacity={0.9}
+            />
+            <path
+              d={cmdsToSvgD(leaf.veins, x, y, scale)}
+              fill="none"
+              stroke={hexString(darkenColor(leaf.color, 0.6))}
+              strokeWidth={Math.max(0.3, scale * 0.015)}
+              opacity={0.7}
+            />
+          </g>
         )),
       )}
 

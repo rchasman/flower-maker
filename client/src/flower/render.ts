@@ -50,6 +50,7 @@ export type StemPlan = {
 
 export type LeafPlan = {
   cmds: DrawCmd[];
+  veins: DrawCmd[];
   color: number;
 };
 
@@ -583,15 +584,14 @@ export function createFlowerPlan(
   );
   const stem: StemPlan = { cmds: stemCmds, color: stemData.color };
 
-  const leafSize = 0.45 + leafData.size * 0.35;
+  const leafSize = 0.5 + leafData.size * 0.4;
+  const leaf1 = generateLeaf(0, stemLen * 0.65, Math.PI * 0.55, leafSize, leafData);
   const leaves: LeafPlan[] = [
-    { cmds: generateLeafAt(0, stemLen * 0.7, Math.PI * 0.55, leafSize, leafData), color: leafData.color },
+    { cmds: leaf1.outline, veins: leaf1.veins, color: leafData.color },
   ];
   if (stemLen > 0.6) {
-    leaves.push({
-      cmds: generateLeafAt(0, stemLen * 0.42, -Math.PI * 0.55, leafSize * 0.85, leafData),
-      color: leafData.color,
-    });
+    const leaf2 = generateLeaf(0, stemLen * 0.38, -Math.PI * 0.55, leafSize * 0.85, leafData);
+    leaves.push({ cmds: leaf2.outline, veins: leaf2.veins, color: leafData.color });
   }
 
   return { sepals, layers, center, stem, leaves };
@@ -629,10 +629,14 @@ function createFallbackPlan(sid: number): FlowerPlan {
       stamens: [],
     },
     stem: { cmds: stemCmds, color: 0x2d5a27 },
-    leaves: [
-      { cmds: generateLeafAt(0, 0.7, Math.PI * 0.55, 0.45), color: 0x3a7d32 },
-      { cmds: generateLeafAt(0, 0.42, -Math.PI * 0.55, 0.35), color: 0x3a7d32 },
-    ],
+    leaves: (() => {
+      const l1 = generateLeaf(0, 0.65, Math.PI * 0.55, 0.5);
+      const l2 = generateLeaf(0, 0.38, -Math.PI * 0.55, 0.4);
+      return [
+        { cmds: l1.outline, veins: l1.veins, color: 0x3a7d32 },
+        { cmds: l2.outline, veins: l2.veins, color: 0x3a7d32 },
+      ];
+    })(),
   };
 }
 
@@ -879,72 +883,96 @@ function leafSerration(style: string, t: number, seed: number): number {
   }
 }
 
-/** Generate a botanical leaf at a stem attachment point.
- *  Shape, serration, droop, and curl driven by spec data. */
-function generateLeafAt(
+/** Leaf geometry: filled outline + vein strokes (midrib + side veins). */
+type LeafGeometry = { outline: DrawCmd[]; veins: DrawCmd[] };
+
+/** Attempt a simple seeded pseudo-noise for edge variation. */
+function leafNoise(t: number, seed: number): number {
+  const x = Math.sin(t * 17.3 + seed * 7.9) * 43758.5453;
+  return (x - Math.floor(x)) * 2 - 1; // -1..1
+}
+
+function generateLeaf(
   x: number, y: number,
   angle: number,
   size: number,
   leaf?: ParsedLeaf,
-): DrawCmd[] {
+): LeafGeometry {
   const ld = leaf ?? DEFAULT_LEAF;
-  const len = size * (0.8 + ld.size * 0.4);
-  const halfW = size * 0.32;
-  const segments = 14;
+  const len = size * (0.9 + ld.size * 0.5);
+  const halfW = size * 0.42;
   const cosA = Math.cos(angle);
   const sinA = Math.sin(angle);
-  const droopAmt = ld.droop * len * 0.25;
-  const curlAmt = ld.curl * 0.15;
+  const droopAmt = ld.droop * len * 0.3;
   const seed = angle * 7.3 + size * 3.1;
 
-  const leftPts: Vec2[] = [];
-  const rightPts: Vec2[] = [];
+  // Transform local leaf coords (along midrib, perpendicular) to world
+  const toWorld = (along: number, perp: number): Vec2 => {
+    const sag = droopAmt * (along / len) * (along / len);
+    return [
+      x + cosA * along + sinA * (sag + perp),
+      y - sinA * along + cosA * (sag + perp),
+    ];
+  };
 
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments;
+  // Polar-inspired outline (adapted from gaia-incremental)
+  // Sample points around the leaf using an elliptical envelope with
+  // pointed ends via sin(angle*2) modulation + noise for organic edges
+  const N = 16;
+  const outlinePts: Vec2[] = [];
 
-    // Width from shape profile + serration
-    const w = halfW * leafProfile(ld.shape, t) * leafSerration(ld.serration, t, seed);
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
 
-    // Position along midrib
-    const along = t * len;
+    // Width profile from shape enum
+    const baseW = halfW * leafProfile(ld.shape, t) * leafSerration(ld.serration, t, seed);
 
-    // Natural droop — quadratic gravity curve
-    const droop = droopAmt * t * t;
+    // Organic edge irregularity (like gaia's p.noise)
+    const noise = leafNoise(t, seed) * halfW * 0.08;
 
-    // Curl — tip recurves backward
-    const curl = t > 0.6 ? curlAmt * Math.pow((t - 0.6) / 0.4, 2) * len : 0;
+    // Asymmetry — slightly wider on one side
+    const w = (baseW + noise) * (t < 0.5 ? 1.04 : 0.96);
 
-    // Midrib position in local leaf space (along = forward, droop = perpendicular)
-    const lx = along - curl;
-    const ly = droop;
-
-    // Slight asymmetry — one side ~10% wider for naturalism
-    const leftW = w * 1.05;
-    const rightW = w * 0.95;
-
-    // Rotate to world space and offset
-    // Left side: midrib + perpendicular * width
-    const perpX = -sinA;
-    const perpY = cosA;
-
-    const mx = x + cosA * lx - sinA * ly;
-    const my = y + sinA * lx + cosA * ly;
-
-    leftPts.push([mx + perpX * leftW, my + perpY * leftW]);
-    rightPts.push([mx - perpX * rightW, my - perpY * rightW]);
+    outlinePts.push(toWorld(t * len, w));
   }
 
-  // Build closed outline: left edge → bridge → right edge reversed
-  const cmds = smoothCmds(leftPts);
-  const rightCmds = smoothCmds(rightPts.toReversed());
-
-  if (rightCmds.length > 0 && rightCmds[0]!.op === "M") {
-    cmds.push({ op: "L", x: rightCmds[0]!.x, y: rightCmds[0]!.y });
-    cmds.push(...rightCmds.slice(1));
+  // Return path: tip back to base on the other side
+  for (let i = N; i >= 0; i--) {
+    const t = i / N;
+    const baseW = halfW * leafProfile(ld.shape, t) * leafSerration(ld.serration, t, seed);
+    const noise = leafNoise(t, seed + 5) * halfW * 0.08;
+    const w = (baseW + noise) * (t < 0.5 ? 0.96 : 1.04);
+    outlinePts.push(toWorld(t * len, -w));
   }
-  cmds.push({ op: "Z" });
-  return cmds;
+
+  // Smooth the outline with Catmull-Rom → Bézier
+  const outline = smoothCmds(outlinePts);
+  outline.push({ op: "Z" });
+
+  // Veins: midrib + 3-4 branching side veins (like gaia-incremental)
+  const veins: DrawCmd[] = [];
+  const base = toWorld(0, 0);
+  const tip = toWorld(len, 0);
+
+  // Midrib
+  veins.push({ op: "M", x: base[0], y: base[1] });
+  veins.push({ op: "L", x: tip[0], y: tip[1] });
+
+  // Side veins: branch alternately from midrib
+  const veinCount = Math.max(3, Math.min(6, Math.round(len * 8)));
+  for (let i = 0; i < veinCount; i++) {
+    const vt = 0.15 + (i / (veinCount - 1)) * 0.7; // 15-85% along midrib
+    const veinBase = toWorld(vt * len, 0);
+    const side = i % 2 === 0 ? 1 : -1;
+    // Veins angle outward at ~40° from midrib, shorter toward tip
+    const veinLen = halfW * leafProfile(ld.shape, vt) * 0.85;
+    const veinTip = toWorld(vt * len + len * 0.08, side * veinLen);
+
+    veins.push({ op: "M", x: veinBase[0], y: veinBase[1] });
+    veins.push({ op: "L", x: veinTip[0], y: veinTip[1] });
+  }
+
+  return { outline, veins };
 }
 
 // ── Arrangement layout ──
@@ -1026,7 +1054,7 @@ export function createArrangementPlan(
     const { specJson, sid } = constituents[Math.min(i, count - 1)]!;
     const flowerPlan = createFlowerPlan(specJson, sid);
     const stemData = parseSpecStem(specJson);
-    const leafColor = parseLeafColor(specJson);
+    const leafData = parseLeafData(specJson);
 
     // Stem from base to flower head position
     const stemHalfW = Math.max(0.03, Math.min(0.08, stemData.thickness * 0.08));
@@ -1043,18 +1071,20 @@ export function createArrangementPlan(
     // 1-2 leaves along stem
     const stemMidX = slot.offsetX * 0.4;
     const stemMidY = (baseY + slot.offsetY) * 0.55;
-    const leafSize = 0.45 + stemData.thickness * 0.25;
-    const leafAngle1 = slot.stemAngle - Math.PI * 0.35;
-    const leafAngle2 = slot.stemAngle + Math.PI * 0.4;
+    const leafSize = 0.5 + leafData.size * 0.4;
+    const leafAngle1 = slot.stemAngle + Math.PI * 0.55;
+    const leafAngle2 = slot.stemAngle - Math.PI * 0.55;
 
+    const arrLeaf1 = generateLeaf(stemMidX, stemMidY, leafAngle1, leafSize, leafData);
     const leaves: LeafPlan[] = [
-      { cmds: generateLeafAt(stemMidX, stemMidY, leafAngle1, leafSize), color: leafColor },
+      { cmds: arrLeaf1.outline, veins: arrLeaf1.veins, color: leafData.color },
     ];
     // Second leaf on longer stems
     if (slot.stemLength > 0.6) {
       const leafMidX2 = slot.offsetX * 0.65;
       const leafMidY2 = (baseY + slot.offsetY) * 0.35;
-      leaves.push({ cmds: generateLeafAt(leafMidX2, leafMidY2, leafAngle2, leafSize * 0.8), color: leafColor });
+      const arrLeaf2 = generateLeaf(leafMidX2, leafMidY2, leafAngle2, leafSize * 0.8, leafData);
+      leaves.push({ cmds: arrLeaf2.outline, veins: arrLeaf2.veins, color: leafData.color });
     }
 
     return {
