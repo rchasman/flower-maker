@@ -3,6 +3,7 @@ import { useSession } from "../session/SessionProvider.tsx";
 import { useFlowerSessions, useFlowerSpecs, useOrders, useUsers } from "../spacetime/hooks.ts";
 import type { FlowerSession, FlowerSpec, User } from "../spacetime/types.ts";
 import { isVariant } from "../spacetime/types.ts";
+import { flowerShape, resolveFlowerColor, resolveFlowerPetalCount, darkenColor, hexString } from "../flower/render.ts";
 
 interface FlowerGridProps {
   onEnterDesigner: () => void;
@@ -202,111 +203,71 @@ function arrangementName(level: number): string {
 }
 
 // ── Mini canvas — live SVG replica of a user's designer canvas ───────────
+// Uses the exact same math as FlowerCanvas (PixiJS) via shared render module.
 
-const HUES = ["#ff6b9d", "#c084fc", "#67e8f9", "#fbbf24", "#4ade80", "#f87171", "#a78bfa", "#38bdf8"];
-
-function sidHash(sid: number, salt: number): number {
-  return ((sid * 2654435761 + salt * 40503) >>> 0) / 4294967296;
-}
-
-/** Extract petal color + count from specJson, matching WASM's primary_petal_color logic. */
-function parseSpecVisuals(specJson: string | undefined): { color: string | null; petalCount: number } {
-  if (!specJson) return { color: null, petalCount: 0 };
-  try {
-    const spec = JSON.parse(specJson) as {
-      petals?: {
-        layers?: Array<{
-          count?: number;
-          color?: { stops?: Array<{ color?: { r?: number; g?: number; b?: number } }> };
-        }>;
-      };
-    };
-    const layer = spec.petals?.layers?.[0];
-    const stop = layer?.color?.stops?.[0]?.color;
-    const petalCount = layer?.count ?? 0;
-    if (stop && (stop.r ?? 0) + (stop.g ?? 0) + (stop.b ?? 0) > 0.05) {
-      const ri = Math.round(Math.max(0, Math.min(1, stop.r ?? 0)) * 255);
-      const gi = Math.round(Math.max(0, Math.min(1, stop.g ?? 0)) * 255);
-      const bi = Math.round(Math.max(0, Math.min(1, stop.b ?? 0)) * 255);
-      return { color: `#${((ri << 16) | (gi << 8) | bi).toString(16).padStart(6, "0")}`, petalCount };
-    }
-    return { color: null, petalCount };
-  } catch {
-    return { color: null, petalCount: 0 };
-  }
-}
-
-function fallbackColor(sid: number): string {
-  return HUES[sid % HUES.length]!;
-}
-
-function darkenHex(hex: string, factor: number): string {
-  const n = parseInt(hex.replace("#", ""), 16);
-  const r = Math.floor(((n >> 16) & 0xff) * factor);
-  const g = Math.floor(((n >> 8) & 0xff) * factor);
-  const b = Math.floor((n & 0xff) * factor);
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
-}
-
-/** Render one SVG flower at a given position (matches PixiJS petal logic). */
+/** SVG translation of FlowerCanvas.drawFlowerHead — same quadratic Bézier petal geometry. */
 function SvgFlower({ sid, x, y, r, specJson }: { sid: number; x: number; y: number; r: number; specJson?: string }) {
-  const visuals = parseSpecVisuals(specJson);
-  const color = visuals.color ?? fallbackColor(sid);
-  const petalCount = visuals.petalCount > 0 ? visuals.petalCount : 5 + Math.floor(sidHash(sid, 1) * 3);
-  const petalLength = 0.75 + sidHash(sid, 2) * 0.35;
-  const petalWidth = 0.28 + sidHash(sid, 3) * 0.18;
-  const rotOffset = sidHash(sid, 5) * Math.PI * 2;
-  const outerColor = darkenHex(color, 0.88);
-  const pistilColor = darkenHex(color, 0.45);
+  const color = resolveFlowerColor(sid, specJson);
+  const specPetalCount = resolveFlowerPetalCount(sid, specJson);
+  const shape = flowerShape(sid, specPetalCount);
 
-  const petals = Array.from({ length: petalCount }, (_, i) => {
-    const angle = rotOffset + (i * Math.PI * 2) / petalCount;
+  const angleStep = (Math.PI * 2) / shape.petalCount;
+  const petalLen = r * shape.petalLength;
+  const petalW = r * shape.petalWidth;
+  const petalColor = hexString(darkenColor(color, 0.88));
+  const mainColor = hexString(color);
+  const pistilColor = hexString(darkenColor(color, 0.45));
+
+  const petals = Array.from({ length: shape.petalCount }, (_, i) => {
+    const angle = shape.rotationOffset + i * angleStep;
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
-    const pLen = r * petalLength;
-    const pW = r * petalWidth;
-    const pcx = x + cos * pLen * 0.55;
-    const pcy = y + sin * pLen * 0.55;
-    return (
-      <ellipse
-        key={`o${i}`}
-        cx={pcx}
-        cy={pcy}
-        rx={pLen * 0.5}
-        ry={pW}
-        transform={`rotate(${(angle * 180) / Math.PI} ${pcx} ${pcy})`}
-        fill={outerColor}
-        opacity={0.9}
-      />
-    );
-  });
 
-  const innerPetals = Array.from({ length: petalCount }, (_, i) => {
-    const angle = rotOffset + (i * Math.PI * 2) / petalCount + Math.PI / petalCount;
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-    const pLen = r * petalLength * 0.6;
-    const pW = r * petalWidth * 0.7;
-    const pcx = x + cos * pLen * 0.5;
-    const pcy = y + sin * pLen * 0.5;
+    const cx = cos * petalLen * 0.55;
+    const cy = sin * petalLen * 0.55;
+    const tx = cos * petalLen;
+    const ty = sin * petalLen;
+    const px = -sin * petalW;
+    const py = cos * petalW;
+    const tpx = -sin * petalW * shape.petalTaper;
+    const tpy = cos * petalW * shape.petalTaper;
+
+    // Outer petal — same quadratic curves as PixiJS drawFlowerHead
+    const outerD = [
+      `M ${x + px * 0.3} ${y + py * 0.3}`,
+      `Q ${x + cx + px} ${y + cy + py} ${x + tx + tpx} ${y + ty + tpy}`,
+      `Q ${x + cx - px} ${y + cy - py} ${x - px * 0.3} ${y - py * 0.3}`,
+      "Z",
+    ].join(" ");
+
+    // Inner petal layer
+    const innerLen = petalLen * 0.7;
+    const innerW = petalW * 0.6;
+    const icx = cos * innerLen * 0.5;
+    const icy = sin * innerLen * 0.5;
+    const itx = cos * innerLen;
+    const ity = sin * innerLen;
+    const ipx = -sin * innerW;
+    const ipy = cos * innerW;
+
+    const innerD = [
+      `M ${x + ipx * 0.2} ${y + ipy * 0.2}`,
+      `Q ${x + icx + ipx} ${y + icy + ipy} ${x + itx} ${y + ity}`,
+      `Q ${x + icx - ipx} ${y + icy - ipy} ${x - ipx * 0.2} ${y - ipy * 0.2}`,
+      "Z",
+    ].join(" ");
+
     return (
-      <ellipse
-        key={`i${i}`}
-        cx={pcx}
-        cy={pcy}
-        rx={pLen * 0.45}
-        ry={pW}
-        transform={`rotate(${(angle * 180) / Math.PI} ${pcx} ${pcy})`}
-        fill={color}
-        opacity={0.85}
-      />
+      <g key={i}>
+        <path d={outerD} fill={petalColor} opacity={0.85} />
+        <path d={innerD} fill={mainColor} opacity={0.9} />
+      </g>
     );
   });
 
   return (
     <g>
       {petals}
-      {innerPetals}
       <circle cx={x} cy={y} r={r * 0.28} fill={pistilColor} />
       <circle cx={x} cy={y} r={r * 0.14} fill="#fefce8" opacity={0.6} />
     </g>
