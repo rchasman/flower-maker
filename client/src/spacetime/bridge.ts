@@ -4,12 +4,25 @@ import type { DbConnection, FlowerSession, FlowerSpec } from "./types.ts";
 import { isVariant } from "./types.ts";
 import { getMyIdentity } from "./connection.ts";
 
+/** Normalize a SpacetimeDB identity to a comparable hex string. */
+function identityHex(id: unknown): string {
+  if (!id) return "";
+  // SpacetimeDB v2 Identity objects have toHexString or toString methods
+  if (typeof (id as { toHexString?: () => string }).toHexString === "function") {
+    return (id as { toHexString: () => string }).toHexString();
+  }
+  const s = String(id);
+  // If String() returned a hex-like value, use it; otherwise empty
+  return s.startsWith("[object") ? "" : s;
+}
+
 /** Check if a session belongs to the current user. */
 function isMySession(session: FlowerSession): boolean {
   const me = getMyIdentity();
   if (!me) return true; // fallback: show all if identity unavailable
-  // SpacetimeDB identities compare by their string/toHexString representation
-  return String(session.owner) === String(me);
+  const myHex = identityHex(me);
+  if (!myHex) return true; // can't determine identity, show all
+  return identityHex(session.owner) === myHex;
 }
 
 /** Spread flowers across the canvas when server positions are all zero. */

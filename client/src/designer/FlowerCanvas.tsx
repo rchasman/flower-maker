@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from "react";
-import { Application, Graphics, Container } from "pixi.js";
+import { Application, Graphics, Container, Circle } from "pixi.js";
 import type { FlowerRenderData } from "../wasm/loop.ts";
 
 export interface FlowerCanvasHandle {
@@ -86,16 +86,24 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         if (!g) {
           g = new Graphics();
           g.eventMode = "static";
-          g.cursor = "pointer";
+          g.cursor = "grab";
           const sid = flower.sid;
           g.on("pointerdown", (e) => {
             onFlowerClick?.(sid);
             dragRef.current = { sid };
+            g!.cursor = "grabbing";
             e.stopPropagation();
+          });
+          g.on("pointerup", () => {
+            g!.cursor = "grab";
           });
           graphics.set(flower.sid, g);
           stage.addChild(g);
         }
+
+        // Update hit area to match current flower size
+        const hitRadius = FLOWER_BASE_RADIUS * flower.scale * 1.5;
+        g.hitArea = new Circle(0, 0, hitRadius);
 
         const color = flowerColor(flower.sid);
         const r = FLOWER_BASE_RADIUS * flower.scale;
@@ -228,6 +236,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         app.stage.on("pointerup", () => {
           const drag = dragRef.current;
           if (drag) {
+            const g = flowerGraphicsRef.current.get(drag.sid);
+            if (g) g.cursor = "grab";
             onFlowerDragEndRef.current?.(drag.sid);
             dragRef.current = null;
           }
@@ -236,6 +246,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         app.stage.on("pointerupoutside", () => {
           const drag = dragRef.current;
           if (drag) {
+            const g = flowerGraphicsRef.current.get(drag.sid);
+            if (g) g.cursor = "grab";
             onFlowerDragEndRef.current?.(drag.sid);
             dragRef.current = null;
           }
