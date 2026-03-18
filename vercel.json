@@ -1,0 +1,12 @@
+{
+  "experimentalServices": {
+    "client": {
+      "entrypoint": "client",
+      "routePrefix": "/"
+    },
+    "api": {
+      "entrypoint": "api",
+      "routePrefix": "/api"
+    }
+  }
+}
