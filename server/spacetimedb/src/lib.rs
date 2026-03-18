@@ -347,7 +347,7 @@ pub fn merge_sessions(
     ctx: &ReducerContext,
     session_a_id: u64,
     session_b_id: u64,
-    ai_arrangement_json: String,
+    _ai_arrangement_json: String,
 ) -> Result<(), String> {
     // Both sessions must be owned by the caller and in Designing status
     let session_a = require_session_owner(ctx, session_a_id)?;
