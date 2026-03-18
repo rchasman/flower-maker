@@ -226,7 +226,26 @@ function SvgFlower({ sid, x, y, r, specJson, plan: precomputedPlan }: { sid: num
 
   return (
     <g>
-      {/* Sepals — behind petals */}
+      {/* Stem */}
+      {plan.stem && (
+        <path
+          d={cmdsToSvgD(plan.stem.cmds, x, y, scale)}
+          fill={hexString(plan.stem.color)}
+          opacity={0.9}
+        />
+      )}
+
+      {/* Leaves */}
+      {plan.leaves.map((leaf, i) => (
+        <path
+          key={`leaf-${i}`}
+          d={cmdsToSvgD(leaf.cmds, x, y, scale)}
+          fill={hexString(leaf.color)}
+          opacity={0.85}
+        />
+      ))}
+
+      {/* Sepals */}
       {plan.sepals.map((sepal, i) => (
         <path
           key={`sep-${i}`}
@@ -236,7 +255,7 @@ function SvgFlower({ sid, x, y, r, specJson, plan: precomputedPlan }: { sid: num
         />
       ))}
 
-      {/* Petal layers — outer first (lower z), inner last (upper z) */}
+      {/* Petal layers */}
       {plan.layers.map((layer, li) =>
         layer.petals.map((petal, pi) => (
           <path

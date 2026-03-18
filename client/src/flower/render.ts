@@ -43,6 +43,16 @@ export type CenterPlan = {
   stamens: readonly StamenPlan[];
 };
 
+export type StemPlan = {
+  cmds: DrawCmd[];
+  color: number;
+};
+
+export type LeafPlan = {
+  cmds: DrawCmd[];
+  color: number;
+};
+
 /** Pre-computed rendering plan for a flower — cached per spec, scale-independent. */
 export type FlowerPlan = {
   sepals: ReadonlyArray<{ cmds: DrawCmd[]; color: number }>;
@@ -52,6 +62,8 @@ export type FlowerPlan = {
     opacity: number;
   }>;
   center: CenterPlan;
+  stem: StemPlan | null;
+  leaves: readonly LeafPlan[];
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -234,6 +246,21 @@ function intrinsicEdge(shape: string): string | null {
 // ═══════════════════════════════════════════════════════════════════════════
 // Smooth curve generation — Catmull-Rom → cubic Bézier
 // ═══════════════════════════════════════════════════════════════════════════
+
+/** Offset a DrawCmd by (dx, dy) in unit space. */
+function offsetCmd(cmd: DrawCmd, dx: number, dy: number): DrawCmd {
+  switch (cmd.op) {
+    case "M": return { op: "M", x: cmd.x + dx, y: cmd.y + dy };
+    case "L": return { op: "L", x: cmd.x + dx, y: cmd.y + dy };
+    case "C": return {
+      op: "C",
+      c1x: cmd.c1x + dx, c1y: cmd.c1y + dy,
+      c2x: cmd.c2x + dx, c2y: cmd.c2y + dy,
+      x: cmd.x + dx, y: cmd.y + dy,
+    };
+    case "Z": return cmd;
+  }
+}
 
 /** Convert a point sequence into smooth cubic Bézier draw commands. */
 function smoothCmds(points: Vec2[]): DrawCmd[] {
@@ -541,7 +568,34 @@ export function createFlowerPlan(
     };
   });
 
-  return { sepals, layers, center };
+  // ── Stem + leaves (single flower gets a single stem below head) ──
+  const stemData = parseSpecStem(specJson);
+  const leafColor = parseLeafColor(specJson);
+  const stemLen = Math.max(0.6, Math.min(1.8, stemData.height * 1.4));
+  const stemHalfW = Math.max(0.03, Math.min(0.08, stemData.thickness * 0.08));
+
+  const stemCmds = generateStem(
+    0, stemLen,        // base (below flower center)
+    0, 0,              // top (flower center)
+    stemData.curvature,
+    stemHalfW,
+    stemData.color,
+  );
+  const stem: StemPlan = { cmds: stemCmds, color: stemData.color };
+
+  const leafSize = 0.45 + stemData.thickness * 0.25;
+  // Leaves point outward from stem: left leaf angles right-and-down, right leaf angles left-and-down
+  const leaves: LeafPlan[] = [
+    { cmds: generateLeafAt(0, stemLen * 0.7, Math.PI * 0.6, leafSize), color: leafColor },
+  ];
+  if (stemLen > 0.6) {
+    leaves.push({
+      cmds: generateLeafAt(0, stemLen * 0.45, -Math.PI * 0.6, leafSize * 0.85),
+      color: leafColor,
+    });
+  }
+
+  return { sepals, layers, center, stem, leaves };
 }
 
 /** Fallback plan when no spec available — sid-based pseudo-random flower. */
@@ -564,6 +618,7 @@ function createFallbackPlan(sid: number): FlowerPlan {
     ),
   }));
 
+  const stemCmds = generateStem(0, 1.0, 0, 0, 0, 0.04, 0x2d5a27);
   return {
     sepals: [],
     layers: [{ petals, color, opacity: 1 }],
@@ -574,6 +629,11 @@ function createFallbackPlan(sid: number): FlowerPlan {
       highlightColor: 0xfefce8,
       stamens: [],
     },
+    stem: { cmds: stemCmds, color: 0x2d5a27 },
+    leaves: [
+      { cmds: generateLeafAt(0, 0.7, Math.PI * 0.6, 0.45), color: 0x3a7d32 },
+      { cmds: generateLeafAt(0, 0.45, -Math.PI * 0.6, 0.35), color: 0x3a7d32 },
+    ],
   };
 }
 
@@ -607,16 +667,6 @@ export function cmdsToSvgD(
 // ═══════════════════════════════════════════════════════════════════════════
 // Arrangement rendering — multi-flower compositions with stems and leaves
 // ═══════════════════════════════════════════════════════════════════════════
-
-export type StemPlan = {
-  cmds: DrawCmd[];
-  color: number;
-};
-
-export type LeafPlan = {
-  cmds: DrawCmd[];
-  color: number;
-};
 
 export type ArrangementMember = {
   flowerPlan: FlowerPlan;
@@ -660,16 +710,42 @@ function parseSpecStem(specJson: string | undefined): ParsedStem {
   }
 }
 
-function parseLeafColor(specJson: string | undefined): number {
-  if (!specJson) return 0x3a7d32;
+type ParsedLeaf = {
+  shape: string;
+  size: number;
+  color: number;
+  serration: string;
+  droop: number;
+  curl: number;
+};
+
+const DEFAULT_LEAF: ParsedLeaf = {
+  shape: "Ovate", size: 0.5, color: 0x3a7d32,
+  serration: "None", droop: 0.15, curl: 0,
+};
+
+function parseLeafData(specJson: string | undefined): ParsedLeaf {
+  if (!specJson) return DEFAULT_LEAF;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const spec = JSON.parse(specJson) as any;
     const leaf = spec.foliage?.leaves?.[0];
-    return colorToHex(leaf?.color?.stops?.[0]?.color) ?? 0x3a7d32;
+    if (!leaf) return DEFAULT_LEAF;
+    return {
+      shape: leaf.shape ?? "Ovate",
+      size: leaf.size ?? 0.5,
+      color: colorToHex(leaf.color?.stops?.[0]?.color) ?? 0x3a7d32,
+      serration: leaf.serration ?? "None",
+      droop: leaf.droop ?? 0.15,
+      curl: leaf.curl ?? 0,
+    };
   } catch {
-    return 0x3a7d32;
+    return DEFAULT_LEAF;
   }
+}
+
+function parseLeafColor(specJson: string | undefined): number {
+  return parseLeafData(specJson).color;
 }
 
 // ── Stem generation ──
@@ -729,23 +805,46 @@ function generateStem(
 
 // ── Leaf generation ──
 
-/** Generate a simple leaf at a point along the stem. */
+/** Generate a leaf shape as a simple pointed oval at a stem attachment point.
+ *  Unlike petals (which radiate from center), leaves grow outward from
+ *  their attachment point with a visible midrib shape. */
 function generateLeafAt(
   x: number, y: number,
   angle: number,
   size: number,
 ): DrawCmd[] {
-  // Reuse petal generation with leaf-like parameters
-  return generatePetal(
-    angle,
-    "Lanceolate",
-    "Smooth",
-    size * 0.8,   // length
-    size * 0.5,   // width
-    0.15,         // curvature — slight cup
-    0,            // no curl
-    angle * 7.3,  // deterministic seed from angle
-  );
+  const len = size * 0.9;
+  const halfW = size * 0.28;
+  const segments = 10;
+  const cosA = Math.cos(angle);
+  const sinA = Math.sin(angle);
+
+  const leftPts: Vec2[] = [];
+  const rightPts: Vec2[] = [];
+
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    // Leaf width profile: widest at ~35%, tapers to point
+    const w = halfW * Math.sin(Math.PI * Math.pow(t, 0.65)) * (1 - t * 0.15);
+    const along = t * len;
+    // Slight droop curve
+    const droop = t * t * len * 0.12;
+    const lx = cosA * along - sinA * droop;
+    const ly = sinA * along + cosA * droop;
+
+    leftPts.push([x + lx - sinA * w * -1, y + ly + cosA * w * -1]);
+    rightPts.push([x + lx + sinA * w * -1, y + ly - cosA * w * -1]);
+  }
+
+  const cmds = smoothCmds(leftPts);
+  const rightCmds = smoothCmds(rightPts.toReversed());
+
+  if (rightCmds.length > 0 && rightCmds[0]!.op === "M") {
+    cmds.push({ op: "L", x: rightCmds[0]!.x, y: rightCmds[0]!.y });
+    cmds.push(...rightCmds.slice(1));
+  }
+  cmds.push({ op: "Z" });
+  return cmds;
 }
 
 // ── Arrangement layout ──
@@ -830,7 +929,7 @@ export function createArrangementPlan(
     const leafColor = parseLeafColor(specJson);
 
     // Stem from base to flower head position
-    const stemHalfW = Math.max(0.01, Math.min(0.04, stemData.thickness * 0.04));
+    const stemHalfW = Math.max(0.03, Math.min(0.08, stemData.thickness * 0.08));
     const stemCmds = generateStem(
       0, baseY,
       slot.offsetX, slot.offsetY,
@@ -844,7 +943,7 @@ export function createArrangementPlan(
     // 1-2 leaves along stem
     const stemMidX = slot.offsetX * 0.4;
     const stemMidY = (baseY + slot.offsetY) * 0.55;
-    const leafSize = 0.3 + stemData.thickness * 0.2;
+    const leafSize = 0.45 + stemData.thickness * 0.25;
     const leafAngle1 = slot.stemAngle - Math.PI * 0.35;
     const leafAngle2 = slot.stemAngle + Math.PI * 0.4;
 
