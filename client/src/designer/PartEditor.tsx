@@ -2,9 +2,16 @@ import { useState } from "react";
 import { useSession } from "../session/SessionProvider.tsx";
 import { run } from "../lib/utils.ts";
 
+interface ConstituentInfo {
+  index: number;
+  specJson: string;
+  forkedFrom: string;
+}
+
 interface PartEditorProps {
   sessionId: number;
   specJson: string;
+  constituents?: ConstituentInfo[];
 }
 
 interface EditableField {
@@ -48,7 +55,7 @@ const EDITABLE_FIELDS: EditableField[] = [
   },
 ];
 
-export function PartEditor({ sessionId, specJson }: PartEditorProps) {
+export function PartEditor({ sessionId, specJson, constituents = [] }: PartEditorProps) {
   const { conn } = useSession();
   const [overrides, setOverrides] = useState<Record<string, string>>({});
 
@@ -197,6 +204,56 @@ export function PartEditor({ sessionId, specJson }: PartEditorProps) {
           Adjust values above to fork parts. Forks create personal variants that
           others can discover.
         </p>
+      )}
+
+      {constituents.length > 1 && (
+        <div style={{ marginTop: "0.75rem", borderTop: "1px solid #262626", paddingTop: "0.5rem" }}>
+          <div style={{ fontSize: "0.75rem", fontWeight: 500, color: "#a3a3a3", marginBottom: "0.375rem" }}>
+            Flowers ({constituents.length})
+          </div>
+          {constituents.map((c) => {
+            const cSpec = run(() => {
+              try { return JSON.parse(c.specJson) as Record<string, unknown>; }
+              catch { return {} as Record<string, unknown>; }
+            });
+            const name = (cSpec.common_name as string) ?? (cSpec.species as string) ?? `Flower ${c.index}`;
+            return (
+              <div
+                key={c.index}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "0.25rem 0",
+                  fontSize: "0.6875rem",
+                }}
+              >
+                <span style={{ color: "#a3a3a3" }}>
+                  {c.index === 0 ? `${name} (hero)` : name}
+                </span>
+                <button
+                  onClick={() => {
+                    conn?.reducers.removeConstituent({
+                      sessionId: BigInt(sessionId),
+                      constituentIndex: c.index,
+                    });
+                  }}
+                  style={{
+                    background: "none",
+                    border: "1px solid #333",
+                    borderRadius: "0.1875rem",
+                    color: "#737373",
+                    cursor: "pointer",
+                    fontSize: "0.625rem",
+                    padding: "0.125rem 0.375rem",
+                  }}
+                >
+                  remove
+                </button>
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

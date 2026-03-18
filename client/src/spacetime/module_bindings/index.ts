@@ -40,6 +40,7 @@ import DeletePartOverrideReducer from "./delete_part_override_reducer";
 import ForkPartReducer from "./fork_part_reducer";
 import MergeSessionsReducer from "./merge_sessions_reducer";
 import PlaceOrderReducer from "./place_order_reducer";
+import RemoveConstituentReducer from "./remove_constituent_reducer";
 import SendChatReducer from "./send_chat_reducer";
 import SetNameReducer from "./set_name_reducer";
 import UpdateFlowerSpecReducer from "./update_flower_spec_reducer";
@@ -142,6 +143,7 @@ const reducersSchema = __reducers(
   __reducerSchema("fork_part", ForkPartReducer),
   __reducerSchema("merge_sessions", MergeSessionsReducer),
   __reducerSchema("place_order", PlaceOrderReducer),
+  __reducerSchema("remove_constituent", RemoveConstituentReducer),
   __reducerSchema("send_chat", SendChatReducer),
   __reducerSchema("set_name", SetNameReducer),
   __reducerSchema("update_flower_spec", UpdateFlowerSpecReducer),

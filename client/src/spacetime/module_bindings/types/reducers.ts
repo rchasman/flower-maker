@@ -12,6 +12,7 @@ import DeletePartOverrideReducer from "../delete_part_override_reducer";
 import ForkPartReducer from "../fork_part_reducer";
 import MergeSessionsReducer from "../merge_sessions_reducer";
 import PlaceOrderReducer from "../place_order_reducer";
+import RemoveConstituentReducer from "../remove_constituent_reducer";
 import SendChatReducer from "../send_chat_reducer";
 import SetNameReducer from "../set_name_reducer";
 import UpdateFlowerSpecReducer from "../update_flower_spec_reducer";
@@ -24,6 +25,7 @@ export type DeletePartOverrideParams = __Infer<typeof DeletePartOverrideReducer>
 export type ForkPartParams = __Infer<typeof ForkPartReducer>;
 export type MergeSessionsParams = __Infer<typeof MergeSessionsReducer>;
 export type PlaceOrderParams = __Infer<typeof PlaceOrderReducer>;
+export type RemoveConstituentParams = __Infer<typeof RemoveConstituentReducer>;
 export type SendChatParams = __Infer<typeof SendChatReducer>;
 export type SetNameParams = __Infer<typeof SetNameReducer>;
 export type UpdateFlowerSpecParams = __Infer<typeof UpdateFlowerSpecReducer>;

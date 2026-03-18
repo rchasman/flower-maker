@@ -294,6 +294,15 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
             <PartEditor
               sessionId={Number(selected.id)}
               specJson={selectedSpec?.specJson ?? "{}"}
+              constituents={partOverrides
+                .filter(o => o.sessionId === selected.id && o.partPath.startsWith("constituent:"))
+                .map(o => ({
+                  index: parseInt(o.partPath.split(":")[1] ?? "0", 10),
+                  specJson: o.overrideJson,
+                  forkedFrom: o.forkedFrom,
+                }))
+                .sort((a, b) => a.index - b.index)
+              }
             />
           )}
           {rightPanel === "parts" && !selected && (
