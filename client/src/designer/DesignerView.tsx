@@ -41,6 +41,15 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     ? specs.find(s => s.sessionId === selected.id)
     : null;
 
+  // Push spec data to canvas whenever specs update
+  useEffect(() => {
+    const specMap = specs.reduce<Map<number, string>>(
+      (acc, s) => acc.set(Number(s.sessionId), s.specJson),
+      new Map(),
+    );
+    canvasRef.current?.setSpecMap(specMap);
+  }, [specs]);
+
   useEffect(() => {
     if (!conn || wasmInitialized.current) return;
     wasmInitialized.current = true;
@@ -69,9 +78,9 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     simRef.current?.set_body_position(BigInt(sid), x, y);
   }, []);
 
-  const handleFlowerDragEnd = useCallback((_sid: number) => {
-    // Drag complete — physics takes over naturally via damping
-  }, []);
+  const handleFlowerDragEnd = useCallback((sid: number, x: number, y: number) => {
+    conn?.reducers.updatePosition({ sessionId: BigInt(sid), x, y });
+  }, [conn]);
 
   const handleFlowerGenerated = (specJson: string) => {
     conn?.reducers.createSession({ prompt: specJson });

@@ -3,7 +3,7 @@ import { useSession } from "../session/SessionProvider.tsx";
 import { useFlowerSessions, useFlowerSpecs, useOrders, useUsers } from "../spacetime/hooks.ts";
 import type { FlowerSession, FlowerSpec, User } from "../spacetime/types.ts";
 import { isVariant } from "../spacetime/types.ts";
-import { flowerShape, resolveFlowerColor, resolveFlowerPetalCount, darkenColor, hexString } from "../flower/render.ts";
+import { createFlowerPlan, cmdsToSvgD, hexString } from "../flower/render.ts";
 
 interface FlowerGridProps {
   onEnterDesigner: () => void;
@@ -205,71 +205,63 @@ function arrangementName(level: number): string {
 // ── Mini canvas — live SVG replica of a user's designer canvas ───────────
 // Uses the exact same math as FlowerCanvas (PixiJS) via shared render module.
 
-/** SVG translation of FlowerCanvas.drawFlowerHead — same quadratic Bézier petal geometry. */
+/** Render a single flower from its spec-driven plan. */
 function SvgFlower({ sid, x, y, r, specJson }: { sid: number; x: number; y: number; r: number; specJson?: string }) {
-  const color = resolveFlowerColor(sid, specJson);
-  const specPetalCount = resolveFlowerPetalCount(sid, specJson);
-  const shape = flowerShape(sid, specPetalCount);
-
-  const angleStep = (Math.PI * 2) / shape.petalCount;
-  const petalLen = r * shape.petalLength;
-  const petalW = r * shape.petalWidth;
-  const petalColor = hexString(darkenColor(color, 0.88));
-  const mainColor = hexString(color);
-  const pistilColor = hexString(darkenColor(color, 0.45));
-
-  const petals = Array.from({ length: shape.petalCount }, (_, i) => {
-    const angle = shape.rotationOffset + i * angleStep;
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-
-    const cx = cos * petalLen * 0.55;
-    const cy = sin * petalLen * 0.55;
-    const tx = cos * petalLen;
-    const ty = sin * petalLen;
-    const px = -sin * petalW;
-    const py = cos * petalW;
-    const tpx = -sin * petalW * shape.petalTaper;
-    const tpy = cos * petalW * shape.petalTaper;
-
-    // Outer petal — same quadratic curves as PixiJS drawFlowerHead
-    const outerD = [
-      `M ${x + px * 0.3} ${y + py * 0.3}`,
-      `Q ${x + cx + px} ${y + cy + py} ${x + tx + tpx} ${y + ty + tpy}`,
-      `Q ${x + cx - px} ${y + cy - py} ${x - px * 0.3} ${y - py * 0.3}`,
-      "Z",
-    ].join(" ");
-
-    // Inner petal layer
-    const innerLen = petalLen * 0.7;
-    const innerW = petalW * 0.6;
-    const icx = cos * innerLen * 0.5;
-    const icy = sin * innerLen * 0.5;
-    const itx = cos * innerLen;
-    const ity = sin * innerLen;
-    const ipx = -sin * innerW;
-    const ipy = cos * innerW;
-
-    const innerD = [
-      `M ${x + ipx * 0.2} ${y + ipy * 0.2}`,
-      `Q ${x + icx + ipx} ${y + icy + ipy} ${x + itx} ${y + ity}`,
-      `Q ${x + icx - ipx} ${y + icy - ipy} ${x - ipx * 0.2} ${y - ipy * 0.2}`,
-      "Z",
-    ].join(" ");
-
-    return (
-      <g key={i}>
-        <path d={outerD} fill={petalColor} opacity={0.85} />
-        <path d={innerD} fill={mainColor} opacity={0.9} />
-      </g>
-    );
-  });
+  const plan = createFlowerPlan(specJson, sid);
+  const scale = r;
 
   return (
     <g>
-      {petals}
-      <circle cx={x} cy={y} r={r * 0.28} fill={pistilColor} />
-      <circle cx={x} cy={y} r={r * 0.14} fill="#fefce8" opacity={0.6} />
+      {/* Sepals — behind petals */}
+      {plan.sepals.map((sepal, i) => (
+        <path
+          key={`sep-${i}`}
+          d={cmdsToSvgD(sepal.cmds, x, y, scale)}
+          fill={hexString(sepal.color)}
+          opacity={0.85}
+        />
+      ))}
+
+      {/* Petal layers — outer first (lower z), inner last (upper z) */}
+      {plan.layers.map((layer, li) =>
+        layer.petals.map((petal, pi) => (
+          <path
+            key={`l${li}-p${pi}`}
+            d={cmdsToSvgD(petal.cmds, x, y, scale)}
+            fill={hexString(layer.color)}
+            opacity={layer.opacity}
+          />
+        )),
+      )}
+
+      {/* Stamens */}
+      {plan.center.stamens.map((s, i) => {
+        const sx = x + Math.cos(s.angle) * s.length * scale;
+        const sy = y + Math.sin(s.angle) * s.length * scale;
+        return (
+          <g key={`stm-${i}`}>
+            <line
+              x1={x}
+              y1={y}
+              x2={sx}
+              y2={sy}
+              stroke={hexString(s.filamentColor)}
+              strokeWidth={Math.max(0.3, scale * 0.02)}
+              opacity={0.7}
+            />
+            <circle
+              cx={sx}
+              cy={sy}
+              r={s.antherRadius * scale}
+              fill={hexString(s.antherColor)}
+            />
+          </g>
+        );
+      })}
+
+      {/* Center disc (pistil) */}
+      <circle cx={x} cy={y} r={plan.center.discRadius * scale} fill={hexString(plan.center.discColor)} />
+      <circle cx={x} cy={y} r={plan.center.highlightRadius * scale} fill={hexString(plan.center.highlightColor)} opacity={0.6} />
     </g>
   );
 }
@@ -282,8 +274,8 @@ function MiniCanvas({ sessions, specBySessionId, size }: { sessions: readonly Fl
   const positions = sessions.map(s => ({
     sid: Number(s.id),
     sessionKey: String(s.id),
-    x: Number(s.canvasX),
-    y: Number(s.canvasY),
+    x: Number(s.canvasX) || 0,
+    y: Number(s.canvasY) || 0,
   }));
 
   // If all at (0,0), spread them in a grid
