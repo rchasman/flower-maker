@@ -605,6 +605,274 @@ export function cmdsToSvgD(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Arrangement rendering — multi-flower compositions with stems and leaves
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type StemPlan = {
+  cmds: DrawCmd[];
+  color: number;
+};
+
+export type LeafPlan = {
+  cmds: DrawCmd[];
+  color: number;
+};
+
+export type ArrangementMember = {
+  flowerPlan: FlowerPlan;
+  stem: StemPlan;
+  leaves: readonly LeafPlan[];
+  offsetX: number;
+  offsetY: number;
+  scale: number;
+  angle: number;
+};
+
+/** Pre-computed rendering plan for a multi-flower arrangement. */
+export type ArrangementPlan = {
+  members: readonly ArrangementMember[];
+  baseY: number;
+};
+
+// ── Stem/leaf spec parsing ──
+
+type ParsedStem = {
+  height: number;
+  thickness: number;
+  curvature: number;
+  color: number;
+};
+
+function parseSpecStem(specJson: string | undefined): ParsedStem {
+  if (!specJson) return { height: 0.5, thickness: 0.3, curvature: 0, color: 0x2d5a27 };
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const spec = JSON.parse(specJson) as any;
+    const stem = spec.structure?.stem ?? {};
+    return {
+      height: stem.height ?? 0.5,
+      thickness: stem.thickness ?? 0.3,
+      curvature: stem.curvature ?? 0,
+      color: colorToHex(stem.color) ?? 0x2d5a27,
+    };
+  } catch {
+    return { height: 0.5, thickness: 0.3, curvature: 0, color: 0x2d5a27 };
+  }
+}
+
+function parseLeafColor(specJson: string | undefined): number {
+  if (!specJson) return 0x3a7d32;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const spec = JSON.parse(specJson) as any;
+    const leaf = spec.foliage?.leaves?.[0];
+    return colorToHex(leaf?.color?.stops?.[0]?.color) ?? 0x3a7d32;
+  } catch {
+    return 0x3a7d32;
+  }
+}
+
+// ── Stem generation ──
+
+/** Generate a stem outline as a closed path (two parallel bezier curves). */
+function generateStem(
+  fromX: number, fromY: number,
+  toX: number, toY: number,
+  curvature: number,
+  halfWidth: number,
+  _color: number,
+): DrawCmd[] {
+  const dx = toX - fromX;
+  const dy = toY - fromY;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 0.001) return [];
+
+  // Normal perpendicular to stem direction
+  const nx = -dy / len;
+  const ny = dx / len;
+
+  // Curvature offset at midpoint (lateral bend)
+  const curvOff = curvature * len * 0.3;
+  const midX = (fromX + toX) / 2 + nx * curvOff;
+  const midY = (fromY + toY) / 2 + ny * curvOff;
+
+  // Taper: wider at base, narrower at top
+  const baseW = halfWidth;
+  const tipW = halfWidth * 0.5;
+
+  // Left side (base → tip)
+  const lb1x = fromX + nx * baseW;
+  const lb1y = fromY + ny * baseW;
+  const lm1x = midX + nx * (baseW + tipW) * 0.5;
+  const lm1y = midY + ny * (baseW + tipW) * 0.5;
+  const lt1x = toX + nx * tipW;
+  const lt1y = toY + ny * tipW;
+
+  // Right side (tip → base)
+  const rt1x = toX - nx * tipW;
+  const rt1y = toY - ny * tipW;
+  const rm1x = midX - nx * (baseW + tipW) * 0.5;
+  const rm1y = midY - ny * (baseW + tipW) * 0.5;
+  const rb1x = fromX - nx * baseW;
+  const rb1y = fromY - ny * baseW;
+
+  return [
+    { op: "M", x: lb1x, y: lb1y },
+    { op: "C", c1x: lb1x, c1y: lb1y + (lm1y - lb1y) * 0.5, c2x: lm1x, c2y: lm1y - (lm1y - lb1y) * 0.5, x: lm1x, y: lm1y },
+    { op: "C", c1x: lm1x, c1y: lm1y + (lt1y - lm1y) * 0.5, c2x: lt1x, c2y: lt1y - (lt1y - lm1y) * 0.5, x: lt1x, y: lt1y },
+    { op: "L", x: rt1x, y: rt1y },
+    { op: "C", c1x: rt1x, c1y: rt1y + (rm1y - rt1y) * 0.5, c2x: rm1x, c2y: rm1y - (rm1y - rt1y) * 0.5, x: rm1x, y: rm1y },
+    { op: "C", c1x: rm1x, c1y: rm1y + (rb1y - rm1y) * 0.5, c2x: rb1x, c2y: rb1y - (rb1y - rm1y) * 0.5, x: rb1x, y: rb1y },
+    { op: "Z" },
+  ];
+}
+
+// ── Leaf generation ──
+
+/** Generate a simple leaf at a point along the stem. */
+function generateLeafAt(
+  x: number, y: number,
+  angle: number,
+  size: number,
+): DrawCmd[] {
+  // Reuse petal generation with leaf-like parameters
+  return generatePetal(
+    angle,
+    "Lanceolate",
+    "Smooth",
+    size * 0.8,   // length
+    size * 0.5,   // width
+    0.15,         // curvature — slight cup
+    0,            // no curl
+    angle * 7.3,  // deterministic seed from angle
+  );
+}
+
+// ── Arrangement layout ──
+
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5)); // ~137.5 degrees
+
+type LayoutSlot = {
+  offsetX: number;
+  offsetY: number;
+  stemAngle: number;
+  scale: number;
+  stemLength: number;
+};
+
+/** Compute flower positions for an arrangement level. */
+function layoutForLevel(count: number, level: number): LayoutSlot[] {
+  if (count <= 1) {
+    // Single stem — straight down
+    return [{ offsetX: 0, offsetY: -0.7, stemAngle: 0, scale: 1.0, stemLength: 0.7 }];
+  }
+
+  return Array.from({ length: count }, (_, i) => {
+    const isHero = i === 0;
+
+    if (level <= 2) {
+      // Group (2-3): fan stems from shared base
+      const spread = Math.PI * 0.35;
+      const angleStep = count > 1 ? spread / (count - 1) : 0;
+      const angle = -spread / 2 + i * angleStep;
+      const stemLen = isHero ? 0.8 : 0.65;
+      return {
+        offsetX: Math.sin(angle) * stemLen * 0.7,
+        offsetY: -stemLen * 0.85 + Math.abs(Math.sin(angle)) * 0.15,
+        stemAngle: angle,
+        scale: isHero ? 1.0 : 0.8,
+        stemLength: stemLen,
+      };
+    }
+
+    if (level <= 3) {
+      // Bunch (4-6): wider fan
+      const spread = Math.PI * 0.55;
+      const angleStep = count > 1 ? spread / (count - 1) : 0;
+      const angle = -spread / 2 + i * angleStep;
+      const stemLen = isHero ? 0.8 : 0.55 + Math.random() * 0.15;
+      return {
+        offsetX: Math.sin(angle) * stemLen * 0.6,
+        offsetY: -stemLen * 0.8 + Math.abs(Math.sin(angle)) * 0.2,
+        stemAngle: angle,
+        scale: isHero ? 1.0 : 0.7 + (1 - Math.abs(angle) / (spread / 2)) * 0.1,
+        stemLength: stemLen,
+      };
+    }
+
+    // Arrangement / Bouquet / Centerpiece: golden-angle spiral
+    const radius = isHero ? 0 : 0.2 + Math.sqrt(i / count) * 0.5;
+    const theta = i * GOLDEN_ANGLE;
+    const stemLen = isHero ? 0.85 : 0.55 + (1 - radius) * 0.2;
+    return {
+      offsetX: Math.cos(theta) * radius,
+      offsetY: -stemLen * 0.75 + Math.sin(theta) * radius * 0.3,
+      stemAngle: Math.cos(theta) * radius * 0.6,
+      scale: isHero ? 1.0 : Math.max(0.55, 0.85 - radius * 0.4),
+      stemLength: stemLen,
+    };
+  });
+}
+
+/** Create a complete arrangement plan from constituent flower specs. */
+export function createArrangementPlan(
+  constituents: ReadonlyArray<{ specJson: string; sid: number }>,
+  level: number,
+): ArrangementPlan {
+  const count = constituents.length;
+  const slots = layoutForLevel(count, level);
+  const baseY = 0.9; // stems converge at this Y (below flower heads)
+
+  const members: ArrangementMember[] = slots.map((slot, i) => {
+    const { specJson, sid } = constituents[Math.min(i, count - 1)]!;
+    const flowerPlan = createFlowerPlan(specJson, sid);
+    const stemData = parseSpecStem(specJson);
+    const leafColor = parseLeafColor(specJson);
+
+    // Stem from base to flower head position
+    const stemHalfW = Math.max(0.01, Math.min(0.04, stemData.thickness * 0.04));
+    const stemCmds = generateStem(
+      0, baseY,
+      slot.offsetX, slot.offsetY,
+      stemData.curvature + slot.stemAngle * 0.3,
+      stemHalfW,
+      stemData.color,
+    );
+
+    const stem: StemPlan = { cmds: stemCmds, color: stemData.color };
+
+    // 1-2 leaves along stem
+    const stemMidX = slot.offsetX * 0.4;
+    const stemMidY = (baseY + slot.offsetY) * 0.55;
+    const leafSize = 0.3 + stemData.thickness * 0.2;
+    const leafAngle1 = slot.stemAngle - Math.PI * 0.35;
+    const leafAngle2 = slot.stemAngle + Math.PI * 0.4;
+
+    const leaves: LeafPlan[] = [
+      { cmds: generateLeafAt(stemMidX, stemMidY, leafAngle1, leafSize), color: leafColor },
+    ];
+    // Second leaf on longer stems
+    if (slot.stemLength > 0.6) {
+      const leafMidX2 = slot.offsetX * 0.65;
+      const leafMidY2 = (baseY + slot.offsetY) * 0.35;
+      leaves.push({ cmds: generateLeafAt(leafMidX2, leafMidY2, leafAngle2, leafSize * 0.8), color: leafColor });
+    }
+
+    return {
+      flowerPlan,
+      stem,
+      leaves,
+      offsetX: slot.offsetX,
+      offsetY: slot.offsetY,
+      scale: slot.scale,
+      angle: slot.stemAngle,
+    };
+  });
+
+  return { members, baseY };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Legacy API — preserved for any transitional callers
 // ═══════════════════════════════════════════════════════════════════════════
 

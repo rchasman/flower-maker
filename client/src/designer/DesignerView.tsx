@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "../session/SessionProvider.tsx";
-import { useFlowerSessions, useFlowerSpecs } from "../spacetime/hooks.ts";
+import { useFlowerSessions, useFlowerSpecs, usePartOverrides } from "../spacetime/hooks.ts";
 import { TemplatePicker } from "./TemplatePicker.tsx";
 import { FlowerChat } from "../ai/FlowerChat.tsx";
 import { OrderFlow } from "../orders/OrderFlow.tsx";
@@ -26,6 +26,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
   const { conn } = useSession();
   const sessions = useFlowerSessions(conn);
   const specs = useFlowerSpecs(conn);
+  const partOverrides = usePartOverrides(conn);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [rightPanel, setRightPanel] = useState<RightPanel>("order");
   const [flowerCount, setFlowerCount] = useState(0);
@@ -49,6 +50,21 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     );
     canvasRef.current?.setSpecMap(specMap);
   }, [specs]);
+
+  // Push constituent data to canvas for arrangement rendering
+  useEffect(() => {
+    const constituentMap = partOverrides
+      .filter(o => o.partPath.startsWith("constituent:"))
+      .reduce<Map<number, Array<{ specJson: string; sid: number }>>>((acc, o) => {
+        const sid = Number(o.sessionId);
+        const idx = parseInt(o.partPath.split(":")[1] ?? "0", 10);
+        const existing = acc.get(sid) ?? [];
+        existing[idx] = { specJson: o.overrideJson, sid: idx };
+        acc.set(sid, existing);
+        return acc;
+      }, new Map());
+    canvasRef.current?.setConstituentMap(constituentMap);
+  }, [partOverrides]);
 
   useEffect(() => {
     if (!conn || wasmInitialized.current) return;

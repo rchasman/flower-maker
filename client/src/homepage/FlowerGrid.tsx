@@ -1,9 +1,9 @@
 import { run, scoreColor } from "../lib/utils.ts";
 import { useSession } from "../session/SessionProvider.tsx";
-import { useFlowerSessions, useFlowerSpecs, useOrders, useUsers } from "../spacetime/hooks.ts";
-import type { FlowerSession, FlowerSpec, User } from "../spacetime/types.ts";
+import { useFlowerSessions, useFlowerSpecs, useOrders, useUsers, usePartOverrides } from "../spacetime/hooks.ts";
+import type { FlowerSession, FlowerSpec, FlowerPartOverride, User } from "../spacetime/types.ts";
 import { isVariant } from "../spacetime/types.ts";
-import { createFlowerPlan, cmdsToSvgD, hexString } from "../flower/render.ts";
+import { createFlowerPlan, createArrangementPlan, cmdsToSvgD, hexString } from "../flower/render.ts";
 
 interface FlowerGridProps {
   onEnterDesigner: () => void;
@@ -24,7 +24,20 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
   const specs = useFlowerSpecs(conn);
   const users = useUsers(conn);
   const orders = useOrders(conn);
+  const partOverrides = usePartOverrides(conn);
   const onlineCount = users.filter(u => u.online).length;
+
+  // Build constituent map for arrangement rendering
+  const constituentMap = partOverrides
+    .filter(o => o.partPath.startsWith("constituent:"))
+    .reduce<Map<string, Array<{ specJson: string; sid: number }>>>((acc, o) => {
+      const key = String(o.sessionId);
+      const idx = parseInt(o.partPath.split(":")[1] ?? "0", 10);
+      const existing = acc.get(key) ?? [];
+      existing[idx] = { specJson: o.overrideJson, sid: idx };
+      acc.set(key, existing);
+      return acc;
+    }, new Map());
 
   // Build a spec lookup by sessionId for O(1) access
   const specBySessionId = specs.reduce<Map<string, FlowerSpec>>(
@@ -145,6 +158,7 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
             key={String(zone.user.identity)}
             zone={zone}
             specBySessionId={specBySessionId}
+            constituentMap={constituentMap}
             onClick={zone.isYours ? onEnterDesigner : undefined}
           />
         ))}
@@ -206,8 +220,8 @@ function arrangementName(level: number): string {
 // Uses the exact same math as FlowerCanvas (PixiJS) via shared render module.
 
 /** Render a single flower from its spec-driven plan. */
-function SvgFlower({ sid, x, y, r, specJson }: { sid: number; x: number; y: number; r: number; specJson?: string }) {
-  const plan = createFlowerPlan(specJson, sid);
+function SvgFlower({ sid, x, y, r, specJson, plan: precomputedPlan }: { sid: number; x: number; y: number; r: number; specJson?: string; plan?: ReturnType<typeof createFlowerPlan> }) {
+  const plan = precomputedPlan ?? createFlowerPlan(specJson, sid);
   const scale = r;
 
   return (
@@ -266,8 +280,54 @@ function SvgFlower({ sid, x, y, r, specJson }: { sid: number; x: number; y: numb
   );
 }
 
+/** Render a multi-flower arrangement from its pre-computed plan. */
+function SvgArrangement({ x, y, r, constituents, level }: {
+  x: number; y: number; r: number;
+  constituents: ReadonlyArray<{ specJson: string; sid: number }>;
+  level: number;
+}) {
+  const plan = createArrangementPlan(constituents, level);
+  const scale = r;
+
+  return (
+    <g>
+      {/* Stems */}
+      {plan.members.map((member, i) => (
+        <path
+          key={`stem-${i}`}
+          d={cmdsToSvgD(member.stem.cmds, x, y, scale)}
+          fill={hexString(member.stem.color)}
+          opacity={0.9}
+        />
+      ))}
+
+      {/* Leaves */}
+      {plan.members.map((member, mi) =>
+        member.leaves.map((leaf, li) => (
+          <path
+            key={`leaf-${mi}-${li}`}
+            d={cmdsToSvgD(leaf.cmds, x, y, scale)}
+            fill={hexString(leaf.color)}
+            opacity={0.85}
+          />
+        )),
+      )}
+
+      {/* Flower heads (back to front) */}
+      {[...plan.members].reverse().map((member, i) => {
+        const flowerScale = scale * member.scale;
+        const ox = x + member.offsetX * scale;
+        const oy = y + member.offsetY * scale;
+        return (
+          <SvgFlower key={`head-${i}`} sid={member.flowerPlan === plan.members[0]?.flowerPlan ? 0 : i + 1} x={ox} y={oy} r={flowerScale} specJson={undefined} plan={member.flowerPlan} />
+        );
+      })}
+    </g>
+  );
+}
+
 /** Live mini-canvas: renders all of a user's flowers at their real positions, scaled to fit. */
-function MiniCanvas({ sessions, specBySessionId, size }: { sessions: readonly FlowerSession[]; specBySessionId: Map<string, FlowerSpec>; size: number }) {
+function MiniCanvas({ sessions, specBySessionId, constituentMap, size }: { sessions: readonly FlowerSession[]; specBySessionId: Map<string, FlowerSpec>; constituentMap: Map<string, Array<{ specJson: string; sid: number }>>; size: number }) {
   if (sessions.length === 0) return null;
 
   // Compute bounding box of all flower positions
@@ -315,9 +375,14 @@ function MiniCanvas({ sessions, specBySessionId, size }: { sessions: readonly Fl
       style={{ borderRadius: "0.25rem" }}
     >
       <rect x={vbX} y={vbY} width={bboxW} height={bboxH} fill="#0d0d0d" />
-      {resolved.map(p => (
-        <SvgFlower key={p.sid} sid={p.sid} x={p.x} y={p.y} r={flowerR} specJson={specBySessionId.get(p.sessionKey)?.specJson} />
-      ))}
+      {resolved.map(p => {
+        const constituents = constituentMap.get(p.sessionKey);
+        if (constituents && constituents.length > 1) {
+          const level = Math.min(7, Math.ceil(constituents.length / 3));
+          return <SvgArrangement key={p.sid} x={p.x} y={p.y} r={flowerR} constituents={constituents} level={level} />;
+        }
+        return <SvgFlower key={p.sid} sid={p.sid} x={p.x} y={p.y} r={flowerR} specJson={specBySessionId.get(p.sessionKey)?.specJson} />;
+      })}
     </svg>
   );
 }
@@ -340,10 +405,12 @@ function EmptyZoneIcon({ isYours }: { isYours: boolean }) {
 function ZoneCard({
   zone,
   specBySessionId,
+  constituentMap,
   onClick,
 }: {
   zone: ZoneData;
   specBySessionId: Map<string, FlowerSpec>;
+  constituentMap: Map<string, Array<{ specJson: string; sid: number }>>;
   onClick?: () => void;
 }) {
   const { user, session, allSessions, incomingOrders, isYours } = zone;
@@ -396,7 +463,7 @@ function ZoneCard({
       }}
     >
       {allSessions.length > 0 ? (
-        <MiniCanvas sessions={allSessions} specBySessionId={specBySessionId} size={100} />
+        <MiniCanvas sessions={allSessions} specBySessionId={specBySessionId} constituentMap={constituentMap} size={100} />
       ) : (
         <EmptyZoneIcon isYours={isYours} />
       )}

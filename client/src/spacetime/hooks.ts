@@ -5,6 +5,7 @@ import type {
   DbConnection,
   FlowerSession,
   FlowerSpec,
+  FlowerPartOverride,
   User,
   FlowerOrder,
   ChatMessage,
@@ -73,6 +74,10 @@ export function useOrders(conn: DbConnection | null) {
 
 export function useChatMessages(conn: DbConnection | null) {
   return useTable<ChatMessage>(conn, "chat_message");
+}
+
+export function usePartOverrides(conn: DbConnection | null) {
+  return useTable<FlowerPartOverride>(conn, "part_override");
 }
 
 

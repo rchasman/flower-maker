@@ -7,15 +7,21 @@ import {
   colorFromSpec,
   darkenColor,
   createFlowerPlan,
+  createArrangementPlan,
   type FlowerPlan,
+  type ArrangementPlan,
   type DrawCmd,
 } from "../flower/render.ts";
+
+export type ConstituentEntry = { specJson: string; sid: number };
 
 export interface FlowerCanvasHandle {
   /** Push new render data each frame from the WASM loop. */
   updateFlowers(data: FlowerRenderData[]): void;
   /** Update the spec map (sid → specJson) — call when specs change. */
   setSpecMap(specs: Map<number, string>): void;
+  /** Update the constituent map (sid → array of constituent specs) for arrangements. */
+  setConstituentMap(constituents: Map<number, ConstituentEntry[]>): void;
 }
 
 interface FlowerCanvasProps {
@@ -112,6 +118,117 @@ function drawFlowerFromPlan(
   g.fill({ color: plan.center.highlightColor, alpha: alpha * 0.6 });
 }
 
+/** Draw a multi-flower arrangement from its pre-computed plan. */
+function drawArrangementFromPlan(
+  g: Graphics,
+  plan: ArrangementPlan,
+  r: number,
+  alpha: number,
+) {
+  const scale = r;
+
+  // Draw back-to-front: stems first, then leaves, then flower heads
+  // Pass 1: All stems
+  plan.members.map((member) => {
+    drawCmds(g, member.stem.cmds, scale);
+    g.fill({ color: member.stem.color, alpha: alpha * 0.9 });
+    return null;
+  });
+
+  // Pass 2: All leaves
+  plan.members.map((member) => {
+    member.leaves.map((leaf) => {
+      drawCmds(g, leaf.cmds, scale);
+      g.fill({ color: leaf.color, alpha: alpha * 0.85 });
+      return null;
+    });
+    return null;
+  });
+
+  // Pass 3: Flower heads (back to front — hero last so it's on top)
+  [...plan.members].reverse().map((member) => {
+    const flowerScale = scale * member.scale;
+    const ox = member.offsetX * scale;
+    const oy = member.offsetY * scale;
+
+    // Translate to flower head position for drawing
+    // Save current transform by offsetting all draw commands
+    const offsetPlan: FlowerPlan = {
+      sepals: member.flowerPlan.sepals.map((s) => ({
+        cmds: s.cmds.map((cmd) => offsetCmd(cmd, ox, oy)),
+        color: s.color,
+      })),
+      layers: member.flowerPlan.layers.map((l) => ({
+        petals: l.petals.map((p) => ({
+          cmds: p.cmds.map((cmd) => offsetCmd(cmd, ox, oy)),
+        })),
+        color: l.color,
+        opacity: l.opacity,
+      })),
+      center: {
+        ...member.flowerPlan.center,
+        stamens: member.flowerPlan.center.stamens.map((s) => ({ ...s })),
+      },
+    };
+
+    // Draw sepals
+    offsetPlan.sepals.map((sepal) => {
+      drawCmds(g, sepal.cmds, flowerScale);
+      g.fill({ color: sepal.color, alpha: alpha * 0.85 });
+      return null;
+    });
+
+    // Petal layers
+    offsetPlan.layers.map((layer) => {
+      layer.petals.map((petal) => {
+        drawCmds(g, petal.cmds, flowerScale);
+        g.fill({ color: layer.color, alpha: alpha * layer.opacity });
+        return null;
+      });
+      return null;
+    });
+
+    // Stamens
+    member.flowerPlan.center.stamens.map((s) => {
+      const sx = ox + Math.cos(s.angle) * s.length * flowerScale;
+      const sy = oy + Math.sin(s.angle) * s.length * flowerScale;
+      g.moveTo(ox, oy);
+      g.lineTo(sx, sy);
+      g.stroke({
+        color: s.filamentColor,
+        width: Math.max(0.3, flowerScale * 0.02),
+        alpha: alpha * 0.7,
+      });
+      g.circle(sx, sy, s.antherRadius * flowerScale);
+      g.fill({ color: s.antherColor, alpha });
+      return null;
+    });
+
+    // Center disc
+    g.circle(ox, oy, member.flowerPlan.center.discRadius * flowerScale);
+    g.fill({ color: member.flowerPlan.center.discColor, alpha });
+    g.circle(ox, oy, member.flowerPlan.center.highlightRadius * flowerScale);
+    g.fill({ color: member.flowerPlan.center.highlightColor, alpha: alpha * 0.6 });
+
+    return null;
+  });
+}
+
+/** Offset a DrawCmd by (dx, dy) in unit space. */
+function offsetCmd(cmd: DrawCmd, dx: number, dy: number): DrawCmd {
+  switch (cmd.op) {
+    case "M": return { op: "M", x: cmd.x + dx, y: cmd.y + dy };
+    case "L": return { op: "L", x: cmd.x + dx, y: cmd.y + dy };
+    case "C": return {
+      op: "C",
+      c1x: cmd.c1x + dx, c1y: cmd.c1y + dy,
+      c2x: cmd.c2x + dx, c2y: cmd.c2y + dy,
+      x: cmd.x + dx, y: cmd.y + dy,
+    };
+    case "Z": return cmd;
+  }
+}
+
 const FLOWER_BASE_RADIUS = 14;
 const SELECTION_RING_PAD = 6;
 
@@ -129,33 +246,50 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const onFlowerDragRef = useRef(onFlowerDrag);
     const onFlowerDragEndRef = useRef(onFlowerDragEnd);
 
-    // Spec map and cached plans
+    // Spec map, constituent map, and cached plans
     const specMapRef = useRef<Map<number, string>>(new Map());
-    const planCacheRef = useRef<Map<number, { specJson: string; plan: FlowerPlan }>>(new Map());
+    const constituentMapRef = useRef<Map<number, ConstituentEntry[]>>(new Map());
+    const planCacheRef = useRef<Map<number, { key: string; plan: FlowerPlan | ArrangementPlan; isArrangement: boolean }>>(new Map());
 
     // Keep refs in sync without re-running effects
     selectedIdRef.current = selectedId;
     onFlowerDragRef.current = onFlowerDrag;
     onFlowerDragEndRef.current = onFlowerDragEnd;
 
-    /** Get or create the cached FlowerPlan for a given sid. */
-    const getPlan = useCallback((sid: number): FlowerPlan => {
-      const specJson = specMapRef.current.get(sid);
-      const cached = planCacheRef.current.get(sid);
+    /** Get or create the cached plan (FlowerPlan or ArrangementPlan) for a given sid. */
+    const getPlan = useCallback((sid: number): { plan: FlowerPlan | ArrangementPlan; isArrangement: boolean } => {
+      const specJson = specMapRef.current.get(sid) ?? "";
+      const constituents = constituentMapRef.current.get(sid);
+      const isArrangement = !!constituents && constituents.length > 1;
 
-      // Cache hit — same spec
-      if (cached && cached.specJson === (specJson ?? "")) {
-        return cached.plan;
+      // Cache key includes constituent count so arrangement changes invalidate
+      const cacheKey = isArrangement
+        ? `arr:${constituents.length}:${constituents.map(c => c.specJson).join("|")}`
+        : specJson;
+
+      const cached = planCacheRef.current.get(sid);
+      if (cached && cached.key === cacheKey) {
+        return { plan: cached.plan, isArrangement: cached.isArrangement };
       }
 
       // Cache miss — recompute
-      const plan = createFlowerPlan(specJson, sid);
-      planCacheRef.current.set(sid, { specJson: specJson ?? "", plan });
-      return plan;
+      if (isArrangement) {
+        const plan = createArrangementPlan(constituents, Math.min(7, Math.ceil(constituents.length / 3)));
+        planCacheRef.current.set(sid, { key: cacheKey, plan, isArrangement: true });
+        return { plan, isArrangement: true };
+      }
+
+      const plan = createFlowerPlan(specJson || undefined, sid);
+      planCacheRef.current.set(sid, { key: cacheKey, plan, isArrangement: false });
+      return { plan, isArrangement: false };
     }, []);
 
     const setSpecMap = useCallback((specs: Map<number, string>) => {
       specMapRef.current = specs;
+    }, []);
+
+    const setConstituentMap = useCallback((constituents: Map<number, ConstituentEntry[]>) => {
+      constituentMapRef.current = constituents;
     }, []);
 
     const updateFlowers = useCallback(
@@ -199,14 +333,14 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           }
 
           const r = FLOWER_BASE_RADIUS * flower.scale;
-          const plan = getPlan(flower.sid);
+          const { plan, isArrangement } = getPlan(flower.sid);
 
           // Override plan layer colors with live WASM color data
           // (WASM extracts petal_color from spec and passes it in the render buffer)
           const liveColor = resolveColor(flower);
 
-          // Compute hit area from outermost petal extent
-          const hitRadius = r * 1.3;
+          // Arrangements need a bigger hit area
+          const hitRadius = isArrangement ? r * 2.5 : r * 1.3;
           g.hitArea = new Circle(0, 0, hitRadius);
 
           g.clear();
@@ -214,7 +348,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           // Selection ring
           const isSelected = selectedIdRef.current === flower.sid;
           if (isSelected) {
-            g.circle(0, 0, r * 1.1 + SELECTION_RING_PAD);
+            const ringR = isArrangement ? r * 2.0 + SELECTION_RING_PAD : r * 1.1 + SELECTION_RING_PAD;
+            g.circle(0, 0, ringR);
             g.stroke({ color: 0xffffff, width: 2, alpha: 0.7 });
           }
 
@@ -224,8 +359,12 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             g.fill({ color: liveColor, alpha: 0.15 * flower.alpha });
           }
 
-          // Draw the flower from its spec-driven plan
-          drawFlowerFromPlan(g, plan, r, flower.alpha);
+          // Draw the flower or arrangement from its spec-driven plan
+          if (isArrangement) {
+            drawArrangementFromPlan(g, plan as ArrangementPlan, r, flower.alpha);
+          } else {
+            drawFlowerFromPlan(g, plan as FlowerPlan, r, flower.alpha);
+          }
 
           g.position.set(flower.x, flower.y);
           g.rotation = flower.rotation;
@@ -236,9 +375,10 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
       [onFlowerClick, getPlan],
     );
 
-    useImperativeHandle(ref, () => ({ updateFlowers, setSpecMap }), [
+    useImperativeHandle(ref, () => ({ updateFlowers, setSpecMap, setConstituentMap }), [
       updateFlowers,
       setSpecMap,
+      setConstituentMap,
     ]);
 
     useEffect(() => {
