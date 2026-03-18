@@ -12,10 +12,34 @@ interface FlowerCanvasProps {
   selectedId?: number | null;
 }
 
+/** Deterministic hash from sid — yields a float in [0, 1). */
+function sidHash(sid: number, salt: number): number {
+  const n = Math.sin(sid * 9301 + salt * 4973) * 49297;
+  return n - Math.floor(n);
+}
+
 /** Petal color per session id — deterministic from sid. */
 function flowerColor(sid: number): number {
   const hues = [0xff6b9d, 0xc084fc, 0x67e8f9, 0xfbbf24, 0x4ade80, 0xf87171, 0xa78bfa, 0x38bdf8];
   return hues[sid % hues.length]!;
+}
+
+/** Darken a hex color by a factor (0–1, where 0 = black). */
+function darkenColor(color: number, factor: number): number {
+  const r = Math.floor(((color >> 16) & 0xff) * factor);
+  const g = Math.floor(((color >> 8) & 0xff) * factor);
+  const b = Math.floor((color & 0xff) * factor);
+  return (r << 16) | (g << 8) | b;
+}
+
+/** Flower shape parameters derived deterministically from sid. */
+function flowerShape(sid: number) {
+  const petalCount = 5 + Math.floor(sidHash(sid, 1) * 3);       // 5–7 petals
+  const petalLength = 0.75 + sidHash(sid, 2) * 0.35;            // relative to radius
+  const petalWidth = 0.28 + sidHash(sid, 3) * 0.18;             // relative to radius
+  const petalTaper = 0.6 + sidHash(sid, 4) * 0.3;               // tip narrowing
+  const rotationOffset = sidHash(sid, 5) * Math.PI * 2;         // starting angle
+  return { petalCount, petalLength, petalWidth, petalTaper, rotationOffset };
 }
 
 const FLOWER_BASE_RADIUS = 14;
@@ -80,13 +104,70 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           g.fill({ color, alpha: 0.15 * flower.alpha });
         }
 
-        // Flower body
-        g.circle(0, 0, r);
-        g.fill({ color, alpha: flower.alpha });
+        // Petals — ellipses arranged radially
+        const shape = flowerShape(flower.sid);
+        const angleStep = (Math.PI * 2) / shape.petalCount;
+        const petalLen = r * shape.petalLength;
+        const petalW = r * shape.petalWidth;
+        const petalColor = darkenColor(color, 0.88);
 
-        // Center dot
-        g.circle(0, 0, r * 0.3);
-        g.fill({ color: 0xfefce8, alpha: flower.alpha * 0.9 });
+        Array.from({ length: shape.petalCount }, (_, i) => {
+          const angle = shape.rotationOffset + i * angleStep;
+          const cos = Math.cos(angle);
+          const sin = Math.sin(angle);
+
+          // Build ellipse petal as a quadratic bezier path
+          // Petal center sits at half the petal length from origin
+          const cx = cos * petalLen * 0.55;
+          const cy = sin * petalLen * 0.55;
+
+          // Petal tip
+          const tx = cos * petalLen;
+          const ty = sin * petalLen;
+
+          // Perpendicular direction for petal width
+          const px = -sin * petalW;
+          const py = cos * petalW;
+
+          // Tip width (tapered)
+          const tpx = -sin * petalW * shape.petalTaper;
+          const tpy = cos * petalW * shape.petalTaper;
+
+          // Draw petal as a closed shape: base → left side → tip → right side → base
+          g.moveTo(px * 0.3, py * 0.3);
+          g.quadraticCurveTo(cx + px, cy + py, tx + tpx, ty + tpy);
+          g.quadraticCurveTo(cx - px, cy - py, -px * 0.3, -py * 0.3);
+          g.closePath();
+          g.fill({ color: petalColor, alpha: flower.alpha * 0.85 });
+
+          // Inner petal layer (slightly smaller, brighter) for depth
+          const innerLen = petalLen * 0.7;
+          const innerW = petalW * 0.6;
+          const icx = cos * innerLen * 0.5;
+          const icy = sin * innerLen * 0.5;
+          const itx = cos * innerLen;
+          const ity = sin * innerLen;
+          const ipx = -sin * innerW;
+          const ipy = cos * innerW;
+
+          g.moveTo(ipx * 0.2, ipy * 0.2);
+          g.quadraticCurveTo(icx + ipx, icy + ipy, itx, ity);
+          g.quadraticCurveTo(icx - ipx, icy - ipy, -ipx * 0.2, -ipy * 0.2);
+          g.closePath();
+          g.fill({ color, alpha: flower.alpha * 0.9 });
+
+          return i;
+        });
+
+        // Center disc (pistil) — darker contrasting circle
+        const pistilColor = darkenColor(color, 0.45);
+        const pistilR = r * 0.28;
+        g.circle(0, 0, pistilR);
+        g.fill({ color: pistilColor, alpha: flower.alpha });
+
+        // Pistil highlight — warm center dot
+        g.circle(0, 0, pistilR * 0.5);
+        g.fill({ color: 0xfefce8, alpha: flower.alpha * 0.6 });
 
         g.position.set(flower.x, flower.y);
         g.rotation = flower.rotation;
