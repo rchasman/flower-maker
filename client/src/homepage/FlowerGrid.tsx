@@ -2,7 +2,6 @@ import { run, scoreColor } from "../lib/utils.ts";
 import { useSession } from "../session/SessionProvider.tsx";
 import { useFlowerSessions, useOrders, useUsers } from "../spacetime/hooks.ts";
 import type { FlowerSession, User } from "../spacetime/types.ts";
-import { isVariant } from "../spacetime/types.ts";
 
 interface FlowerGridProps {
   onEnterDesigner: () => void;
@@ -169,30 +168,69 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
   );
 }
 
-function FlowerIcon({ designing }: { designing: boolean }) {
-  if (designing) {
+const ARRANGEMENT_LEVELS: readonly string[] = [
+  "Stem",
+  "Group",
+  "Bunch",
+  "Arrangement",
+  "Bouquet",
+  "Centerpiece",
+  "Installation",
+];
+
+function arrangementName(level: number): string {
+  return ARRANGEMENT_LEVELS[Math.min(level, ARRANGEMENT_LEVELS.length) - 1] ?? "Stem";
+}
+
+function ArrangementIcon({
+  level,
+  isYours,
+}: {
+  level: number;
+  isYours: boolean;
+}) {
+  const color = isYours ? "#8b8bd4" : "#525252";
+  const dimColor = isYours ? "#6b6bb4" : "#404040";
+
+  // Level 1: single dot
+  if (level <= 1) {
     return (
-      <span
-        style={{
-          fontSize: "1.25rem",
-          color: "#8b8bd4",
-          fontFamily: "monospace",
-        }}
-      >
-        *
-      </span>
+      <svg width="24" height="24" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="3" fill={color} />
+      </svg>
     );
   }
 
-  // Simple dot-pattern flower: 5 dots around a center
+  // Level 2-3: 3 dots in a triangle
+  if (level <= 3) {
+    return (
+      <svg width="24" height="24" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="2.5" fill={color} />
+        <circle cx="8" cy="16" r="2" fill={dimColor} />
+        <circle cx="16" cy="16" r="2" fill={dimColor} />
+      </svg>
+    );
+  }
+
+  // Level 4-6: 5 dots in a ring around center
+  if (level <= 6) {
+    return (
+      <svg width="24" height="24" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="2.5" fill={color} />
+        <circle cx="12" cy="6" r="1.8" fill={dimColor} />
+        <circle cx="17" cy="10" r="1.8" fill={dimColor} />
+        <circle cx="15" cy="16" r="1.8" fill={dimColor} />
+        <circle cx="9" cy="16" r="1.8" fill={dimColor} />
+        <circle cx="7" cy="10" r="1.8" fill={dimColor} />
+      </svg>
+    );
+  }
+
+  // Level 7+: filled ring
   return (
     <svg width="24" height="24" viewBox="0 0 24 24">
-      <circle cx="12" cy="12" r="2.5" fill="#525252" />
-      <circle cx="12" cy="6" r="1.5" fill="#404040" />
-      <circle cx="17" cy="10" r="1.5" fill="#404040" />
-      <circle cx="15" cy="16" r="1.5" fill="#404040" />
-      <circle cx="9" cy="16" r="1.5" fill="#404040" />
-      <circle cx="7" cy="10" r="1.5" fill="#404040" />
+      <circle cx="12" cy="12" r="10" fill="none" stroke={dimColor} strokeWidth="4" />
+      <circle cx="12" cy="12" r="4" fill={color} />
     </svg>
   );
 }
@@ -205,15 +243,18 @@ function ZoneCard({
   onClick?: () => void;
 }) {
   const { user, session, incomingOrders, isYours } = zone;
-  const isDesigning = session != null && isVariant(session.status, "Designing");
+  const level = session ? Number(session.arrangementLevel) : 0;
+  const flowerCount = session ? Number(session.flowerCount) : 0;
+
   const displayName = run(() => {
+    if (isYours && session) return `Your Zone -- ${arrangementName(level)}`;
     if (isYours) return "Your Zone";
     return user.name ?? "Anonymous";
   });
 
   const subtitle = run(() => {
-    if (session && isDesigning) {
-      return session.prompt.slice(0, 30);
+    if (session && flowerCount > 0) {
+      return `${flowerCount} ${flowerCount === 1 ? "flower" : "flowers"}`;
     }
     if (!user.online && incomingOrders > 0) {
       return `${incomingOrders} orders`;
@@ -248,7 +289,7 @@ function ZoneCard({
         opacity: user.online ? 1 : 0.6,
       }}
     >
-      <FlowerIcon designing={isDesigning} />
+      <ArrangementIcon level={level} isYours={isYours} />
 
       <span
         style={{
@@ -277,7 +318,7 @@ function ZoneCard({
       )}
 
       <span style={{ fontSize: "0.5625rem", color: "#333" }}>
-        lvl {Number(user.level)}
+        {session ? arrangementName(level) : `lvl ${Number(user.level)}`}
       </span>
     </div>
   );
