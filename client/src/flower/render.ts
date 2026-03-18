@@ -1032,7 +1032,7 @@ function layoutForLevel(count: number, level: number): LayoutSlot[] {
         offsetX: Math.sin(angle) * stemLen * 0.7,
         offsetY: -stemLen * 0.85 + Math.abs(Math.sin(angle)) * 0.15,
         stemAngle: angle,
-        scale: isHero ? 1.0 : 0.8,
+        scale: isHero ? 0.85 : 0.7,
         stemLength: stemLen,
       };
     }
@@ -1047,7 +1047,7 @@ function layoutForLevel(count: number, level: number): LayoutSlot[] {
         offsetX: Math.sin(angle) * stemLen * 0.6,
         offsetY: -stemLen * 0.8 + Math.abs(Math.sin(angle)) * 0.2,
         stemAngle: angle,
-        scale: isHero ? 1.0 : 0.7 + (1 - Math.abs(angle) / (spread / 2)) * 0.1,
+        scale: isHero ? 0.8 : 0.6 + (1 - Math.abs(angle) / (spread / 2)) * 0.1,
         stemLength: stemLen,
       };
     }
@@ -1060,7 +1060,7 @@ function layoutForLevel(count: number, level: number): LayoutSlot[] {
       offsetX: Math.cos(theta) * radius,
       offsetY: -stemLen * 0.75 + Math.sin(theta) * radius * 0.3,
       stemAngle: Math.cos(theta) * radius * 0.6,
-      scale: isHero ? 1.0 : Math.max(0.55, 0.85 - radius * 0.4),
+      scale: isHero ? 0.8 : Math.max(0.45, 0.7 - radius * 0.35),
       stemLength: stemLen,
     };
   });
