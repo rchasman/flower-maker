@@ -5,11 +5,8 @@ import { flowerRoutes } from "./src/routes/flower.ts";
 const app = new Hono();
 
 app.use("/*", cors());
-app.route("/api/flower", flowerRoutes);
+app.route("/flower", flowerRoutes);
 
-app.get("/api/health", c => c.json({ status: "ok" }));
+app.get("/health", c => c.json({ status: "ok" }));
 
-export default {
-  port: Number(process.env.PORT) || 3001,
-  fetch: app.fetch,
-};
+export default app;

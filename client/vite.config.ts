@@ -5,7 +5,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      "/api": "http://api.flower-maker.localhost:1355",
+      "/api": {
+        target: "http://api.flower-maker.localhost:1355",
+        rewrite: path => path.replace(/^\/api/, ""),
+      },
     },
   },
 });
