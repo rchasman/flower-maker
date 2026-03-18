@@ -41,23 +41,23 @@ function resolveColor(flower: FlowerRenderData): number {
 }
 
 /** Execute DrawCmd[] on a PixiJS Graphics context, scaled around (0,0). */
-function drawCmds(g: Graphics, cmds: readonly DrawCmd[], scale: number): void {
+function drawCmds(g: Graphics, cmds: readonly DrawCmd[], scale: number, ox = 0, oy = 0): void {
   for (const cmd of cmds) {
     switch (cmd.op) {
       case "M":
-        g.moveTo(cmd.x * scale, cmd.y * scale);
+        g.moveTo(cmd.x * scale + ox, cmd.y * scale + oy);
         break;
       case "L":
-        g.lineTo(cmd.x * scale, cmd.y * scale);
+        g.lineTo(cmd.x * scale + ox, cmd.y * scale + oy);
         break;
       case "C":
         g.bezierCurveTo(
-          cmd.c1x * scale,
-          cmd.c1y * scale,
-          cmd.c2x * scale,
-          cmd.c2y * scale,
-          cmd.x * scale,
-          cmd.y * scale,
+          cmd.c1x * scale + ox,
+          cmd.c1y * scale + oy,
+          cmd.c2x * scale + ox,
+          cmd.c2y * scale + oy,
+          cmd.x * scale + ox,
+          cmd.y * scale + oy,
         );
         break;
       case "Z":
@@ -163,44 +163,24 @@ function drawArrangementFromPlan(
   });
 
   // Pass 3: Flower heads (back to front — hero last so it's on top)
+  // Each head is drawn at scale * member.scale, offset to its pixel position.
+  // offset = member.offset * scale (pixel space), applied AFTER scaling coords.
   [...plan.members].reverse().map((member) => {
     const flowerScale = scale * member.scale;
     const ox = member.offsetX * scale;
     const oy = member.offsetY * scale;
 
-    // Translate to flower head position for drawing
-    // Save current transform by offsetting all draw commands
-    const offsetPlan: FlowerPlan = {
-      sepals: member.flowerPlan.sepals.map((s) => ({
-        cmds: s.cmds.map((cmd) => offsetCmd(cmd, ox, oy)),
-        color: s.color,
-      })),
-      layers: member.flowerPlan.layers.map((l) => ({
-        petals: l.petals.map((p) => ({
-          cmds: p.cmds.map((cmd) => offsetCmd(cmd, ox, oy)),
-        })),
-        color: l.color,
-        opacity: l.opacity,
-      })),
-      center: {
-        ...member.flowerPlan.center,
-        stamens: member.flowerPlan.center.stamens.map((s) => ({ ...s })),
-      },
-      stem: null,
-      leaves: [],
-    };
-
-    // Draw sepals
-    offsetPlan.sepals.map((sepal) => {
-      drawCmds(g, sepal.cmds, flowerScale);
+    // Sepals
+    member.flowerPlan.sepals.map((sepal) => {
+      drawCmds(g, sepal.cmds, flowerScale, ox, oy);
       g.fill({ color: sepal.color, alpha: alpha * 0.85 });
       return null;
     });
 
     // Petal layers
-    offsetPlan.layers.map((layer) => {
+    member.flowerPlan.layers.map((layer) => {
       layer.petals.map((petal) => {
-        drawCmds(g, petal.cmds, flowerScale);
+        drawCmds(g, petal.cmds, flowerScale, ox, oy);
         g.fill({ color: layer.color, alpha: alpha * layer.opacity });
         return null;
       });
@@ -231,21 +211,6 @@ function drawArrangementFromPlan(
 
     return null;
   });
-}
-
-/** Offset a DrawCmd by (dx, dy) in unit space. */
-function offsetCmd(cmd: DrawCmd, dx: number, dy: number): DrawCmd {
-  switch (cmd.op) {
-    case "M": return { op: "M", x: cmd.x + dx, y: cmd.y + dy };
-    case "L": return { op: "L", x: cmd.x + dx, y: cmd.y + dy };
-    case "C": return {
-      op: "C",
-      c1x: cmd.c1x + dx, c1y: cmd.c1y + dy,
-      c2x: cmd.c2x + dx, c2y: cmd.c2y + dy,
-      x: cmd.x + dx, y: cmd.y + dy,
-    };
-    case "Z": return cmd;
-  }
 }
 
 const FLOWER_BASE_RADIUS = 90;
