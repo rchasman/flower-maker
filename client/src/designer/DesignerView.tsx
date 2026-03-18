@@ -53,8 +53,18 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
   const streamingSpecRef = useRef<string | null>(null);
   const preStreamSessionCountRef = useRef(0);
 
-  // Push spec data to canvas whenever specs update, merging any streaming spec
+  // Push spec data to canvas whenever specs update, merging any streaming spec.
+  // Also resolves the streaming SID when the session first appears from SpacetimeDB,
+  // flushing any buffered spec that arrived before the round-trip completed.
   useEffect(() => {
+    // Resolve streaming SID if we have buffered spec but no SID yet
+    if (streamingSidRef.current === null && streamingSpecRef.current) {
+      if (sessionsRef.current.length > preStreamSessionCountRef.current) {
+        const newest = sessionsRef.current[sessionsRef.current.length - 1]!;
+        streamingSidRef.current = Number(newest.id);
+      }
+    }
+
     const specMap = specs.reduce<Map<number, string>>(
       (acc, s) => acc.set(Number(s.sessionId), s.specJson),
       new Map(),
@@ -146,14 +156,15 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
 
   // Phase 2: Push partial spec to canvas as YAML streams in
   const handleSpecProgress = useCallback((specJson: string) => {
-    // Detect the new session (appears after createSession round-trip)
+    // Always buffer the latest spec (even before session appears from SpacetimeDB)
+    streamingSpecRef.current = specJson;
+
+    // Try to detect the new session (appears after createSession round-trip)
     if (streamingSidRef.current === null) {
       if (sessionsRef.current.length <= preStreamSessionCountRef.current) return;
       const newest = sessionsRef.current[sessionsRef.current.length - 1]!;
       streamingSidRef.current = Number(newest.id);
     }
-
-    streamingSpecRef.current = specJson;
 
     // Push directly to canvas for immediate visual feedback
     const specMap = specsRef.current.reduce<Map<number, string>>(
