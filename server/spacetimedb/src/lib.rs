@@ -195,6 +195,17 @@ pub fn create_session(ctx: &ReducerContext, prompt: String) -> Result<(), String
 }
 
 #[spacetimedb::reducer]
+pub fn update_position(ctx: &ReducerContext, session_id: u64, x: f64, y: f64) -> Result<(), String> {
+    let session = require_session_owner(ctx, session_id)?;
+    ctx.db.flower_session().id().update(FlowerSession {
+        canvas_x: x,
+        canvas_y: y,
+        ..session
+    });
+    Ok(())
+}
+
+#[spacetimedb::reducer]
 pub fn update_flower_spec(ctx: &ReducerContext, session_id: u64, spec_json: String) -> Result<(), String> {
     let _session = require_session_owner(ctx, session_id)?;
     let existing = ctx.db.flower_spec().session_id().find(session_id)

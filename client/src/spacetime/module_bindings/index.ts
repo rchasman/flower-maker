@@ -44,6 +44,7 @@ import SendChatReducer from "./send_chat_reducer";
 import SetNameReducer from "./set_name_reducer";
 import UpdateFlowerSpecReducer from "./update_flower_spec_reducer";
 import UpdatePartOverrideReducer from "./update_part_override_reducer";
+import UpdatePositionReducer from "./update_position_reducer";
 
 // Import all procedure arg schemas
 
@@ -145,6 +146,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_name", SetNameReducer),
   __reducerSchema("update_flower_spec", UpdateFlowerSpecReducer),
   __reducerSchema("update_part_override", UpdatePartOverrideReducer),
+  __reducerSchema("update_position", UpdatePositionReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */

@@ -16,6 +16,7 @@ import SendChatReducer from "../send_chat_reducer";
 import SetNameReducer from "../set_name_reducer";
 import UpdateFlowerSpecReducer from "../update_flower_spec_reducer";
 import UpdatePartOverrideReducer from "../update_part_override_reducer";
+import UpdatePositionReducer from "../update_position_reducer";
 
 export type CompleteSessionParams = __Infer<typeof CompleteSessionReducer>;
 export type CreateSessionParams = __Infer<typeof CreateSessionReducer>;
@@ -27,4 +28,5 @@ export type SendChatParams = __Infer<typeof SendChatReducer>;
 export type SetNameParams = __Infer<typeof SetNameReducer>;
 export type UpdateFlowerSpecParams = __Infer<typeof UpdateFlowerSpecReducer>;
 export type UpdatePartOverrideParams = __Infer<typeof UpdatePartOverrideReducer>;
+export type UpdatePositionParams = __Infer<typeof UpdatePositionReducer>;
 
