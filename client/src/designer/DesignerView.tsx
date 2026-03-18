@@ -172,6 +172,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
       <main
         style={{
           flex: 1,
+          minWidth: 0,
           display: "flex",
           flexDirection: "column",
           position: "relative",
