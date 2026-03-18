@@ -5,13 +5,13 @@ let simulation: GardenSim | null = null;
 
 export interface GardenSim {
   upsert_flower(
-    session_id: number,
+    session_id: bigint,
     spec_json: string,
     x: number,
     y: number,
   ): void;
-  wilt_flower(session_id: number): void;
-  remove_flower(session_id: number): void;
+  wilt_flower(session_id: bigint): void;
+  remove_flower(session_id: bigint): void;
   tick(dt: number): number;
   get_merge_events(): string;
   render_data(): string;
@@ -52,14 +52,14 @@ function createStub(): GardenSim {
   const flowers = new Map<number, { x: number; y: number; spec: string }>();
 
   return {
-    upsert_flower(sid: number, spec: string, x: number, y: number) {
-      flowers.set(sid, { x, y, spec });
+    upsert_flower(sid: bigint, spec: string, x: number, y: number) {
+      flowers.set(Number(sid), { x, y, spec });
     },
-    wilt_flower(sid: number) {
-      flowers.delete(sid);
+    wilt_flower(sid: bigint) {
+      flowers.delete(Number(sid));
     },
-    remove_flower(sid: number) {
-      flowers.delete(sid);
+    remove_flower(sid: bigint) {
+      flowers.delete(Number(sid));
     },
     tick() {
       return flowers.size;

@@ -3,70 +3,93 @@ import type { GardenSim } from "../wasm/loader.ts";
 import type { DbConnection, FlowerSession, FlowerSpec } from "./types.ts";
 import { isVariant } from "./types.ts";
 
+/** Spread flowers across the canvas when server positions are all zero. */
+function resolvePosition(
+  session: FlowerSession,
+  index: number,
+  total: number,
+): [number, number] {
+  const cx = Number(session.canvasX);
+  const cy = Number(session.canvasY);
+  if (cx !== 0 || cy !== 0) return [cx, cy];
+
+  // Distribute in a grid pattern centered on the viewport
+  const cols = Math.max(1, Math.ceil(Math.sqrt(total)));
+  const spacing = 80;
+  const col = index % cols;
+  const row = Math.floor(index / cols);
+  const offsetX = (cols - 1) * spacing * 0.5;
+  const offsetY = (Math.ceil(total / cols) - 1) * spacing * 0.5;
+  return [400 + col * spacing - offsetX, 300 + row * spacing - offsetY];
+}
+
 /// Wire SpacetimeDB table callbacks to the WASM simulation.
-/// Only flowers owned by the current user are added to the physics world.
+/// Seeds existing rows then listens for future changes.
 export function wireToWasm(conn: DbConnection, sim: GardenSim) {
+  // Seed existing sessions already in the local cache
+  const existing = [...conn.db.flower_session.iter()].filter(s =>
+    isVariant(s.status, "Designing"),
+  );
+  const specLookup = [...conn.db.flower_spec.iter()].reduce(
+    (acc, spec) => acc.set(spec.sessionId, spec.specJson),
+    new Map<bigint, string>(),
+  );
+  existing.map((session, i) => {
+    const [x, y] = resolvePosition(session, i, existing.length);
+    const specJson = specLookup.get(session.id) ?? "{}";
+    sim.upsert_flower(session.id, specJson, x, y);
+    return session.id;
+  });
+
   conn.db.flower_session.onInsert((_ctx, session: FlowerSession) => {
     if (isVariant(session.status, "Designing")) {
-      sim.upsert_flower(
-        Number(session.id),
-        "{}",
-        Number(session.canvasX),
-        Number(session.canvasY),
+      const count = sim.flower_count() + 1;
+      const [x, y] = resolvePosition(session, count, count);
+      const spec = [...conn.db.flower_spec.iter()].find(
+        s => s.sessionId === session.id,
       );
+      sim.upsert_flower(session.id, spec?.specJson ?? "{}", x, y);
     }
   });
 
   conn.db.flower_session.onUpdate(
     (_ctx, _old: FlowerSession, next: FlowerSession) => {
       if (isVariant(next.status, "Complete")) {
-        sim.wilt_flower(Number(next.id));
+        sim.wilt_flower(next.id);
       } else {
-        sim.upsert_flower(
-          Number(next.id),
-          "{}",
-          Number(next.canvasX),
-          Number(next.canvasY),
+        const count = sim.flower_count();
+        const [x, y] = resolvePosition(next, count, count);
+        const spec = [...conn.db.flower_spec.iter()].find(
+          s => s.sessionId === next.id,
         );
+        sim.upsert_flower(next.id, spec?.specJson ?? "{}", x, y);
       }
     },
   );
 
   conn.db.flower_session.onDelete((_ctx, session: FlowerSession) => {
-    sim.remove_flower(Number(session.id));
+    sim.remove_flower(session.id);
   });
 
   conn.db.flower_spec.onInsert((_ctx, spec: FlowerSpec) => {
-    for (const session of conn.db.flower_session.iter()) {
-      if (
-        session.id === spec.sessionId &&
-        isVariant(session.status, "Designing")
-      ) {
-        sim.upsert_flower(
-          Number(session.id),
-          spec.specJson,
-          Number(session.canvasX),
-          Number(session.canvasY),
-        );
-        break;
-      }
+    const session = [...conn.db.flower_session.iter()].find(
+      s => s.id === spec.sessionId && isVariant(s.status, "Designing"),
+    );
+    if (session) {
+      const count = sim.flower_count();
+      const [x, y] = resolvePosition(session, count, count);
+      sim.upsert_flower(session.id, spec.specJson, x, y);
     }
   });
 
   conn.db.flower_spec.onUpdate((_ctx, _old: FlowerSpec, next: FlowerSpec) => {
-    for (const session of conn.db.flower_session.iter()) {
-      if (
-        session.id === next.sessionId &&
-        isVariant(session.status, "Designing")
-      ) {
-        sim.upsert_flower(
-          Number(session.id),
-          next.specJson,
-          Number(session.canvasX),
-          Number(session.canvasY),
-        );
-        break;
-      }
+    const session = [...conn.db.flower_session.iter()].find(
+      s => s.id === next.sessionId && isVariant(s.status, "Designing"),
+    );
+    if (session) {
+      const count = sim.flower_count();
+      const [x, y] = resolvePosition(session, count, count);
+      sim.upsert_flower(session.id, next.specJson, x, y);
     }
   });
 
