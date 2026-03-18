@@ -11,6 +11,40 @@ EXACT SCHEMA (use these field names and enum string values):
 
 name: poetic name
 species: Scientific name
+structure:
+  stem:
+    height: 0.5
+    thickness: 0.3
+    curvature: 0.1
+    color: { r: 0.1, g: 0.5, b: 0.2, a: 1.0 }
+  sepals:
+    - shape: Lanceolate
+      color: { r: 0.1, g: 0.4, b: 0.2, a: 1.0 }
+      reflex_angle: 90.0
+      length: 0.3
+      persistent: true
+  receptacle:
+    shape: Flat
+    size: 0.3
+    color: { r: 0.1, g: 0.4, b: 0.1, a: 1.0 }
+foliage:
+  leaf_shape: Ovate
+  leaf_color: { r: 0.15, g: 0.5, b: 0.2, a: 1.0 }
+  serration: None
+  droop: 0.15
+  leaves:
+    - position: 0.3
+      side: left
+      size: 0.5
+      angle_offset: 0.05
+    - position: 0.55
+      side: right
+      size: 0.45
+      angle_offset: -0.08
+    - position: 0.75
+      side: left
+      size: 0.4
+      angle_offset: 0.12
 petals:
   layers:
     - index: 0
@@ -48,40 +82,6 @@ reproductive:
       pollen_load: 0.5
       height: 0.4
       sway: 0.3
-structure:
-  stem:
-    height: 0.5
-    thickness: 0.3
-    curvature: 0.1
-    color: { r: 0.1, g: 0.5, b: 0.2, a: 1.0 }
-  sepals:
-    - shape: Lanceolate
-      color: { r: 0.1, g: 0.4, b: 0.2, a: 1.0 }
-      reflex_angle: 90.0
-      length: 0.3
-      persistent: true
-  receptacle:
-    shape: Flat
-    size: 0.3
-    color: { r: 0.1, g: 0.4, b: 0.1, a: 1.0 }
-foliage:
-  leaf_shape: Ovate
-  leaf_color: { r: 0.15, g: 0.5, b: 0.2, a: 1.0 }
-  serration: None
-  droop: 0.15
-  leaves:
-    - position: 0.3
-      side: left
-      size: 0.5
-      angle_offset: 0.05
-    - position: 0.55
-      side: right
-      size: 0.45
-      angle_offset: -0.08
-    - position: 0.75
-      side: left
-      size: 0.4
-      angle_offset: 0.12
 
 ENUM VALUES (use exact strings):
 - shape (petal): Ovate, Lanceolate, Spatulate, Oblong, Orbicular, Cordate, Deltoid, Falcate, Ligulate, Tubular, Fimbriate, Laciniate, Runcinate
