@@ -366,7 +366,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           // Selection ring
           const isSelected = selectedIdRef.current === flower.sid;
           if (isSelected) {
-            const ringR = isArrangement ? r * 2.0 + SELECTION_RING_PAD : r * 1.1 + SELECTION_RING_PAD;
+            const ringR = isArrangement ? r * 1.2 + SELECTION_RING_PAD : r * 0.55 + SELECTION_RING_PAD;
             g.circle(0, 0, ringR);
             g.stroke({ color: 0xffffff, width: 2, alpha: 0.7 });
           }
