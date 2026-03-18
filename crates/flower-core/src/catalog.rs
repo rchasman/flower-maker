@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct FlowerSpec {
     pub name: String,
     pub species: String,
@@ -18,11 +19,29 @@ pub struct FlowerSpec {
     pub personality: FlowerPersonality,
 }
 
+impl Default for FlowerSpec {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            species: String::new(),
+            petals: PetalSystem::default(),
+            reproductive: ReproductiveSystem::default(),
+            structure: StructureSystem::default(),
+            foliage: FoliageSystem::default(),
+            ornamentation: OrnamentationSystem::default(),
+            roots: RootSystem::default(),
+            aura: None,
+            personality: FlowerPersonality::default(),
+        }
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // PETAL SYSTEM
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct PetalSystem {
     pub layers: Vec<PetalLayer>,
     pub bloom_progress: f64,        // 0.0 = bud, 1.0 = full bloom
@@ -31,6 +50,7 @@ pub struct PetalSystem {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct PetalLayer {
     pub index: u32,
     pub count: u32,                  // petals in this ring
@@ -50,15 +70,40 @@ pub struct PetalLayer {
     pub thickness: f64,              // 0.1-1.0
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl Default for PetalLayer {
+    fn default() -> Self {
+        Self {
+            index: 0,
+            count: 0,
+            shape: PetalShape::default(),
+            arrangement: PetalArrangement::default(),
+            curvature: 0.0,
+            curl: 0.0,
+            texture: SurfaceTexture::default(),
+            color: ColorGradient::default(),
+            opacity: 0.5,
+            vein_pattern: VeinPattern::default(),
+            edge_style: EdgeStyle::default(),
+            width: 0.5,
+            length: 0.5,
+            angular_offset: 0.0,
+            droop: 0.0,
+            thickness: 0.5,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum PetalShape {
+    #[default]
     Ovate, Lanceolate, Spatulate, Oblong, Orbicular,
     Cordate, Deltoid, Falcate, Ligulate, Tubular,
     Fimbriate, Laciniate, Runcinate,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum PetalArrangement {
+    #[default]
     Radial, Spiral, Bilateral, Imbricate, Valvate, Contorted, Whorled,
 }
 
@@ -70,11 +115,18 @@ pub enum Symmetry {
     Spiral { divergence_angle: f64 },
 }
 
+impl Default for Symmetry {
+    fn default() -> Self {
+        Self::Radial { order: 0 }
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // REPRODUCTIVE SYSTEM
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct ReproductiveSystem {
     pub pistil: Option<Pistil>,
     pub stamens: Vec<Stamen>,
@@ -83,6 +135,7 @@ pub struct ReproductiveSystem {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Pistil {
     pub style: PistilStyle,
     pub stigma_shape: StigmaShape,
@@ -91,13 +144,32 @@ pub struct Pistil {
     pub glow: Option<GlowEffect>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum PistilStyle { Simple, Compound, Split, Gynobasic, Capitate }
+impl Default for Pistil {
+    fn default() -> Self {
+        Self {
+            style: PistilStyle::default(),
+            stigma_shape: StigmaShape::default(),
+            color: Color::default(),
+            height: 0.5,
+            glow: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum PistilStyle {
+    #[default]
+    Simple, Compound, Split, Gynobasic, Capitate,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum StigmaShape {
+    #[default]
+    Capitate, Plumose, Fimbriate, Clavate, Discoid, Lobed,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum StigmaShape { Capitate, Plumose, Fimbriate, Clavate, Discoid, Lobed }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Stamen {
     pub filament_curve: f64,     // 0.0-1.0
     pub filament_color: Color,
@@ -108,10 +180,28 @@ pub struct Stamen {
     pub sway: f64,               // 0.0-1.0 wind responsiveness
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum AntherShape { Versatile, Basifixed, Sagittate, Didynamous, Syngenesious }
+impl Default for Stamen {
+    fn default() -> Self {
+        Self {
+            filament_curve: 0.5,
+            filament_color: Color::default(),
+            anther_shape: AntherShape::default(),
+            anther_color: Color::default(),
+            pollen_load: 0.5,
+            height: 0.5,
+            sway: 0.5,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum AntherShape {
+    #[default]
+    Versatile, Basifixed, Sagittate, Didynamous, Syngenesious,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct PollenSystem {
     pub particle_count: u32,
     pub drift_speed: f64,
@@ -121,10 +211,27 @@ pub struct PollenSystem {
     pub trail: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum DispersalPattern { Gravity, Wind, Burst, Spiral, Chaotic }
+impl Default for PollenSystem {
+    fn default() -> Self {
+        Self {
+            particle_count: 0,
+            drift_speed: 0.5,
+            color: Color::default(),
+            luminosity: 0.5,
+            dispersal: DispersalPattern::default(),
+            trail: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum DispersalPattern {
+    #[default]
+    Gravity, Wind, Burst, Spiral, Chaotic,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Nectary {
     pub position: NectaryPosition,
     pub color: Color,
@@ -132,14 +239,29 @@ pub struct Nectary {
     pub drip_rate: f64,          // visual drip animation speed
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum NectaryPosition { Basal, Petaline, Sepaline, Receptacular }
+impl Default for Nectary {
+    fn default() -> Self {
+        Self {
+            position: NectaryPosition::default(),
+            color: Color::default(),
+            glow: None,
+            drip_rate: 0.5,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum NectaryPosition {
+    #[default]
+    Basal, Petaline, Sepaline, Receptacular,
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // STRUCTURE SYSTEM
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct StructureSystem {
     pub stem: Stem,
     pub sepals: Vec<Sepal>,
@@ -148,6 +270,7 @@ pub struct StructureSystem {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Stem {
     pub height: f64,
     pub thickness: f64,
@@ -159,7 +282,23 @@ pub struct Stem {
     pub branching: BranchPattern,
 }
 
+impl Default for Stem {
+    fn default() -> Self {
+        Self {
+            height: 0.5,
+            thickness: 0.3,
+            curvature: 0.0,
+            color: Color::default(),
+            thorns: None,
+            internode_length: 0.5,
+            surface: SurfaceTexture::default(),
+            branching: BranchPattern::default(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ThornSystem {
     pub density: f64,            // thorns per unit
     pub size: f64,
@@ -168,13 +307,32 @@ pub struct ThornSystem {
     pub curve: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ThornShape { Straight, Hooked, Recurved, Bulbous, Barbed }
+impl Default for ThornSystem {
+    fn default() -> Self {
+        Self {
+            density: 0.5,
+            size: 0.5,
+            color: Color::default(),
+            shape: ThornShape::default(),
+            curve: 0.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum ThornShape {
+    #[default]
+    Straight, Hooked, Recurved, Bulbous, Barbed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum BranchPattern {
+    #[default]
+    None, Alternate, Opposite, Whorled, Dichotomous,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum BranchPattern { None, Alternate, Opposite, Whorled, Dichotomous }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Sepal {
     pub shape: SepalShape,
     pub color: Color,
@@ -184,20 +342,51 @@ pub struct Sepal {
     pub persistent: bool,        // stays after bloom
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum SepalShape { Lanceolate, Ovate, Triangular, Leaflike, Petaloid }
+impl Default for Sepal {
+    fn default() -> Self {
+        Self {
+            shape: SepalShape::default(),
+            color: Color::default(),
+            reflex_angle: 0.0,
+            texture: SurfaceTexture::default(),
+            length: 0.5,
+            persistent: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum SepalShape {
+    #[default]
+    Lanceolate, Ovate, Triangular, Leaflike, Petaloid,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Receptacle {
     pub shape: ReceptacleShape,
     pub size: f64,
     pub color: Color,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ReceptacleShape { Flat, Convex, Concave, Conical, Urceolate }
+impl Default for Receptacle {
+    fn default() -> Self {
+        Self {
+            shape: ReceptacleShape::default(),
+            size: 0.5,
+            color: Color::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum ReceptacleShape {
+    #[default]
+    Flat, Convex, Concave, Conical, Urceolate,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Peduncle {
     pub length: f64,
     pub angle: f64,              // degrees from vertical
@@ -205,11 +394,23 @@ pub struct Peduncle {
     pub color: Color,
 }
 
+impl Default for Peduncle {
+    fn default() -> Self {
+        Self {
+            length: 0.5,
+            angle: 0.0,
+            flexibility: 0.5,
+            color: Color::default(),
+        }
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // FOLIAGE SYSTEM
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct FoliageSystem {
     pub leaves: Vec<Leaf>,
     pub bracts: Vec<Bract>,
@@ -217,6 +418,7 @@ pub struct FoliageSystem {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Leaf {
     pub shape: LeafShape,
     pub size: f64,
@@ -230,19 +432,44 @@ pub struct Leaf {
     pub translucency: f64,       // 0.0-1.0 light through leaf
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl Default for Leaf {
+    fn default() -> Self {
+        Self {
+            shape: LeafShape::default(),
+            size: 0.5,
+            color: ColorGradient::default(),
+            vein_pattern: VeinPattern::default(),
+            serration: Serration::default(),
+            arrangement: LeafArrangement::default(),
+            phyllotaxis_angle: 137.5,
+            droop: 0.0,
+            curl: 0.0,
+            translucency: 0.5,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum LeafShape {
+    #[default]
     Ovate, Lanceolate, Cordate, Palmate, Pinnate, Linear,
     Reniform, Hastate, Sagittate, Peltate, Acicular,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum LeafArrangement { Alternate, Opposite, Whorled, Rosette, Basal }
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum LeafArrangement {
+    #[default]
+    Alternate, Opposite, Whorled, Rosette, Basal,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum Serration {
+    #[default]
+    None, Fine, Coarse, Lobed, Crenate, Dentate, Doubly,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum Serration { None, Fine, Coarse, Lobed, Crenate, Dentate, Doubly }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Bract {
     pub color: ColorGradient,
     pub size: f64,
@@ -251,11 +478,24 @@ pub struct Bract {
     pub position: f64,           // 0.0=base, 1.0=flower head
 }
 
+impl Default for Bract {
+    fn default() -> Self {
+        Self {
+            color: ColorGradient::default(),
+            size: 0.5,
+            shape: LeafShape::default(),
+            showy: false,
+            position: 0.0,
+        }
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ORNAMENTATION SYSTEM — the magic layer
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct OrnamentationSystem {
     pub dewdrops: Vec<Dewdrop>,
     pub glow: Option<GlowEffect>,
@@ -265,6 +505,7 @@ pub struct OrnamentationSystem {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Dewdrop {
     pub size: f64,
     pub count: u32,
@@ -273,10 +514,26 @@ pub struct Dewdrop {
     pub surface_tension: f64,    // affects shape: 0=flat, 1=spherical
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum DewdropPlacement { Random, PetalTip, VeinJunction, Edge, Center }
+impl Default for Dewdrop {
+    fn default() -> Self {
+        Self {
+            size: 0.5,
+            count: 0,
+            refraction: 0.5,
+            placement: DewdropPlacement::default(),
+            surface_tension: 0.5,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum DewdropPlacement {
+    #[default]
+    Random, PetalTip, VeinJunction, Edge, Center,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct GlowEffect {
     pub intensity: f64,          // 0.0-1.0
     pub color: Color,
@@ -284,17 +541,43 @@ pub struct GlowEffect {
     pub pulse: Option<PulsePattern>,
 }
 
+impl Default for GlowEffect {
+    fn default() -> Self {
+        Self {
+            intensity: 0.5,
+            color: Color::default(),
+            radius: 0.5,
+            pulse: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct PulsePattern {
     pub speed: f64,              // Hz
     pub pattern: PulseType,
     pub min_intensity: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum PulseType { Sine, Heartbeat, Flicker, Breathe, Morse }
+impl Default for PulsePattern {
+    fn default() -> Self {
+        Self {
+            speed: 0.5,
+            pattern: PulseType::default(),
+            min_intensity: 0.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum PulseType {
+    #[default]
+    Sine, Heartbeat, Flicker, Breathe, Morse,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ParticleEffect {
     pub kind: ParticleKind,
     pub density: u32,
@@ -305,20 +588,52 @@ pub struct ParticleEffect {
     pub gravity: f64,            // -1 (rises) to 1 (falls)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ParticleKind { Pollen, Firefly, Stardust, FallingPetals, Spores, Motes, Embers }
+impl Default for ParticleEffect {
+    fn default() -> Self {
+        Self {
+            kind: ParticleKind::default(),
+            density: 0,
+            color: Color::default(),
+            drift_speed: 0.5,
+            lifetime: 0.5,
+            emission_zone: EmissionZone::default(),
+            gravity: 0.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum ParticleKind {
+    #[default]
+    Pollen, Firefly, Stardust, FallingPetals, Spores, Motes, Embers,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum EmissionZone {
+    #[default]
+    Center, PetalEdge, Whole, Above, Roots,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum EmissionZone { Center, PetalEdge, Whole, Above, Roots }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Iridescence {
     pub intensity: f64,
     pub hue_shift_range: f64,    // degrees of color shift based on angle
     pub affected_parts: Vec<String>, // "petals", "stem", etc.
 }
 
+impl Default for Iridescence {
+    fn default() -> Self {
+        Self {
+            intensity: 0.5,
+            hue_shift_range: 0.5,
+            affected_parts: Vec::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Bioluminescence {
     pub pattern: BioPattern,
     pub color: Color,
@@ -326,17 +641,35 @@ pub struct Bioluminescence {
     pub trigger: BioTrigger,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum BioPattern { Veins, Spots, Edges, Whole, Pulse }
+impl Default for Bioluminescence {
+    fn default() -> Self {
+        Self {
+            pattern: BioPattern::default(),
+            color: Color::default(),
+            intensity: 0.5,
+            trigger: BioTrigger::default(),
+        }
+    }
+}
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum BioTrigger { Always, Night, Touch, Proximity, Wind }
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum BioPattern {
+    #[default]
+    Veins, Spots, Edges, Whole, Pulse,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum BioTrigger {
+    #[default]
+    Always, Night, Touch, Proximity, Wind,
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ROOT SYSTEM — visual underground aesthetic
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct RootSystem {
     pub pattern: RootPattern,
     pub depth: f64,
@@ -347,18 +680,36 @@ pub struct RootSystem {
     pub mycorrhizal: bool,       // fungal network connections to other flowers!
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum RootPattern { Taproot, Fibrous, Aerial, Rhizome, Tuberous, Adventitious }
+impl Default for RootSystem {
+    fn default() -> Self {
+        Self {
+            pattern: RootPattern::default(),
+            depth: 0.5,
+            spread: 0.5,
+            thickness: 0.5,
+            color: Color::default(),
+            luminescence: None,
+            mycorrhizal: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum RootPattern {
+    #[default]
+    Taproot, Fibrous, Aerial, Rhizome, Tuberous, Adventitious,
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FLOWER PERSONALITY — emergent behavior drivers
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct FlowerPersonality {
     pub growth_speed: f64,       // 0.1 (glacial) to 3.0 (vigorous)
     pub hardiness: f64,          // 0.0-1.0 resistance to environmental stress
-    pub sociability: f64,        // 0.0 (loner) to 1.0 (thrives near others)  
+    pub sociability: f64,        // 0.0 (loner) to 1.0 (thrives near others)
     pub light_preference: LightPreference,
     pub water_need: f64,         // 0.0 (desert) to 1.0 (aquatic)
     pub wind_response: WindResponse,
@@ -366,27 +717,63 @@ pub struct FlowerPersonality {
     pub fragrance: Option<Fragrance>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum LightPreference { FullSun, PartialShade, FullShade, Nocturnal }
+impl Default for FlowerPersonality {
+    fn default() -> Self {
+        Self {
+            growth_speed: 1.0,
+            hardiness: 0.5,
+            sociability: 0.5,
+            light_preference: LightPreference::default(),
+            water_need: 0.5,
+            wind_response: WindResponse::default(),
+            pollinator_attraction: 0.5,
+            fragrance: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum LightPreference {
+    #[default]
+    FullSun, PartialShade, FullShade, Nocturnal,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum WindResponse {
+    #[default]
+    Rigid, Gentle, Dramatic, Dancing,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum WindResponse { Rigid, Gentle, Dramatic, Dancing }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Fragrance {
     pub intensity: f64,
     pub profile: FragranceProfile,
     pub radius: f64,             // how far the visual "fragrance waves" extend
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum FragranceProfile { Sweet, Spicy, Earthy, Citrus, Floral, Musky, Ethereal }
+impl Default for Fragrance {
+    fn default() -> Self {
+        Self {
+            intensity: 0.5,
+            profile: FragranceProfile::default(),
+            radius: 0.5,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum FragranceProfile {
+    #[default]
+    Sweet, Spicy, Earthy, Citrus, Floral, Musky, Ethereal,
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // AURA — the ambient effect around the whole flower
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Aura {
     pub kind: AuraKind,
     pub color: Color,
@@ -395,19 +782,41 @@ pub struct Aura {
     pub animation_speed: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum AuraKind { Mist, Sparkle, Ethereal, Prismatic, Shadow, Flame, Frost, Electric }
+impl Default for Aura {
+    fn default() -> Self {
+        Self {
+            kind: AuraKind::default(),
+            color: Color::default(),
+            opacity: 0.5,
+            radius: 0.5,
+            animation_speed: 0.5,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum AuraKind {
+    #[default]
+    Mist, Sparkle, Ethereal, Prismatic, Shadow, Flame, Frost, Electric,
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SHARED PRIMITIVE TYPES
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Color {
     pub r: f64,  // 0.0-1.0
     pub g: f64,
     pub b: f64,
     pub a: f64,
+}
+
+impl Default for Color {
+    fn default() -> Self {
+        Self { r: 0.8, g: 0.2, b: 0.5, a: 1.0 }
+    }
 }
 
 impl Color {
@@ -424,27 +833,52 @@ impl Color {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ColorGradient {
     pub stops: Vec<ColorStop>,
 }
 
+impl Default for ColorGradient {
+    fn default() -> Self {
+        Self {
+            stops: vec![ColorStop {
+                position: 0.0,
+                color: Color::default(),
+            }],
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ColorStop {
     pub position: f64,  // 0.0-1.0
     pub color: Color,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl Default for ColorStop {
+    fn default() -> Self {
+        Self {
+            position: 0.0,
+            color: Color::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum SurfaceTexture {
+    #[default]
     Smooth, Velvet, Silk, Papery, Waxy, Rough, Hairy, Glassy, Crystalline, Scaled,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum VeinPattern {
+    #[default]
     None, Parallel, Branching, Palmate, Reticulate, Dichotomous, Arcuate,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum EdgeStyle {
+    #[default]
     Smooth, Ruffled, Fringed, Serrated, Rolled, Undulate, Crisped, Lacerate,
 }
