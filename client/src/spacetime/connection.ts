@@ -1,7 +1,7 @@
 import type { DbConnection } from "./types.ts";
 
 const SPACETIMEDB_URI =
-  import.meta.env.VITE_SPACETIMEDB_URI ?? "ws://db.flower-maker.localhost:1355";
+  import.meta.env.VITE_SPACETIMEDB_URI ?? "ws://localhost:9300";
 const SPACETIMEDB_MODULE =
   import.meta.env.VITE_SPACETIMEDB_MODULE ?? "flower-picker";
 const TOKEN_KEY = "spacetimedb_token";

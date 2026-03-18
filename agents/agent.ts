@@ -9,7 +9,7 @@
  */
 
 const SPACETIMEDB_URI =
-  process.env.SPACETIMEDB_URI ?? "ws://db.flower-maker.localhost:1355";
+  process.env.SPACETIMEDB_URI ?? "ws://localhost:9300";
 const MODULE_NAME = process.env.SPACETIMEDB_MODULE ?? "flower-maker";
 const AGENT_NAME = process.env.AGENT_NAME ?? "flora-bot";
 const TICK_INTERVAL_MS = 10_000; // act every 10 seconds

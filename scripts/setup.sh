@@ -18,8 +18,6 @@ bold "Checking prerequisites…"
 command -v bun       >/dev/null || fail "bun not found — install from https://bun.sh"
 command -v spacetime >/dev/null || fail "spacetime CLI not found — install from https://spacetimedb.com/install"
 command -v cargo     >/dev/null || fail "cargo not found — install from https://rustup.rs"
-command -v portless  >/dev/null || fail "portless not found — install with: bun add -g portless"
-
 ok "All CLIs present"
 
 # ── 2. Install dependencies ──────────────────────────────────────────────────

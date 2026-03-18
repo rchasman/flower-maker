@@ -1,7 +1,7 @@
 import { run, scoreColor } from "../lib/utils.ts";
 import { useSession } from "../session/SessionProvider.tsx";
-import { useFlowerSessions, useFlowerSpecs, useOrders, useUsers, usePartOverrides } from "../spacetime/hooks.ts";
-import type { FlowerSession, FlowerSpec, FlowerPartOverride, User } from "../spacetime/types.ts";
+import { useFlowerSessions, useFlowerSpecs, useUsers, usePartOverrides } from "../spacetime/hooks.ts";
+import type { FlowerSession, FlowerSpec, User } from "../spacetime/types.ts";
 import { isVariant } from "../spacetime/types.ts";
 import { createFlowerPlan, createArrangementPlan, cmdsToSvgD, hexString, darkenColor } from "../flower/render.ts";
 
@@ -11,10 +11,7 @@ interface FlowerGridProps {
 
 type ZoneData = {
   user: User;
-  session: FlowerSession | null;
-  /** All "Designing" sessions owned by this user — for the live mini-canvas. */
   allSessions: readonly FlowerSession[];
-  incomingOrders: number;
   isYours: boolean;
 };
 
@@ -23,7 +20,6 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
   const sessions = useFlowerSessions(conn);
   const specs = useFlowerSpecs(conn);
   const users = useUsers(conn);
-  const orders = useOrders(conn);
   const partOverrides = usePartOverrides(conn);
   const onlineCount = users.filter(u => u.online).length;
 
@@ -45,20 +41,6 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
     new Map(),
   );
 
-  // Build a session lookup by id for O(1) access
-  const sessionById = sessions.reduce<Map<string, FlowerSession>>(
-    (acc, s) => acc.set(String(s.id), s),
-    new Map(),
-  );
-
-  // Count incoming orders per session owner
-  const ordersByOwner = orders.reduce<Map<string, number>>((acc, order) => {
-    const session = sessionById.get(String(order.sessionId));
-    if (!session) return acc;
-    const ownerKey = String(session.owner);
-    return acc.set(ownerKey, (acc.get(ownerKey) ?? 0) + 1);
-  }, new Map());
-
   // Group all "Designing" sessions by owner
   const sessionsByOwner = sessions
     .filter(s => isVariant(s.status, "Designing"))
@@ -70,19 +52,11 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
 
   // Build zone data: one slot per user
   const zones: readonly ZoneData[] = users
-    .map((user): ZoneData => {
-      const currentSession = run(() => {
-        if (user.currentSessionId == null) return null;
-        return sessionById.get(String(user.currentSessionId)) ?? null;
-      });
-      return {
-        user,
-        session: currentSession,
-        allSessions: sessionsByOwner.get(String(user.identity)) ?? [],
-        incomingOrders: ordersByOwner.get(String(user.identity)) ?? 0,
-        isYours: String(user.identity) === identityHex,
-      };
-    })
+    .map((user): ZoneData => ({
+      user,
+      allSessions: sessionsByOwner.get(String(user.identity)) ?? [],
+      isYours: String(user.identity) === identityHex,
+    }))
     .sort((a, b) => {
       // "Your Zone" always first
       if (a.isYours) return -1;
@@ -147,10 +121,10 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
           flex: 1,
           display: "grid",
           gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-          gap: "2px",
-          padding: "2px",
+          gap: "0px",
+          padding: "0px",
           overflow: "auto",
-          background: "#0a0a0a",
+          background: "#000",
         }}
       >
         {zones.map(zone => (
@@ -200,20 +174,6 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
       </div>
     </div>
   );
-}
-
-const ARRANGEMENT_LEVELS: readonly string[] = [
-  "Stem",
-  "Group",
-  "Bunch",
-  "Arrangement",
-  "Bouquet",
-  "Centerpiece",
-  "Installation",
-];
-
-function arrangementName(level: number): string {
-  return ARRANGEMENT_LEVELS[Math.min(level, ARRANGEMENT_LEVELS.length) - 1] ?? "Stem";
 }
 
 // ── Mini canvas — live SVG replica of a user's designer canvas ───────────
@@ -362,7 +322,7 @@ function SvgArrangement({ x, y, r, constituents, level }: {
 }
 
 /** Live mini-canvas: renders all of a user's flowers at their real positions, scaled to fit. */
-function MiniCanvas({ sessions, specBySessionId, constituentMap, size }: { sessions: readonly FlowerSession[]; specBySessionId: Map<string, FlowerSpec>; constituentMap: Map<string, Array<{ specJson: string; sid: number }>>; size: number }) {
+function MiniCanvas({ sessions, specBySessionId, constituentMap }: { sessions: readonly FlowerSession[]; specBySessionId: Map<string, FlowerSpec>; constituentMap: Map<string, Array<{ specJson: string; sid: number }>> }) {
   if (sessions.length === 0) return null;
 
   // Compute bounding box of all flower positions
@@ -392,24 +352,25 @@ function MiniCanvas({ sessions, specBySessionId, constituentMap, size }: { sessi
   const minY = Math.min(...ys);
   const maxY = Math.max(...ys);
 
-  // Add padding around the bounding box
-  const pad = 30;
-  const bboxW = Math.max(maxX - minX + pad * 2, 60);
-  const bboxH = Math.max(maxY - minY + pad * 2, 60);
+  const rawW = Math.max(maxX - minX, 1);
+  const rawH = Math.max(maxY - minY, 1);
+
+  // Flower radius scales with how many there are (smaller when crowded)
+  const flowerR = Math.max(6, Math.min(14, rawW / (sessions.length + 1)));
+
+  // Pad by flower radius so edge flowers aren't clipped
+  const pad = flowerR * 1.5;
+  const bboxW = rawW + pad * 2;
+  const bboxH = rawH + pad * 2;
   const vbX = minX - pad;
   const vbY = minY - pad;
 
-  // Flower radius scales with how many there are (smaller when crowded)
-  const flowerR = Math.max(6, Math.min(14, bboxW / (sessions.length + 1)));
-
   return (
     <svg
-      width={size}
-      height={size}
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", background: "#000" }}
       viewBox={`${vbX} ${vbY} ${bboxW} ${bboxH}`}
-      style={{ borderRadius: "0.25rem" }}
+      preserveAspectRatio="xMidYMid meet"
     >
-      <rect x={vbX} y={vbY} width={bboxW} height={bboxH} fill="#0d0d0d" />
       {resolved.map(p => {
         const constituents = constituentMap.get(p.sessionKey);
         if (constituents && constituents.length > 1) {
@@ -426,7 +387,7 @@ function MiniCanvas({ sessions, specBySessionId, constituentMap, size }: { sessi
 function EmptyZoneIcon({ isYours }: { isYours: boolean }) {
   const color = isYours ? "#6b6bb4" : "#333";
   return (
-    <svg width="40" height="40" viewBox="0 0 40 40">
+    <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} viewBox="0 0 40 40">
       <line x1="20" y1="10" x2="20" y2="30" stroke={color} strokeWidth="1" />
       <line x1="10" y1="20" x2="30" y2="20" stroke={color} strokeWidth="1" />
       <line x1="13" y1="13" x2="27" y2="27" stroke={color} strokeWidth="0.5" />
@@ -448,93 +409,30 @@ function ZoneCard({
   constituentMap: Map<string, Array<{ specJson: string; sid: number }>>;
   onClick?: () => void;
 }) {
-  const { user, session, allSessions, incomingOrders, isYours } = zone;
-  const level = session ? Number(session.arrangementLevel) : 0;
-  const flowerCount = allSessions.length;
-
-  const displayName = run(() => {
-    if (isYours && session) return `Your Zone`;
-    if (isYours) return "Your Zone";
-    return user.name ?? "Anonymous";
-  });
-
-  const subtitle = run(() => {
-    if (session) {
-      const name = session.prompt.slice(0, 20);
-      const levelName = arrangementName(level);
-      return `${name} -- ${levelName}`;
-    }
-    if (!user.online && incomingOrders > 0) {
-      return `${incomingOrders} orders`;
-    }
-    if (!user.online) {
-      return `${Number(user.totalOrders)} total orders`;
-    }
-    return null;
-  });
+  const { user, allSessions, isYours } = zone;
 
   return (
     <div
       onClick={onClick}
       style={{
         aspectRatio: "1",
-        background: isYours ? "#1a1a2e" : "#141414",
+        background: "#000",
         border: run(() => {
           if (isYours) return "1px solid #3b3b6d";
           if (user.online) return "1px solid #1f1f1f";
           return "1px solid #1a1a1a";
         }),
-        borderRadius: "0.25rem",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "0.25rem",
+        overflow: "hidden",
+        position: "relative",
         cursor: onClick ? "pointer" : "default",
         transition: "border-color 0.15s",
-        fontSize: "0.75rem",
-        color: isYours ? "#8b8bd4" : "#525252",
         opacity: user.online ? 1 : 0.6,
       }}
     >
       {allSessions.length > 0 ? (
-        <MiniCanvas sessions={allSessions} specBySessionId={specBySessionId} constituentMap={constituentMap} size={100} />
+        <MiniCanvas sessions={allSessions} specBySessionId={specBySessionId} constituentMap={constituentMap} />
       ) : (
         <EmptyZoneIcon isYours={isYours} />
-      )}
-
-      <span
-        style={{
-          maxWidth: "90%",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          fontWeight: isYours ? 500 : 400,
-        }}
-      >
-        {displayName}
-      </span>
-
-      {subtitle && (
-        <span
-          style={{
-            fontSize: "0.625rem",
-            color: isYours ? "#7b7bc4" : "#404040",
-            maxWidth: "90%",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {subtitle}
-        </span>
-      )}
-
-      {flowerCount > 0 && (
-        <span style={{ fontSize: "0.5625rem", color: "#333" }}>
-          {flowerCount} {flowerCount === 1 ? "flower" : "flowers"}
-          {session ? ` -- ${arrangementName(level)}` : ""}
-        </span>
       )}
     </div>
   );

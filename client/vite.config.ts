@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "http://api.flower-maker.localhost:1355",
+        target: "http://localhost:9200",
         rewrite: path => path.replace(/^\/api/, ""),
       },
     },
