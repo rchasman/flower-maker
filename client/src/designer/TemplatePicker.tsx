@@ -1,113 +1,205 @@
+import { useState } from "react";
 import type { DbConnection } from "../spacetime/types.ts";
-
-const TEMPLATES = [
-  {
-    name: "Rose",
-    emoji: "🌹",
-    scientific: "Rosa damascena",
-    colors: ["Red", "Pink", "White"],
-  },
-  {
-    name: "Sunflower",
-    emoji: "🌻",
-    scientific: "Helianthus annuus",
-    colors: ["Yellow", "Orange"],
-  },
-  {
-    name: "Daisy",
-    emoji: "🌼",
-    scientific: "Bellis perennis",
-    colors: ["White", "Pink"],
-  },
-  {
-    name: "Orchid",
-    emoji: "🪻",
-    scientific: "Phalaenopsis amabilis",
-    colors: ["White", "Purple"],
-  },
-  {
-    name: "Tulip",
-    emoji: "🌷",
-    scientific: "Tulipa gesneriana",
-    colors: ["Red", "Yellow", "Purple"],
-  },
-];
+import { templatesByCategory, type TemplateInfo } from "../data/templates.ts";
 
 interface TemplatePickerProps {
   conn: DbConnection | null;
 }
 
 export function TemplatePicker({ conn }: TemplatePickerProps) {
+  const [search, setSearch] = useState("");
+  const groups = templatesByCategory();
+
+  const lowerSearch = search.toLowerCase();
+  const filteredGroups = groups
+    .map(g => ({
+      ...g,
+      templates: g.templates.filter(
+        t =>
+          t.name.toLowerCase().includes(lowerSearch) ||
+          t.scientific.toLowerCase().includes(lowerSearch) ||
+          t.colors.some(c => c.toLowerCase().includes(lowerSearch)) ||
+          t.season.toLowerCase().includes(lowerSearch),
+      ),
+    }))
+    .filter(g => g.templates.length > 0);
+
   return (
     <div
       style={{
-        flex: 1,
-        overflow: "auto",
-        padding: "0.5rem",
         display: "flex",
         flexDirection: "column",
-        gap: "0.25rem",
+        height: "100%",
+        overflow: "hidden",
       }}
     >
-      {TEMPLATES.map(t => (
-        <button
-          key={t.name}
-          onClick={() => {
-            conn?.reducers.createSession({ prompt: t.name });
-          }}
-          disabled={!conn}
+      {/* Search */}
+      <div style={{ padding: "0.5rem", borderBottom: "1px solid #1a1a1a" }}>
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search 46 templates..."
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.75rem",
-            padding: "0.625rem 0.75rem",
-            background: "#141414",
+            width: "100%",
+            padding: "0.375rem 0.5rem",
+            background: "#0d0d0d",
             border: "1px solid #1a1a1a",
-            borderRadius: "0.375rem",
-            cursor: conn ? "pointer" : "not-allowed",
-            textAlign: "left",
+            borderRadius: "0.25rem",
             color: "#e5e5e5",
-            opacity: conn ? 1 : 0.5,
-            transition: "border-color 0.15s",
+            fontSize: "0.6875rem",
+            outline: "none",
           }}
-        >
-          <span style={{ fontSize: "1.25rem" }}>{t.emoji}</span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: "0.8125rem", fontWeight: 500 }}>
-              {t.name}
-            </div>
-            <div
-              style={{
-                fontSize: "0.625rem",
-                color: "#525252",
-                fontStyle: "italic",
-              }}
-            >
-              {t.scientific}
-            </div>
-            <div
-              style={{
-                fontSize: "0.625rem",
-                color: "#404040",
-                marginTop: "0.125rem",
-              }}
-            >
-              {t.colors.join(" · ")}
-            </div>
-          </div>
-        </button>
-      ))}
+        />
+      </div>
 
+      {/* Template list */}
       <div
         style={{
-          padding: "0.75rem",
-          fontSize: "0.6875rem",
-          color: "#404040",
-          textAlign: "center",
+          flex: 1,
+          overflow: "auto",
+          padding: "0.25rem 0.5rem",
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.5rem",
         }}
       >
-        5 of 45 templates · more coming soon
+        {filteredGroups.map(group => (
+          <div key={group.category}>
+            <div
+              style={{
+                fontSize: "0.5625rem",
+                fontWeight: 600,
+                color: "#525252",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                padding: "0.375rem 0 0.25rem",
+              }}
+            >
+              {group.label} ({group.templates.length})
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.125rem",
+              }}
+            >
+              {group.templates.map(t => (
+                <TemplateRow
+                  key={t.name}
+                  template={t}
+                  disabled={!conn}
+                  onClick={() => {
+                    conn?.reducers.createSession({ prompt: t.name });
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {filteredGroups.length === 0 && (
+          <div
+            style={{
+              padding: "1rem",
+              color: "#404040",
+              fontSize: "0.6875rem",
+              textAlign: "center",
+            }}
+          >
+            No templates match "{search}"
+          </div>
+        )}
       </div>
     </div>
   );
+}
+
+function TemplateRow({
+  template: t,
+  disabled,
+  onClick,
+}: {
+  template: TemplateInfo;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "0.5rem",
+        padding: "0.375rem 0.5rem",
+        background: "#141414",
+        border: "1px solid #1a1a1a",
+        borderRadius: "0.25rem",
+        cursor: disabled ? "not-allowed" : "pointer",
+        textAlign: "left",
+        color: "#e5e5e5",
+        opacity: disabled ? 0.5 : 1,
+        transition: "border-color 0.15s",
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: "0.6875rem", fontWeight: 500 }}>{t.name}</div>
+        <div
+          style={{
+            fontSize: "0.5625rem",
+            color: "#525252",
+            fontStyle: "italic",
+          }}
+        >
+          {t.scientific}
+        </div>
+      </div>
+      <div
+        style={{
+          display: "flex",
+          gap: "2px",
+          flexShrink: 0,
+        }}
+      >
+        {t.colors.slice(0, 4).map(c => (
+          <span
+            key={c}
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: colorToHex(c),
+              border: "1px solid #262626",
+            }}
+          />
+        ))}
+        {t.colors.length > 4 && (
+          <span
+            style={{ fontSize: "0.5rem", color: "#404040", lineHeight: "6px" }}
+          >
+            +{t.colors.length - 4}
+          </span>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function colorToHex(name: string): string {
+  const map: Record<string, string> = {
+    Red: "#ef4444",
+    Pink: "#ec4899",
+    White: "#f5f5f5",
+    Yellow: "#eab308",
+    Orange: "#f97316",
+    Purple: "#a855f7",
+    Lavender: "#c4b5fd",
+    Blue: "#3b82f6",
+    Green: "#22c55e",
+    Peach: "#fdba74",
+    Coral: "#fb7185",
+    Brown: "#92400e",
+  };
+  return map[name] ?? "#737373";
 }
