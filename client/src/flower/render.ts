@@ -571,7 +571,7 @@ export function createFlowerPlan(
 
   // ── Stem + leaves (single flower gets a single stem below head) ──
   const stemData = parseSpecStem(specJson);
-  const leafData = parseLeafData(specJson);
+  const foliage = parseFoliage(specJson);
   const stemLen = Math.max(0.6, Math.min(1.8, stemData.height * 1.4));
   const stemHalfW = Math.max(0.03, Math.min(0.08, stemData.thickness * 0.08));
 
@@ -584,15 +584,15 @@ export function createFlowerPlan(
   );
   const stem: StemPlan = { cmds: stemCmds, color: stemData.color };
 
-  const leafSize = 0.5 + leafData.size * 0.4;
-  const leaf1 = generateLeaf(0, stemLen * 0.65, Math.PI * 0.55, leafSize, leafData);
-  const leaves: LeafPlan[] = [
-    { cmds: leaf1.outline, veins: leaf1.veins, color: leafData.color },
-  ];
-  if (stemLen > 0.6) {
-    const leaf2 = generateLeaf(0, stemLen * 0.38, -Math.PI * 0.55, leafSize * 0.85, leafData);
-    leaves.push({ cmds: leaf2.outline, veins: leaf2.veins, color: leafData.color });
-  }
+  // Place leaves using per-leaf spec data (position, side, size, angle offset)
+  const leaves: LeafPlan[] = foliage.leaves.map(l => {
+    const pt = stemPointAt(0, stemLen, 0, 0, stemData.curvature, l.position);
+    const side = l.side === "right" ? -1 : 1;
+    const leafAngle = pt.angle + side * (Math.PI * 0.35) + l.angleOffset;
+    const scale = 0.3 + l.size * 0.25;
+    const leaf = generateLeaf(pt.x, pt.y, leafAngle, scale, foliage);
+    return { cmds: leaf.outline, veins: leaf.veins, color: foliage.color };
+  });
 
   return { sepals, layers, center, stem, leaves };
 }
@@ -629,14 +629,12 @@ function createFallbackPlan(sid: number): FlowerPlan {
       stamens: [],
     },
     stem: { cmds: stemCmds, color: 0x2d5a27 },
-    leaves: (() => {
-      const l1 = generateLeaf(0, 0.65, Math.PI * 0.55, 0.5);
-      const l2 = generateLeaf(0, 0.38, -Math.PI * 0.55, 0.4);
-      return [
-        { cmds: l1.outline, veins: l1.veins, color: 0x3a7d32 },
-        { cmds: l2.outline, veins: l2.veins, color: 0x3a7d32 },
-      ];
-    })(),
+    leaves: DEFAULT_FOLIAGE.leaves.map(l => {
+      const pt = stemPointAt(0, 1.0, 0, 0, 0, l.position);
+      const side = l.side === "right" ? -1 : 1;
+      const leaf = generateLeaf(pt.x, pt.y, pt.angle + side * Math.PI * 0.35 + l.angleOffset, 0.3 + l.size * 0.25);
+      return { cmds: leaf.outline, veins: leaf.veins, color: 0x3a7d32 };
+    }),
   };
 }
 
@@ -713,42 +711,57 @@ function parseSpecStem(specJson: string | undefined): ParsedStem {
   }
 }
 
-type ParsedLeaf = {
-  shape: string;
+type ParsedLeafInstance = {
+  position: number;  // 0-1 along stem
+  side: "left" | "right";
   size: number;
+  angleOffset: number;
+};
+
+type ParsedFoliage = {
+  shape: string;
   color: number;
   serration: string;
   droop: number;
-  curl: number;
+  leaves: ParsedLeafInstance[];
 };
 
-const DEFAULT_LEAF: ParsedLeaf = {
-  shape: "Ovate", size: 0.5, color: 0x3a7d32,
-  serration: "None", droop: 0.15, curl: 0,
+const DEFAULT_FOLIAGE: ParsedFoliage = {
+  shape: "Ovate", color: 0x3a7d32,
+  serration: "None", droop: 0.15,
+  leaves: [
+    { position: 0.35, side: "left", size: 0.5, angleOffset: 0.05 },
+    { position: 0.6, side: "right", size: 0.42, angleOffset: -0.08 },
+  ],
 };
 
-function parseLeafData(specJson: string | undefined): ParsedLeaf {
-  if (!specJson) return DEFAULT_LEAF;
+function parseFoliage(specJson: string | undefined): ParsedFoliage {
+  if (!specJson) return DEFAULT_FOLIAGE;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const spec = JSON.parse(specJson) as any;
-    const leaf = spec.foliage?.leaves?.[0];
-    if (!leaf) return DEFAULT_LEAF;
+    const foliage = spec.foliage;
+    if (!foliage) return DEFAULT_FOLIAGE;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rawLeaves = Array.isArray(foliage.leaves) ? foliage.leaves : [];
+    const leaves: ParsedLeafInstance[] = rawLeaves.slice(0, 6).map((l: any, i: number) => ({
+      position: Math.max(0.1, Math.min(0.85, l.position ?? 0.3 + i * 0.2)),
+      side: l.side === "right" ? "right" as const : "left" as const,
+      size: Math.max(0.2, Math.min(1.0, l.size ?? 0.5)),
+      angleOffset: Math.max(-0.3, Math.min(0.3, l.angle_offset ?? 0)),
+    }));
+
     return {
-      shape: leaf.shape ?? "Ovate",
-      size: leaf.size ?? 0.5,
-      color: colorToHex(leaf.color?.stops?.[0]?.color) ?? 0x3a7d32,
-      serration: leaf.serration ?? "None",
-      droop: leaf.droop ?? 0.15,
-      curl: leaf.curl ?? 0,
+      shape: foliage.leaf_shape ?? "Ovate",
+      color: colorToHex(foliage.leaf_color) ?? 0x3a7d32,
+      serration: foliage.serration ?? "None",
+      droop: foliage.droop ?? 0.15,
+      leaves: leaves.length > 0 ? leaves : DEFAULT_FOLIAGE.leaves,
     };
   } catch {
-    return DEFAULT_LEAF;
+    return DEFAULT_FOLIAGE;
   }
-}
-
-function parseLeafColor(specJson: string | undefined): number {
-  return parseLeafData(specJson).color;
 }
 
 // ── Stem generation ──
@@ -804,6 +817,37 @@ function generateStem(
     { op: "C", c1x: rm1x, c1y: rm1y + (rb1y - rm1y) * 0.5, c2x: rb1x, c2y: rb1y - (rb1y - rm1y) * 0.5, x: rb1x, y: rb1y },
     { op: "Z" },
   ];
+}
+
+// ── Stem interpolation ──
+
+/** Get a point and tangent angle along a curved stem at parameter t ∈ [0,1] (base → tip). */
+function stemPointAt(
+  fromX: number, fromY: number,
+  toX: number, toY: number,
+  curvature: number,
+  t: number,
+): { x: number; y: number; angle: number } {
+  const dx = toX - fromX;
+  const dy = toY - fromY;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  const nx = -dy / len;
+  const ny = dx / len;
+  const curvOff = curvature * len * 0.3;
+  const midX = (fromX + toX) / 2 + nx * curvOff;
+  const midY = (fromY + toY) / 2 + ny * curvOff;
+
+  // Quadratic bezier: B(t) = (1-t)²·from + 2(1-t)t·mid + t²·to
+  const u = 1 - t;
+  const x = u * u * fromX + 2 * u * t * midX + t * t * toX;
+  const y = u * u * fromY + 2 * u * t * midY + t * t * toY;
+
+  // Tangent: B'(t) = 2(1-t)(mid-from) + 2t(to-mid)
+  const tx = 2 * u * (midX - fromX) + 2 * t * (toX - midX);
+  const ty = 2 * u * (midY - fromY) + 2 * t * (toY - midY);
+  const angle = Math.atan2(-tx, ty); // perpendicular to stem direction
+
+  return { x, y, angle };
 }
 
 // ── Leaf generation ──
@@ -896,11 +940,11 @@ function generateLeaf(
   x: number, y: number,
   angle: number,
   size: number,
-  leaf?: ParsedLeaf,
+  foliage?: ParsedFoliage,
 ): LeafGeometry {
-  const ld = leaf ?? DEFAULT_LEAF;
-  const len = size * (0.9 + ld.size * 0.5);
-  const halfW = size * 0.42;
+  const ld = foliage ?? DEFAULT_FOLIAGE;
+  const len = size * 1.1;
+  const halfW = size * 0.32;
   const cosA = Math.cos(angle);
   const sinA = Math.sin(angle);
   const droopAmt = ld.droop * len * 0.3;
@@ -1054,38 +1098,30 @@ export function createArrangementPlan(
     const { specJson, sid } = constituents[Math.min(i, count - 1)]!;
     const flowerPlan = createFlowerPlan(specJson, sid);
     const stemData = parseSpecStem(specJson);
-    const leafData = parseLeafData(specJson);
+    const foliage = parseFoliage(specJson);
 
     // Stem from base to flower head position
     const stemHalfW = Math.max(0.03, Math.min(0.08, stemData.thickness * 0.08));
+    const stemCurvature = stemData.curvature + slot.stemAngle * 0.3;
     const stemCmds = generateStem(
       0, baseY,
       slot.offsetX, slot.offsetY,
-      stemData.curvature + slot.stemAngle * 0.3,
+      stemCurvature,
       stemHalfW,
       stemData.color,
     );
 
     const stem: StemPlan = { cmds: stemCmds, color: stemData.color };
 
-    // 1-2 leaves along stem
-    const stemMidX = slot.offsetX * 0.4;
-    const stemMidY = (baseY + slot.offsetY) * 0.55;
-    const leafSize = 0.5 + leafData.size * 0.4;
-    const leafAngle1 = slot.stemAngle + Math.PI * 0.55;
-    const leafAngle2 = slot.stemAngle - Math.PI * 0.55;
-
-    const arrLeaf1 = generateLeaf(stemMidX, stemMidY, leafAngle1, leafSize, leafData);
-    const leaves: LeafPlan[] = [
-      { cmds: arrLeaf1.outline, veins: arrLeaf1.veins, color: leafData.color },
-    ];
-    // Second leaf on longer stems
-    if (slot.stemLength > 0.6) {
-      const leafMidX2 = slot.offsetX * 0.65;
-      const leafMidY2 = (baseY + slot.offsetY) * 0.35;
-      const arrLeaf2 = generateLeaf(leafMidX2, leafMidY2, leafAngle2, leafSize * 0.8, leafData);
-      leaves.push({ cmds: arrLeaf2.outline, veins: arrLeaf2.veins, color: leafData.color });
-    }
+    // Use at most 2 leaves per arrangement stem to avoid clutter
+    const leaves: LeafPlan[] = foliage.leaves.slice(0, 2).map(l => {
+      const pt = stemPointAt(0, baseY, slot.offsetX, slot.offsetY, stemCurvature, l.position);
+      const side = l.side === "right" ? -1 : 1;
+      const leafAngle = pt.angle + side * (Math.PI * 0.35) + l.angleOffset;
+      const scale = 0.3 + l.size * 0.25;
+      const leaf = generateLeaf(pt.x, pt.y, leafAngle, scale, foliage);
+      return { cmds: leaf.outline, veins: leaf.veins, color: foliage.color };
+    });
 
     return {
       flowerPlan,

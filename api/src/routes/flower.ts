@@ -64,6 +64,24 @@ structure:
     shape: Flat
     size: 0.3
     color: { r: 0.1, g: 0.4, b: 0.1, a: 1.0 }
+foliage:
+  leaf_shape: Ovate
+  leaf_color: { r: 0.15, g: 0.5, b: 0.2, a: 1.0 }
+  serration: None
+  droop: 0.15
+  leaves:
+    - position: 0.3
+      side: left
+      size: 0.5
+      angle_offset: 0.05
+    - position: 0.55
+      side: right
+      size: 0.45
+      angle_offset: -0.08
+    - position: 0.75
+      side: left
+      size: 0.4
+      angle_offset: 0.12
 
 ENUM VALUES (use exact strings):
 - shape (petal): Ovate, Lanceolate, Spatulate, Oblong, Orbicular, Cordate, Deltoid, Falcate, Ligulate, Tubular, Fimbriate, Laciniate, Runcinate
@@ -73,6 +91,8 @@ ENUM VALUES (use exact strings):
 - vein_pattern: None, Parallel, Branching, Palmate, Reticulate, Dichotomous, Arcuate
 - sepal shape: Lanceolate, Ovate, Triangular, Leaflike, Petaloid
 - receptacle shape: Flat, Convex, Concave, Conical, Urceolate
+- leaf_shape: Ovate, Lanceolate, Cordate, Palmate, Pinnate, Linear, Reniform, Sagittate, Peltate, Acicular, Hastate
+- serration: None, Fine, Coarse, Double, Crenate, Lobed
 
 RULES:
 - Colors use flow syntax: { r: 0.0-1.0, g: 0.0-1.0, b: 0.0-1.0, a: 1.0 }
@@ -82,6 +102,14 @@ RULES:
 - Orchids: 2 layers — 3 Falcate + 3 Orbicular with angular_offset: 60
 - Lilies: 1 layer of 6 Lanceolate petals with negative curvature (recurved), prominent stamens
 - Use multiple layers with angular_offset for complex flowers (roses, peonies, dahlias)
+- Foliage: each leaf has position (0.0-1.0 along stem), side (left/right), size (0.3-0.8), angle_offset (-0.2 to 0.2 radians)
+- Vary size and angle_offset per leaf for natural look — no two leaves should be identical
+- Alternate left/right sides down the stem
+- Roses: 2-3 Ovate leaves, Fine serration, clustered mid-stem
+- Sunflowers: 3-4 large Cordate leaves, Coarse serration, distributed evenly
+- Daisies: 2 small Lanceolate basal leaves near base
+- Orchids: 1-2 thick Oblong leaves low on stem
+- Lilies: 3-5 Linear leaves distributed along full stem
 - Be botanically accurate but creatively expressive`;
 
 const COMBINE_SYSTEM_PROMPT = `You are an expert florist describing what happens when flowers are combined into arrangements. Given two flower specs and their counts, describe what the combination becomes.
