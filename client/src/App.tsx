@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { SessionProvider } from "./session/SessionProvider.tsx";
+import { NameGate } from "./session/NameGate.tsx";
 import { FlowerGrid } from "./homepage/FlowerGrid.tsx";
 import { DesignerView } from "./designer/DesignerView.tsx";
 
@@ -10,13 +11,15 @@ export function App() {
 
   return (
     <SessionProvider>
-      <div style={{ width: "100%", height: "100%", position: "relative" }}>
-        {view === "grid" ? (
-          <FlowerGrid onEnterDesigner={() => setView("designer")} />
-        ) : (
-          <DesignerView onBackToGrid={() => setView("grid")} />
-        )}
-      </div>
+      <NameGate>
+        <div style={{ width: "100%", height: "100%", position: "relative" }}>
+          {view === "grid" ? (
+            <FlowerGrid onEnterDesigner={() => setView("designer")} />
+          ) : (
+            <DesignerView onBackToGrid={() => setView("grid")} />
+          )}
+        </div>
+      </NameGate>
     </SessionProvider>
   );
 }
