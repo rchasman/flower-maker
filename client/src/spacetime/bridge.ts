@@ -2,6 +2,15 @@ import { readStream } from "../lib/utils.ts";
 import type { GardenSim } from "../wasm/loader.ts";
 import type { DbConnection, FlowerSession, FlowerSpec } from "./types.ts";
 import { isVariant } from "./types.ts";
+import { getMyIdentity } from "./connection.ts";
+
+/** Check if a session belongs to the current user. */
+function isMySession(session: FlowerSession): boolean {
+  const me = getMyIdentity();
+  if (!me) return true; // fallback: show all if identity unavailable
+  // SpacetimeDB identities compare by their string/toHexString representation
+  return String(session.owner) === String(me);
+}
 
 /** Spread flowers across the canvas when server positions are all zero. */
 function resolvePosition(
@@ -13,22 +22,26 @@ function resolvePosition(
   const cy = Number(session.canvasY);
   if (cx !== 0 || cy !== 0) return [cx, cy];
 
-  // Distribute in a grid pattern centered on the viewport
+  // Distribute in a grid across the full canvas viewport with padding
+  const padX = 100;
+  const padY = 100;
+  const canvasW = 800; // usable range: padX .. canvasW
+  const canvasH = 700; // usable range: padY .. canvasH
   const cols = Math.max(1, Math.ceil(Math.sqrt(total)));
-  const spacing = 80;
+  const rows = Math.max(1, Math.ceil(total / cols));
+  const spacingX = (canvasW - padX) / Math.max(1, cols);
+  const spacingY = (canvasH - padY) / Math.max(1, rows);
   const col = index % cols;
   const row = Math.floor(index / cols);
-  const offsetX = (cols - 1) * spacing * 0.5;
-  const offsetY = (Math.ceil(total / cols) - 1) * spacing * 0.5;
-  return [400 + col * spacing - offsetX, 300 + row * spacing - offsetY];
+  return [padX + spacingX * (col + 0.5), padY + spacingY * (row + 0.5)];
 }
 
 /// Wire SpacetimeDB table callbacks to the WASM simulation.
 /// Seeds existing rows then listens for future changes.
 export function wireToWasm(conn: DbConnection, sim: GardenSim) {
-  // Seed existing sessions already in the local cache
-  const existing = [...conn.db.flower_session.iter()].filter(s =>
-    isVariant(s.status, "Designing"),
+  // Seed existing sessions owned by the current user
+  const existing = [...conn.db.flower_session.iter()].filter(
+    s => isVariant(s.status, "Designing") && isMySession(s),
   );
   const specLookup = [...conn.db.flower_spec.iter()].reduce(
     (acc, spec) => acc.set(spec.sessionId, spec.specJson),
@@ -42,7 +55,7 @@ export function wireToWasm(conn: DbConnection, sim: GardenSim) {
   });
 
   conn.db.flower_session.onInsert((_ctx, session: FlowerSession) => {
-    if (isVariant(session.status, "Designing")) {
+    if (isVariant(session.status, "Designing") && isMySession(session)) {
       const count = sim.flower_count() + 1;
       const [x, y] = resolvePosition(session, count, count);
       const spec = [...conn.db.flower_spec.iter()].find(

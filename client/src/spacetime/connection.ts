@@ -7,12 +7,18 @@ const SPACETIMEDB_MODULE =
 const TOKEN_KEY = "spacetimedb_token";
 
 let connection: DbConnection | null = null;
+let myIdentity: unknown = null;
 
 export type ConnectionState =
   | "disconnected"
   | "connecting"
   | "connected"
   | "error";
+
+/** Get the current user's SpacetimeDB identity (available after connect). */
+export function getMyIdentity(): unknown {
+  return myIdentity;
+}
 
 export type ConnectionListener = (
   state: ConnectionState,
@@ -51,6 +57,7 @@ export async function connect(): Promise<DbConnection> {
       .withDatabaseName(SPACETIMEDB_MODULE)
       .withToken(savedToken)
       .onConnect((...args: unknown[]) => {
+        myIdentity = args[0]; // SpacetimeDB identity
         const token = args[2] as string | undefined;
         if (token) localStorage.setItem(TOKEN_KEY, token);
         connection = conn as DbConnection;
