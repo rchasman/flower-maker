@@ -347,7 +347,7 @@ pub fn merge_sessions(
     ctx: &ReducerContext,
     session_a_id: u64,
     session_b_id: u64,
-    _ai_arrangement_json: String,
+    ai_arrangement_json: String,
 ) -> Result<(), String> {
     // Both sessions must be owned by the caller and in Designing status
     let session_a = require_session_owner(ctx, session_a_id)?;
@@ -403,6 +403,18 @@ pub fn merge_sessions(
         version: 0,
         updated_at: ctx.timestamp,
     });
+
+    // Store AI arrangement as a part override on the child
+    if !ai_arrangement_json.is_empty() {
+        ctx.db.part_override().insert(FlowerPartOverride {
+            id: 0,
+            session_id: child_session.id,
+            part_path: "arrangement".to_string(),
+            override_json: ai_arrangement_json,
+            forked_from: format!("merge:{}+{}", session_a_id, session_b_id),
+            created_at: ctx.timestamp,
+        });
+    }
 
     // Archive parents
     ctx.db.flower_session().id().update(FlowerSession {

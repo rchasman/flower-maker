@@ -20,10 +20,26 @@ function sidHash(sid: number, salt: number): number {
   return n - Math.floor(n);
 }
 
-/** Petal color per session id — deterministic from sid. */
-function flowerColor(sid: number): number {
+/** Convert 0.0–1.0 RGB floats to a PixiJS hex color number. */
+function colorFromSpec(r: number, g: number, b: number): number {
+  const ri = Math.round(Math.max(0, Math.min(1, r)) * 255);
+  const gi = Math.round(Math.max(0, Math.min(1, g)) * 255);
+  const bi = Math.round(Math.max(0, Math.min(1, b)) * 255);
+  return (ri << 16) | (gi << 8) | bi;
+}
+
+/** Fallback palette when spec colors are default/zero. */
+function fallbackColor(sid: number): number {
   const hues = [0xff6b9d, 0xc084fc, 0x67e8f9, 0xfbbf24, 0x4ade80, 0xf87171, 0xa78bfa, 0x38bdf8];
   return hues[sid % hues.length]!;
+}
+
+/** Resolve flower color — use spec data if available, fallback to sid hash. */
+function resolveColor(flower: FlowerRenderData): number {
+  const { petal_color_r: r, petal_color_g: g, petal_color_b: b } = flower;
+  // Treat all-zero or very dark as "no color data"
+  if (r + g + b < 0.05) return fallbackColor(flower.sid);
+  return colorFromSpec(r, g, b);
 }
 
 /** Darken a hex color by a factor (0–1, where 0 = black). */
@@ -34,14 +50,78 @@ function darkenColor(color: number, factor: number): number {
   return (r << 16) | (g << 8) | b;
 }
 
-/** Flower shape parameters derived deterministically from sid. */
-function flowerShape(sid: number) {
-  const petalCount = 5 + Math.floor(sidHash(sid, 1) * 3);       // 5–7 petals
-  const petalLength = 0.75 + sidHash(sid, 2) * 0.35;            // relative to radius
-  const petalWidth = 0.28 + sidHash(sid, 3) * 0.18;             // relative to radius
-  const petalTaper = 0.6 + sidHash(sid, 4) * 0.3;               // tip narrowing
-  const rotationOffset = sidHash(sid, 5) * Math.PI * 2;         // starting angle
+/** Flower shape parameters — uses spec petal_count, sid-hash for proportions. */
+function flowerShape(sid: number, specPetalCount: number) {
+  const petalCount = specPetalCount > 0 ? specPetalCount : 5 + Math.floor(sidHash(sid, 1) * 3);
+  const petalLength = 0.75 + sidHash(sid, 2) * 0.35;
+  const petalWidth = 0.28 + sidHash(sid, 3) * 0.18;
+  const petalTaper = 0.6 + sidHash(sid, 4) * 0.3;
+  const rotationOffset = sidHash(sid, 5) * Math.PI * 2;
   return { petalCount, petalLength, petalWidth, petalTaper, rotationOffset };
+}
+
+/** Draw a single flower head at (0, 0) on the graphics context. */
+function drawFlowerHead(
+  g: Graphics,
+  color: number,
+  r: number,
+  alpha: number,
+  shape: ReturnType<typeof flowerShape>,
+) {
+  const angleStep = (Math.PI * 2) / shape.petalCount;
+  const petalLen = r * shape.petalLength;
+  const petalW = r * shape.petalWidth;
+  const petalColor = darkenColor(color, 0.88);
+
+  Array.from({ length: shape.petalCount }, (_, i) => {
+    const angle = shape.rotationOffset + i * angleStep;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+
+    const cx = cos * petalLen * 0.55;
+    const cy = sin * petalLen * 0.55;
+    const tx = cos * petalLen;
+    const ty = sin * petalLen;
+    const px = -sin * petalW;
+    const py = cos * petalW;
+    const tpx = -sin * petalW * shape.petalTaper;
+    const tpy = cos * petalW * shape.petalTaper;
+
+    // Outer petal
+    g.moveTo(px * 0.3, py * 0.3);
+    g.quadraticCurveTo(cx + px, cy + py, tx + tpx, ty + tpy);
+    g.quadraticCurveTo(cx - px, cy - py, -px * 0.3, -py * 0.3);
+    g.closePath();
+    g.fill({ color: petalColor, alpha: alpha * 0.85 });
+
+    // Inner petal layer
+    const innerLen = petalLen * 0.7;
+    const innerW = petalW * 0.6;
+    const icx = cos * innerLen * 0.5;
+    const icy = sin * innerLen * 0.5;
+    const itx = cos * innerLen;
+    const ity = sin * innerLen;
+    const ipx = -sin * innerW;
+    const ipy = cos * innerW;
+
+    g.moveTo(ipx * 0.2, ipy * 0.2);
+    g.quadraticCurveTo(icx + ipx, icy + ipy, itx, ity);
+    g.quadraticCurveTo(icx - ipx, icy - ipy, -ipx * 0.2, -ipy * 0.2);
+    g.closePath();
+    g.fill({ color, alpha: alpha * 0.9 });
+
+    return i;
+  });
+
+  // Center disc (pistil)
+  const pistilColor = darkenColor(color, 0.45);
+  const pistilR = r * 0.28;
+  g.circle(0, 0, pistilR);
+  g.fill({ color: pistilColor, alpha });
+
+  // Pistil highlight
+  g.circle(0, 0, pistilR * 0.5);
+  g.fill({ color: 0xfefce8, alpha: alpha * 0.6 });
 }
 
 const FLOWER_BASE_RADIUS = 14;
@@ -101,19 +181,20 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           stage.addChild(g);
         }
 
-        // Update hit area to match current flower size
-        const hitRadius = FLOWER_BASE_RADIUS * flower.scale * 1.5;
-        g.hitArea = new Circle(0, 0, hitRadius);
-
-        const color = flowerColor(flower.sid);
+        const color = resolveColor(flower);
         const r = FLOWER_BASE_RADIUS * flower.scale;
         const isSelected = selectedIdRef.current === flower.sid;
+        const shape = flowerShape(flower.sid, flower.petal_count);
+
+        // Update hit area
+        const hitRadius = r * shape.petalLength * 1.5;
+        g.hitArea = new Circle(0, 0, hitRadius);
 
         g.clear();
 
         // Selection ring
         if (isSelected) {
-          g.circle(0, 0, r + SELECTION_RING_PAD);
+          g.circle(0, 0, r * shape.petalLength + SELECTION_RING_PAD);
           g.stroke({ color: 0xffffff, width: 2, alpha: 0.7 });
         }
 
@@ -123,70 +204,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           g.fill({ color, alpha: 0.15 * flower.alpha });
         }
 
-        // Petals — ellipses arranged radially
-        const shape = flowerShape(flower.sid);
-        const angleStep = (Math.PI * 2) / shape.petalCount;
-        const petalLen = r * shape.petalLength;
-        const petalW = r * shape.petalWidth;
-        const petalColor = darkenColor(color, 0.88);
-
-        Array.from({ length: shape.petalCount }, (_, i) => {
-          const angle = shape.rotationOffset + i * angleStep;
-          const cos = Math.cos(angle);
-          const sin = Math.sin(angle);
-
-          // Build ellipse petal as a quadratic bezier path
-          // Petal center sits at half the petal length from origin
-          const cx = cos * petalLen * 0.55;
-          const cy = sin * petalLen * 0.55;
-
-          // Petal tip
-          const tx = cos * petalLen;
-          const ty = sin * petalLen;
-
-          // Perpendicular direction for petal width
-          const px = -sin * petalW;
-          const py = cos * petalW;
-
-          // Tip width (tapered)
-          const tpx = -sin * petalW * shape.petalTaper;
-          const tpy = cos * petalW * shape.petalTaper;
-
-          // Draw petal as a closed shape: base → left side → tip → right side → base
-          g.moveTo(px * 0.3, py * 0.3);
-          g.quadraticCurveTo(cx + px, cy + py, tx + tpx, ty + tpy);
-          g.quadraticCurveTo(cx - px, cy - py, -px * 0.3, -py * 0.3);
-          g.closePath();
-          g.fill({ color: petalColor, alpha: flower.alpha * 0.85 });
-
-          // Inner petal layer (slightly smaller, brighter) for depth
-          const innerLen = petalLen * 0.7;
-          const innerW = petalW * 0.6;
-          const icx = cos * innerLen * 0.5;
-          const icy = sin * innerLen * 0.5;
-          const itx = cos * innerLen;
-          const ity = sin * innerLen;
-          const ipx = -sin * innerW;
-          const ipy = cos * innerW;
-
-          g.moveTo(ipx * 0.2, ipy * 0.2);
-          g.quadraticCurveTo(icx + ipx, icy + ipy, itx, ity);
-          g.quadraticCurveTo(icx - ipx, icy - ipy, -ipx * 0.2, -ipy * 0.2);
-          g.closePath();
-          g.fill({ color, alpha: flower.alpha * 0.9 });
-
-          return i;
-        });
-
-        // Center disc (pistil) — darker contrasting circle
-        const pistilColor = darkenColor(color, 0.45);
-        const pistilR = r * 0.28;
-        g.circle(0, 0, pistilR);
-        g.fill({ color: pistilColor, alpha: flower.alpha });
-
-        // Pistil highlight — warm center dot
-        g.circle(0, 0, pistilR * 0.5);
-        g.fill({ color: 0xfefce8, alpha: flower.alpha * 0.6 });
+        // Draw the flower head at origin
+        drawFlowerHead(g, color, r, flower.alpha, shape);
 
         g.position.set(flower.x, flower.y);
         g.rotation = flower.rotation;

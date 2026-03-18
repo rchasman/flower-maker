@@ -105,7 +105,6 @@ flowerRoutes.post("/order", async c => {
     arrangement_level: string;
     flower_count: number;
     generation: number;
-    fitness_scores: Record<string, number>;
     prompt: string;
   }>();
 
@@ -121,7 +120,6 @@ flowerRoutes.post("/order", async c => {
       },
       metadata: {
         generation: body.generation,
-        fitness_scores: body.fitness_scores,
         created_at: new Date().toISOString(),
       },
     },
