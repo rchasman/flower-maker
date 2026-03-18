@@ -74,7 +74,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
       specMap.set(streamingSidRef.current, streamingSpecRef.current);
     }
     canvasRef.current?.setSpecMap(specMap);
-  }, [specs]);
+  }, [specs, mySessions.length]);
 
   // Push constituent data to canvas for arrangement rendering
   useEffect(() => {
