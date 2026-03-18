@@ -1,6 +1,7 @@
 mod simulation;
 mod merge;
 mod animation;
+mod buffer;
 
 use flower_core::catalog::FlowerSpec;
 use flower_core::animation::FlowerAnimation;
@@ -8,6 +9,7 @@ use flower_core::physics::GardenPhysics;
 use flower_core::templates::PhysicsArchetype;
 use simulation::PhysicsWorld;
 use merge::MergeTracker;
+use buffer::RenderBuffer;
 use wasm_bindgen::prelude::*;
 
 struct FlowerInstance {
@@ -25,6 +27,7 @@ pub struct GardenSimulation {
     world: PhysicsWorld,
     merge_tracker: MergeTracker,
     flowers: Vec<FlowerInstance>,
+    render_buf: RenderBuffer,
 }
 
 #[wasm_bindgen]
@@ -36,6 +39,7 @@ impl GardenSimulation {
             world: PhysicsWorld::new(),
             merge_tracker: MergeTracker::new(),
             flowers: Vec::new(),
+            render_buf: RenderBuffer::new(),
         }
     }
 
@@ -138,6 +142,33 @@ impl GardenSimulation {
             })
         }).collect();
         serde_json::to_string(&data).unwrap_or_else(|_| "[]".into())
+    }
+
+    /// Write render data into a SharedArrayBuffer-backed f32 slice.
+    /// Call from JS: `sim.write_to_buffer(new Float32Array(sharedBuf))`
+    /// Returns the number of flowers written.
+    pub fn write_to_buffer(&mut self, buf: &mut [f32]) -> u32 {
+        let flowers: Vec<_> = self.flowers.iter().map(|f| {
+            let pos = self.world.position(f.body_handle);
+            let rot = self.world.rotation(f.body_handle);
+            (
+                f.session_id,
+                pos.0,
+                pos.1,
+                rot,
+                f.anim.scale() as f32,
+                f.anim.alpha() as f32,
+                f.spec.aura.is_some(),
+                f.spec.ornamentation.glow.is_some(),
+                f.anim.particles.len(),
+            )
+        }).collect();
+        self.render_buf.write(buf, &flowers) as u32
+    }
+
+    /// Required buffer size in f32 elements for SharedArrayBuffer allocation.
+    pub fn render_buffer_size() -> u32 {
+        buffer::BUFFER_FLOATS as u32
     }
 
     pub fn flower_count(&self) -> u32 {

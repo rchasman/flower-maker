@@ -15,6 +15,10 @@ export interface GardenSim {
   tick(dt: number): number;
   get_merge_events(): string;
   render_data(): string;
+  /** Write render data to a Float32Array (SharedArrayBuffer-backed). */
+  write_to_buffer?(buf: Float32Array): number;
+  /** Required Float32Array length for render buffer allocation. */
+  render_buffer_size?(): number;
   flower_count(): number;
   wind_x(): number;
   wind_y(): number;
