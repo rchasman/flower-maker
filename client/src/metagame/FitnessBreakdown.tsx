@@ -21,7 +21,7 @@ export function FitnessBreakdown({ sessionId }: FitnessBreakdownProps) {
     );
   }
 
-  const scores = allScores.filter(s => s.session_id === sessionId);
+  const scores = allScores.filter(s => Number(s.sessionId) === sessionId);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
@@ -31,10 +31,10 @@ export function FitnessBreakdown({ sessionId }: FitnessBreakdownProps) {
         </div>
       )}
       {scores.map(score => {
-        const env = environments.find(e => e.id === score.environment_id);
+        const env = environments.find(e => e.id === score.environmentId);
         return (
           <div
-            key={score.id}
+            key={Number(score.id)}
             style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
           >
             <span
@@ -44,7 +44,7 @@ export function FitnessBreakdown({ sessionId }: FitnessBreakdownProps) {
                 width: "4.5rem",
               }}
             >
-              {env?.name ?? `Env #${score.environment_id}`}
+              {env?.name ?? `Env #${Number(score.environmentId)}`}
             </span>
             <div
               style={{
@@ -57,10 +57,10 @@ export function FitnessBreakdown({ sessionId }: FitnessBreakdownProps) {
             >
               <div
                 style={{
-                  width: `${score.score}%`,
+                  width: `${Number(score.score)}%`,
                   height: "100%",
                   borderRadius: "0.1875rem",
-                  background: scoreColor(score.score),
+                  background: scoreColor(Number(score.score)),
                   transition: "width 0.3s ease",
                 }}
               />
@@ -74,7 +74,7 @@ export function FitnessBreakdown({ sessionId }: FitnessBreakdownProps) {
                 textAlign: "right",
               }}
             >
-              {score.score.toFixed(0)}
+              {Number(score.score).toFixed(0)}
             </span>
           </div>
         );

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { readStreamWithProgress } from "../lib/utils.ts";
 
 interface FlowerChatProps {
   onFlowerGenerated?: (specJson: string) => void;
@@ -40,16 +41,9 @@ export function FlowerChat({ onFlowerGenerated }: FlowerChatProps) {
         return;
       }
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let accumulated = "";
-
       setMessages(prev => [...prev, { role: "assistant", content: "" }]);
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        accumulated += decoder.decode(value, { stream: true });
+      const final = await readStreamWithProgress(res, accumulated => {
         setMessages(prev => {
           const updated = [...prev];
           const last = updated[updated.length - 1];
@@ -57,9 +51,9 @@ export function FlowerChat({ onFlowerGenerated }: FlowerChatProps) {
             updated[updated.length - 1] = { ...last, content: accumulated };
           return updated;
         });
-      }
+      });
 
-      onFlowerGenerated?.(accumulated);
+      onFlowerGenerated?.(final);
     } catch (err) {
       setMessages(prev => [
         ...prev,

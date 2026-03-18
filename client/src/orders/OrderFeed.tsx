@@ -1,12 +1,13 @@
 import { useSession } from "../session/SessionProvider.tsx";
 import { useOrders } from "../spacetime/hooks.ts";
+import { isVariant } from "../spacetime/types.ts";
 
 export function OrderFeed() {
   const { conn } = useSession();
   const orders = useOrders(conn);
 
   const recentOrders = [...orders]
-    .sort((a, b) => b.ordered_at - a.ordered_at)
+    .sort((a, b) => Number(b.orderedAt) - Number(a.orderedAt))
     .slice(0, 20);
 
   if (recentOrders.length === 0) {
@@ -35,7 +36,7 @@ export function OrderFeed() {
     >
       {recentOrders.map(order => (
         <div
-          key={order.id}
+          key={Number(order.id)}
           style={{
             padding: "0.5rem 0.75rem",
             background: "#141414",
@@ -48,8 +49,8 @@ export function OrderFeed() {
           }}
         >
           <span>
-            #{order.session_id}
-            {order.source === "Agent" && (
+            #{Number(order.sessionId)}
+            {isVariant(order.source, "Agent") && (
               <span style={{ color: "#8b5cf6", marginLeft: "0.25rem" }}>
                 AI
               </span>

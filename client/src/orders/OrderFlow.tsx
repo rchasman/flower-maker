@@ -24,7 +24,7 @@ export function OrderFlow({ session, onOrder }: OrderFlowProps) {
 
   const fitnessScores: Record<string, number> = run(() => {
     try {
-      const parsed: unknown = JSON.parse(session.fitness_json);
+      const parsed: unknown = JSON.parse(session.fitnessJson);
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
         return parsed as Record<string, number>;
       }
@@ -41,11 +41,11 @@ export function OrderFlow({ session, onOrder }: OrderFlowProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          session_id: session.id,
-          spec: {}, // Would be loaded from FlowerSpec table
-          arrangement_level: levelName(session.arrangement_level),
-          flower_count: session.flower_count,
-          generation: session.generation,
+          session_id: Number(session.id),
+          spec: {},
+          arrangement_level: levelName(Number(session.arrangementLevel)),
+          flower_count: Number(session.flowerCount),
+          generation: Number(session.generation),
           fitness_scores: fitnessScores,
           prompt: session.prompt,
         }),
@@ -76,9 +76,9 @@ export function OrderFlow({ session, onOrder }: OrderFlowProps) {
           {session.prompt}
         </div>
         <div style={{ display: "flex", gap: "1rem", color: "#525252" }}>
-          <span>Level: {levelName(session.arrangement_level)}</span>
-          <span>{session.flower_count} flowers</span>
-          <span>Gen {session.generation}</span>
+          <span>Level: {levelName(Number(session.arrangementLevel))}</span>
+          <span>{Number(session.flowerCount)} flowers</span>
+          <span>Gen {Number(session.generation)}</span>
         </div>
       </div>
 

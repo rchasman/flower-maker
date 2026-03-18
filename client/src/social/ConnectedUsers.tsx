@@ -14,7 +14,7 @@ export function ConnectedUsers() {
       </div>
       {online.map(user => (
         <div
-          key={user.identity}
+          key={String(user.identity)}
           style={{
             display: "flex",
             alignItems: "center",
@@ -39,10 +39,10 @@ export function ConnectedUsers() {
               whiteSpace: "nowrap",
             }}
           >
-            {user.name ?? user.identity.slice(0, 12)}
+            {user.name ?? String(user.identity).slice(0, 12)}
           </span>
           <span style={{ color: "#404040", marginLeft: "auto", flexShrink: 0 }}>
-            lvl {user.level}
+            lvl {Number(user.level)}
           </span>
         </div>
       ))}

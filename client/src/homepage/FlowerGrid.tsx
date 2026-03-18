@@ -2,6 +2,7 @@ import { run, scoreColor } from "../lib/utils.ts";
 import { useSession } from "../session/SessionProvider.tsx";
 import { useFlowerSessions, useUsers } from "../spacetime/hooks.ts";
 import type { FlowerSession } from "../spacetime/types.ts";
+import { isVariant } from "../spacetime/types.ts";
 
 interface FlowerGridProps {
   onEnterDesigner: () => void;
@@ -13,7 +14,9 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
   const users = useUsers(conn);
   const onlineCount = users.filter(u => u.online).length;
 
-  const activeSessions = sessions.filter(s => s.status !== "Complete");
+  const activeSessions = sessions.filter(
+    s => !isVariant(s.status, "Complete"),
+  );
 
   return (
     <div
@@ -76,7 +79,7 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
         {/* Other people's zones */}
         {activeSessions.map(session => (
           <ZoneCard
-            key={session.id}
+            key={Number(session.id)}
             session={session}
             label={session.prompt.slice(0, 30)}
           />
@@ -169,7 +172,7 @@ function ZoneCard({
       </span>
       {session && (
         <span style={{ fontSize: "0.625rem", color: "#404040" }}>
-          lvl {session.arrangement_level} · {session.flower_count}f
+          lvl {Number(session.arrangementLevel)} · {Number(session.flowerCount)}f
         </span>
       )}
     </div>

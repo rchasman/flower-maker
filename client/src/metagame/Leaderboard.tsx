@@ -9,13 +9,13 @@ export function Leaderboard() {
   const leaderboard = useLeaderboard(conn);
   const [selectedEnvId, setSelectedEnvId] = useState<number | null>(null);
 
-  const activeEnvs = environments.filter(e => e.is_active);
-  const currentEnvId = selectedEnvId ?? activeEnvs[0]?.id ?? null;
-  const currentEnv = activeEnvs.find(e => e.id === currentEnvId);
+  const activeEnvs = environments.filter(e => e.isActive);
+  const currentEnvId = selectedEnvId ?? (activeEnvs[0] ? Number(activeEnvs[0].id) : null);
+  const currentEnv = activeEnvs.find(e => Number(e.id) === currentEnvId);
 
   const entries = leaderboard
-    .filter(e => e.environment_id === currentEnvId)
-    .sort((a, b) => b.score - a.score)
+    .filter(e => Number(e.environmentId) === currentEnvId)
+    .sort((a, b) => Number(b.score) - Number(a.score))
     .slice(0, 20);
 
   return (
@@ -30,14 +30,16 @@ export function Leaderboard() {
       >
         {activeEnvs.map(env => (
           <button
-            key={env.id}
-            onClick={() => setSelectedEnvId(env.id)}
+            key={Number(env.id)}
+            onClick={() => setSelectedEnvId(Number(env.id))}
             style={{
               padding: "0.25rem 0.5rem",
-              background: env.id === currentEnvId ? "#262626" : "transparent",
+              background:
+                Number(env.id) === currentEnvId ? "#262626" : "transparent",
               border: "1px solid #262626",
               borderRadius: "0.25rem",
-              color: env.id === currentEnvId ? "#e5e5e5" : "#525252",
+              color:
+                Number(env.id) === currentEnvId ? "#e5e5e5" : "#525252",
               cursor: "pointer",
               fontSize: "0.625rem",
             }}
@@ -75,7 +77,7 @@ export function Leaderboard() {
 
           {entries.map((entry, i) => (
             <div
-              key={entry.id}
+              key={Number(entry.id)}
               style={{
                 display: "flex",
                 justifyContent: "space-between",
@@ -104,15 +106,15 @@ export function Leaderboard() {
                   whiteSpace: "nowrap",
                 }}
               >
-                {entry.flower_name}
+                {entry.flowerName}
               </span>
               <span
                 style={{
                   fontFamily: "'Geist Mono', monospace",
-                  color: scoreColor(entry.score),
+                  color: scoreColor(Number(entry.score)),
                 }}
               >
-                {entry.score.toFixed(1)}
+                {Number(entry.score).toFixed(1)}
               </span>
             </div>
           ))}
