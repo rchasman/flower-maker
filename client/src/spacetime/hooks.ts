@@ -11,6 +11,7 @@ import type {
   LeaderboardEntry,
   FitnessScore,
   Environment,
+  SkinDefinition,
 } from "./types.ts";
 
 export function useSpacetimeDB() {
@@ -22,7 +23,6 @@ export function useSpacetimeDB() {
       setState(s);
       setConn(c);
     });
-    // Attempt connection on mount
     connect().catch(() => {});
     return () => {
       unsub();
@@ -47,10 +47,8 @@ function useTable<T>(
       onDelete(cb: (ctx: unknown, row: T) => void): void;
     };
 
-    // Load initial data
     setRows([...table.iter()]);
 
-    // Subscribe to changes
     const refresh = () => setRows([...table.iter()]);
     table.onInsert(refresh);
     table.onDelete(refresh);
@@ -91,11 +89,14 @@ export function useEnvironments(conn: DbConnection | null) {
   return useTable<Environment>(conn, "environment");
 }
 
+export function useSkinDefinitions(conn: DbConnection | null) {
+  return useTable<SkinDefinition>(conn, "skin_definition");
+}
+
 export function useMyIdentity(_conn: DbConnection | null): string | null {
-  // Identity comes from the connection token — stored in localStorage
   const token =
     typeof window !== "undefined"
       ? localStorage.getItem("spacetimedb_token")
       : null;
-  return token ? "self" : null; // Placeholder — real identity comes from onConnect callback
+  return token ? "self" : null;
 }
