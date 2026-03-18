@@ -54,6 +54,16 @@ export async function connect(): Promise<DbConnection> {
         const token = args[2] as string | undefined;
         if (token) localStorage.setItem(TOKEN_KEY, token);
         connection = conn as DbConnection;
+
+        // Subscribe to all tables so the client cache populates
+        // and onInsert/onDelete/onUpdate callbacks fire
+        (conn as DbConnection)
+          .subscriptionBuilder()
+          .onApplied(() => {
+            console.log("[spacetimedb] subscription applied — client cache ready");
+          })
+          .subscribeToAllTables();
+
         notify("connected", conn as DbConnection);
       })
       .onConnectError((...args: unknown[]) => {
