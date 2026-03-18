@@ -22,36 +22,27 @@ interface EditableField {
 }
 
 const EDITABLE_FIELDS: EditableField[] = [
-  { path: "personality.growth_speed", label: "Growth Speed", type: "number" },
-  { path: "personality.hardiness", label: "Hardiness", type: "number" },
-  { path: "personality.sociability", label: "Sociability", type: "number" },
-  { path: "personality.water_need", label: "Water Need", type: "number" },
-  {
-    path: "personality.pollinator_attraction",
-    label: "Pollinator Attraction",
-    type: "number",
-  },
-  {
-    path: "personality.light_preference",
-    label: "Light",
-    type: "select",
-    options: ["FullSun", "PartialShade", "FullShade", "Nocturnal"],
-  },
-  {
-    path: "personality.wind_response",
-    label: "Wind Response",
-    type: "select",
-    options: ["Rigid", "Gentle", "Dramatic", "Dancing"],
-  },
   { path: "structure.stem.height", label: "Stem Height", type: "number" },
-  { path: "structure.stem.thickness", label: "Stem Thickness", type: "number" },
+  { path: "structure.stem.thickness", label: "Stem Width", type: "number" },
   { path: "structure.stem.curvature", label: "Stem Curve", type: "number" },
-  { path: "roots.depth", label: "Root Depth", type: "number" },
   {
-    path: "roots.mycorrhizal",
-    label: "Mycorrhizal",
+    path: "petals.layers.0.shape",
+    label: "Petal Shape",
     type: "select",
-    options: ["true", "false"],
+    options: [
+      "Ovate", "Lanceolate", "Spatulate", "Oblong", "Orbicular",
+      "Cordate", "Deltoid", "Falcate", "Ligulate", "Fimbriate",
+    ],
+  },
+  { path: "petals.layers.0.count", label: "Petal Count", type: "number" },
+  { path: "petals.layers.0.length", label: "Petal Length", type: "number" },
+  { path: "petals.layers.0.width", label: "Petal Width", type: "number" },
+  { path: "petals.layers.0.curvature", label: "Petal Curve", type: "number" },
+  {
+    path: "petals.layers.0.edge_style",
+    label: "Edge Style",
+    type: "select",
+    options: ["Smooth", "Ruffled", "Fringed", "Serrated", "Rolled", "Undulate", "Crisped"],
   },
 ];
 
