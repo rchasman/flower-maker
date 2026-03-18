@@ -11,12 +11,6 @@ pub enum SessionStatus { Designing, Ordered, Complete }
 #[derive(Clone, Debug, PartialEq, SpacetimeType)]
 pub enum OrderSource { Human, Agent }
 
-#[derive(Clone, Debug, PartialEq, SpacetimeType)]
-pub enum EmoteKind { Wave, Sparkle, Rain, Bloom, Wilt, Dance, Pollinate }
-
-#[derive(Clone, Debug, PartialEq, SpacetimeType)]
-pub enum SkinRarity { Common, Uncommon, Rare, Epic, Legendary }
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Tables
 // ═══════════════════════════════════════════════════════════════════════════
@@ -29,8 +23,6 @@ pub struct User {
     online: bool,
     current_session_id: Option<u64>,
     total_orders: u32,
-    xp: u64,
-    level: u32,
     joined_at: Timestamp,
 }
 
@@ -48,7 +40,6 @@ pub struct FlowerSession {
     arrangement_level: u32,   // 1=stem, 3=group, 10=bouquet, etc.
     flower_count: u32,
     generation: u32,          // how many merges deep
-    fitness_json: String,     // serialized fitness scores per environment
 }
 
 #[spacetimedb::table(accessor = flower_spec, public)]
@@ -92,54 +83,6 @@ pub struct FlowerOrder {
     note: Option<String>,
 }
 
-// ── Metagame: Environments, Fitness, Leaderboards ────────────────────────
-
-#[spacetimedb::table(accessor = environment, public)]
-pub struct Environment {
-    #[primary_key]
-    #[auto_inc]
-    id: u64,
-    name: String,
-    config_json: String,
-    is_active: bool,
-    created_at: Timestamp,
-}
-
-#[spacetimedb::table(
-    accessor = fitness_score,
-    public,
-    index(name = "idx_fitness_env", accessor = idx_fitness_env, btree(columns = [environment_id])),
-    index(name = "idx_fitness_session", accessor = idx_fitness_session, btree(columns = [session_id]))
-)]
-pub struct FitnessScore {
-    #[primary_key]
-    #[auto_inc]
-    id: u64,
-    session_id: u64,
-    environment_id: u64,
-    score: f64,
-    generation: u32,
-    evaluated_at: Timestamp,
-}
-
-#[spacetimedb::table(
-    accessor = leaderboard_entry,
-    public,
-    index(name = "idx_lb_env", accessor = idx_lb_env, btree(columns = [environment_id]))
-)]
-pub struct LeaderboardEntry {
-    #[primary_key]
-    #[auto_inc]
-    id: u64,
-    environment_id: u64,
-    session_id: u64,
-    owner: Identity,
-    score: f64,
-    rank: u32,
-    flower_name: String,
-    updated_at: Timestamp,
-}
-
 // ── Chat ──────────────────────────────────────────────────────────────────
 
 #[spacetimedb::table(accessor = chat_message, public)]
@@ -150,46 +93,6 @@ pub struct ChatMessage {
     sender: Identity,
     text: String,
     sent_at: Timestamp,
-    emote: Option<EmoteKind>,
-}
-
-// ── Progression & Skins ──────────────────────────────────────────────────
-
-#[spacetimedb::table(accessor = skin_definition, public)]
-pub struct SkinDefinition {
-    #[primary_key]
-    #[auto_inc]
-    id: u64,
-    name: String,
-    description: String,
-    rarity: SkinRarity,
-    unlock_xp: u64,
-    css_class: String,
-}
-
-#[spacetimedb::table(
-    accessor = user_skin,
-    public,
-    index(name = "idx_uskin_owner", accessor = idx_uskin_owner, btree(columns = [owner]))
-)]
-pub struct UserSkin {
-    #[primary_key]
-    #[auto_inc]
-    id: u64,
-    owner: Identity,
-    skin_id: u64,
-    unlocked_at: Timestamp,
-    equipped: bool,
-}
-
-#[spacetimedb::table(accessor = emote_unlock, public)]
-pub struct EmoteUnlock {
-    #[primary_key]
-    #[auto_inc]
-    id: u64,
-    owner: Identity,
-    emote: EmoteKind,
-    unlocked_at: Timestamp,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -215,40 +118,8 @@ fn require_user(ctx: &ReducerContext) -> Result<User, String> {
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[spacetimedb::reducer(init)]
-pub fn init(ctx: &ReducerContext) {
-    // Seed default skins
-    let skins = vec![
-        ("Seedling", "Your first sprout", SkinRarity::Common, 0u64, "skin-seedling"),
-        ("Petal Pusher", "10 flowers ordered", SkinRarity::Uncommon, 500, "skin-petal-pusher"),
-        ("Garden Keeper", "A seasoned grower", SkinRarity::Rare, 2000, "skin-garden-keeper"),
-        ("Bloom Lord", "Master of the garden", SkinRarity::Epic, 10000, "skin-bloom-lord"),
-        ("Eternal Flower", "Legend of the meadow", SkinRarity::Legendary, 50000, "skin-eternal"),
-    ];
-    for (name, desc, rarity, xp, css) in skins {
-        ctx.db.skin_definition().insert(SkinDefinition {
-            id: 0,
-            name: name.to_string(),
-            description: desc.to_string(),
-            rarity,
-            unlock_xp: xp,
-            css_class: css.to_string(),
-        });
-    }
-
-    // Seed environments from flower-core canonical definitions
-    let envs = flower_core::environment::all_environments();
-    for env in &envs {
-        let config_json = serde_json::to_string(env).unwrap_or_default();
-        ctx.db.environment().insert(Environment {
-            id: 0,
-            name: env.name.clone(),
-            config_json,
-            is_active: true,
-            created_at: ctx.timestamp,
-        });
-    }
-
-    log::info!("flower-maker module initialized with {} skins, {} environments", 5, envs.len());
+pub fn init(_ctx: &ReducerContext) {
+    log::info!("flower-maker module initialized");
 }
 
 #[spacetimedb::reducer(client_connected)]
@@ -264,16 +135,7 @@ pub fn client_connected(ctx: &ReducerContext) {
                 online: true,
                 current_session_id: None,
                 total_orders: 0,
-                xp: 0,
-                level: 1,
                 joined_at: ctx.timestamp,
-            });
-            // Everyone gets Wave emote free
-            ctx.db.emote_unlock().insert(EmoteUnlock {
-                id: 0,
-                owner: ctx.sender(),
-                emote: EmoteKind::Wave,
-                unlocked_at: ctx.timestamp,
             });
             log::info!("New user connected: {:?}", ctx.sender());
         }
@@ -312,7 +174,6 @@ pub fn create_session(ctx: &ReducerContext, prompt: String) -> Result<(), String
         arrangement_level: 1,
         flower_count: 1,
         generation: 0,
-        fitness_json: "{}".to_string(),
     });
 
     ctx.db.flower_spec().insert(FlowerSpec {
@@ -411,64 +272,13 @@ pub fn place_order(ctx: &ReducerContext, session_id: u64, source: OrderSource, n
         ..session
     });
 
-    // Award XP for ordering
     let user = require_user(ctx)?;
-    let xp_award: u64 = 100;
-    let new_xp = user.xp + xp_award;
-    let new_level = (new_xp / 500) as u32 + 1;
-    let new_orders = user.total_orders + 1;
-
     ctx.db.user().identity().update(User {
-        xp: new_xp,
-        level: new_level,
-        total_orders: new_orders,
+        total_orders: user.total_orders + 1,
         ..user
     });
 
-    // Check skin unlocks
-    for skin in ctx.db.skin_definition().iter() {
-        if new_xp >= skin.unlock_xp {
-            let already_unlocked = ctx.db.user_skin().idx_uskin_owner()
-                .filter(&ctx.sender())
-                .any(|us| us.skin_id == skin.id);
-            if !already_unlocked {
-                ctx.db.user_skin().insert(UserSkin {
-                    id: 0,
-                    owner: ctx.sender(),
-                    skin_id: skin.id,
-                    unlocked_at: ctx.timestamp,
-                    equipped: false,
-                });
-                log::info!("User unlocked skin: {}", skin.name);
-            }
-        }
-    }
-
-    // Unlock emotes at milestones
-    let emote_milestones = vec![
-        (3, EmoteKind::Sparkle),
-        (10, EmoteKind::Rain),
-        (25, EmoteKind::Bloom),
-        (50, EmoteKind::Dance),
-        (100, EmoteKind::Pollinate),
-    ];
-    for (threshold, emote) in emote_milestones {
-        if new_orders >= threshold {
-            let already_has = ctx.db.emote_unlock().iter()
-                .any(|eu| eu.owner == ctx.sender() && eu.emote == emote);
-            if !already_has {
-                ctx.db.emote_unlock().insert(EmoteUnlock {
-                    id: 0,
-                    owner: ctx.sender(),
-                    emote: emote.clone(),
-                    unlocked_at: ctx.timestamp,
-                });
-                log::info!("User unlocked emote: {:?}", emote);
-            }
-        }
-    }
-
-    log::info!("Order placed for session {}. XP: {} → {}", session_id, user.xp, new_xp);
+    log::info!("Order placed for session {}", session_id);
     Ok(())
 }
 
@@ -499,32 +309,12 @@ pub fn send_chat(ctx: &ReducerContext, text: String) -> Result<(), String> {
         sender: ctx.sender(),
         text,
         sent_at: ctx.timestamp,
-        emote: None,
-    });
-    Ok(())
-}
-
-#[spacetimedb::reducer]
-pub fn send_emote(ctx: &ReducerContext, emote: EmoteKind) -> Result<(), String> {
-    // Verify the user owns this emote
-    let has_emote = ctx.db.emote_unlock().iter()
-        .any(|eu| eu.owner == ctx.sender() && eu.emote == emote);
-    if !has_emote {
-        return Err("You haven't unlocked this emote yet".to_string());
-    }
-
-    ctx.db.chat_message().insert(ChatMessage {
-        id: 0,
-        sender: ctx.sender(),
-        text: String::new(),
-        sent_at: ctx.timestamp,
-        emote: Some(emote),
     });
     Ok(())
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Profile & Skins
+// Profile
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[spacetimedb::reducer]
@@ -533,22 +323,6 @@ pub fn set_name(ctx: &ReducerContext, name: String) -> Result<(), String> {
     if name.len() > 32 { return Err("Name too long (max 32 chars)".to_string()); }
     let user = require_user(ctx)?;
     ctx.db.user().identity().update(User { name: Some(name), ..user });
-    Ok(())
-}
-
-#[spacetimedb::reducer]
-pub fn equip_skin(ctx: &ReducerContext, skin_id: u64) -> Result<(), String> {
-    // Unequip all current skins for this user
-    for us in ctx.db.user_skin().iter() {
-        if us.owner == ctx.sender() && us.equipped {
-            ctx.db.user_skin().id().update(UserSkin { equipped: false, ..us });
-        }
-    }
-    // Equip the requested skin
-    let target = ctx.db.user_skin().iter()
-        .find(|us| us.owner == ctx.sender() && us.skin_id == skin_id)
-        .ok_or_else(|| "You don't own this skin".to_string())?;
-    ctx.db.user_skin().id().update(UserSkin { equipped: true, ..target });
     Ok(())
 }
 
@@ -621,7 +395,6 @@ pub fn merge_sessions(
         arrangement_level: new_level,
         flower_count: total_flowers,
         generation: new_generation,
-        fitness_json: "{}".to_string(),
     });
 
     ctx.db.flower_spec().insert(FlowerSpec {
@@ -641,19 +414,12 @@ pub fn merge_sessions(
         ..session_b
     });
 
-    // Award XP for merging
     if let Some(user) = ctx.db.user().identity().find(ctx.sender()) {
-        let new_xp = user.xp + 50;
         ctx.db.user().identity().update(User {
-            xp: new_xp,
-            level: (new_xp / 500) as u32 + 1,
             current_session_id: Some(child_session.id),
             ..user
         });
     }
-
-    // Evaluate fitness in all active environments
-    evaluate_fitness_internal(ctx, child_session.id, &child);
 
     log::info!(
         "Merged sessions {} + {} → {} (gen {}, {} flowers, level {})",
@@ -663,100 +429,3 @@ pub fn merge_sessions(
     Ok(())
 }
 
-fn evaluate_fitness_internal(
-    ctx: &ReducerContext,
-    session_id: u64,
-    spec: &flower_core::catalog::FlowerSpec,
-) {
-    let mut scores = serde_json::Map::new();
-
-    for env_row in ctx.db.environment().iter() {
-        if !env_row.is_active {
-            continue;
-        }
-        let env: flower_core::environment::Environment = match serde_json::from_str(&env_row.config_json) {
-            Ok(e) => e,
-            Err(_) => continue,
-        };
-
-        let score = flower_core::fitness::evaluate(spec, &env);
-        scores.insert(env_row.name.clone(), serde_json::Value::from(score));
-
-        // Upsert fitness score
-        let existing = ctx.db.fitness_score().iter()
-            .find(|fs| fs.session_id == session_id && fs.environment_id == env_row.id);
-
-        match existing {
-            Some(fs) => {
-                ctx.db.fitness_score().id().update(FitnessScore {
-                    score,
-                    evaluated_at: ctx.timestamp,
-                    ..fs
-                });
-            }
-            None => {
-                ctx.db.fitness_score().insert(FitnessScore {
-                    id: 0,
-                    session_id,
-                    environment_id: env_row.id,
-                    score,
-                    generation: 0,
-                    evaluated_at: ctx.timestamp,
-                });
-            }
-        }
-
-        // Update leaderboard if score qualifies (top 50)
-        let lb_entries: Vec<LeaderboardEntry> = ctx.db.leaderboard_entry()
-            .idx_lb_env()
-            .filter(&env_row.id)
-            .collect();
-
-        let qualifies = lb_entries.len() < 50
-            || lb_entries.iter().any(|e| score > e.score);
-
-        if qualifies {
-            // Remove existing entry for this session if any
-            if let Some(existing_entry) = lb_entries.iter().find(|e| e.session_id == session_id) {
-                ctx.db.leaderboard_entry().id().delete(existing_entry.id);
-            } else if lb_entries.len() >= 50 {
-                // Remove lowest scoring entry
-                if let Some(lowest) = lb_entries.iter().min_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal)) {
-                    ctx.db.leaderboard_entry().id().delete(lowest.id);
-                }
-            }
-
-            ctx.db.leaderboard_entry().insert(LeaderboardEntry {
-                id: 0,
-                environment_id: env_row.id,
-                session_id,
-                owner: ctx.sender(),
-                score,
-                rank: 0, // computed on read
-                flower_name: spec.name.clone(),
-                updated_at: ctx.timestamp,
-            });
-        }
-    }
-
-    // Update fitness_json on the session
-    if let Some(session) = ctx.db.flower_session().id().find(session_id) {
-        let fitness_str = serde_json::Value::Object(scores).to_string();
-        ctx.db.flower_session().id().update(FlowerSession {
-            fitness_json: fitness_str,
-            ..session
-        });
-    }
-}
-
-#[spacetimedb::reducer]
-pub fn evaluate_session_fitness(ctx: &ReducerContext, session_id: u64) -> Result<(), String> {
-    let _session = require_session_owner(ctx, session_id)?;
-    let spec_row = ctx.db.flower_spec().session_id().find(session_id)
-        .ok_or_else(|| "Spec not found".to_string())?;
-    let spec: flower_core::catalog::FlowerSpec = serde_json::from_str(&spec_row.spec_json)
-        .map_err(|e| format!("Failed to parse spec: {e}"))?;
-
-    evaluate_fitness_internal(ctx, session_id, &spec);
-    Ok(())
-}
