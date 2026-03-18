@@ -570,7 +570,7 @@ export function createFlowerPlan(
 
   // ── Stem + leaves (single flower gets a single stem below head) ──
   const stemData = parseSpecStem(specJson);
-  const leafColor = parseLeafColor(specJson);
+  const leafData = parseLeafData(specJson);
   const stemLen = Math.max(0.6, Math.min(1.8, stemData.height * 1.4));
   const stemHalfW = Math.max(0.03, Math.min(0.08, stemData.thickness * 0.08));
 
@@ -583,15 +583,14 @@ export function createFlowerPlan(
   );
   const stem: StemPlan = { cmds: stemCmds, color: stemData.color };
 
-  const leafSize = 0.45 + stemData.thickness * 0.25;
-  // Leaves point outward from stem: left leaf angles right-and-down, right leaf angles left-and-down
+  const leafSize = 0.45 + leafData.size * 0.35;
   const leaves: LeafPlan[] = [
-    { cmds: generateLeafAt(0, stemLen * 0.7, Math.PI * 0.6, leafSize), color: leafColor },
+    { cmds: generateLeafAt(0, stemLen * 0.7, Math.PI * 0.55, leafSize, leafData), color: leafData.color },
   ];
   if (stemLen > 0.6) {
     leaves.push({
-      cmds: generateLeafAt(0, stemLen * 0.45, -Math.PI * 0.6, leafSize * 0.85),
-      color: leafColor,
+      cmds: generateLeafAt(0, stemLen * 0.42, -Math.PI * 0.55, leafSize * 0.85, leafData),
+      color: leafData.color,
     });
   }
 
@@ -631,8 +630,8 @@ function createFallbackPlan(sid: number): FlowerPlan {
     },
     stem: { cmds: stemCmds, color: 0x2d5a27 },
     leaves: [
-      { cmds: generateLeafAt(0, 0.7, Math.PI * 0.6, 0.45), color: 0x3a7d32 },
-      { cmds: generateLeafAt(0, 0.45, -Math.PI * 0.6, 0.35), color: 0x3a7d32 },
+      { cmds: generateLeafAt(0, 0.7, Math.PI * 0.55, 0.45), color: 0x3a7d32 },
+      { cmds: generateLeafAt(0, 0.42, -Math.PI * 0.55, 0.35), color: 0x3a7d32 },
     ],
   };
 }
@@ -805,37 +804,138 @@ function generateStem(
 
 // ── Leaf generation ──
 
-/** Generate a leaf shape as a simple pointed oval at a stem attachment point.
- *  Unlike petals (which radiate from center), leaves grow outward from
- *  their attachment point with a visible midrib shape. */
+// ── Leaf shape profiles — width at t ∈ [0,1] (petiole → tip) ──
+
+const LEAF_PROFILES: Record<string, (t: number) => number> = {
+  // Egg-shaped — widest at ~35%
+  Ovate: (t) => Math.sin(Math.PI * Math.pow(t, 0.65)),
+  // Narrow lance — widest near 25%, long taper
+  Lanceolate: (t) => Math.sin(Math.PI * t) * Math.pow(1 - t, 0.2) * 1.1,
+  // Heart-shaped — very wide base, notched tip
+  Cordate: (t) => {
+    const base = Math.sin(Math.PI * Math.pow(t, 0.5)) * 1.2;
+    return t < 0.1 ? base * (0.4 + t * 6) : base;
+  },
+  // Hand-shaped — wide with undulations suggesting lobes
+  Palmate: (t) => {
+    const base = Math.sin(Math.PI * Math.pow(t, 0.55));
+    const lobes = 1 + Math.sin(t * Math.PI * 5) * 0.15 * Math.sin(Math.PI * t);
+    return base * lobes;
+  },
+  // Feather-like — narrow, with slight scallops
+  Pinnate: (t) => {
+    const base = Math.sin(Math.PI * t) * 0.7;
+    const scallop = 1 + Math.sin(t * Math.PI * 8) * 0.1;
+    return base * scallop;
+  },
+  // Grass-like — uniform narrow width
+  Linear: (t) => {
+    if (t < 0.05) return (t / 0.05) * 0.35;
+    if (t > 0.9) return 0.35 * (1 - (t - 0.9) / 0.1);
+    return 0.35;
+  },
+  // Kidney-shaped — very wide and rounded
+  Reniform: (t) => Math.sqrt(Math.max(0, Math.sin(Math.PI * t))) * 1.3,
+  // Arrow-shaped — barbed base
+  Sagittate: (t) => {
+    if (t < 0.15) return 0.6 + (1 - t / 0.15) * 0.5;
+    return Math.sin(Math.PI * Math.pow(t, 0.7)) * 0.9;
+  },
+  // Shield-shaped — round
+  Peltate: (t) => Math.sqrt(Math.max(0, Math.sin(Math.PI * t))) * 1.1,
+  // Needle — very narrow
+  Acicular: (t) => {
+    if (t < 0.05) return (t / 0.05) * 0.18;
+    return 0.18 * (1 - Math.pow(t, 2));
+  },
+  // Halberd-shaped
+  Hastate: (t) => {
+    if (t < 0.12) return 0.5 + (1 - t / 0.12) * 0.4;
+    return Math.sin(Math.PI * Math.pow(t, 0.65)) * 0.85;
+  },
+};
+
+function leafProfile(shape: string, t: number): number {
+  return (LEAF_PROFILES[shape] ?? LEAF_PROFILES.Ovate!)(Math.max(0, Math.min(1, t)));
+}
+
+/** Edge serration modifier for leaves. */
+function leafSerration(style: string, t: number, seed: number): number {
+  switch (style) {
+    case "Fine":
+      return 1 + Math.sin(t * 30 + seed) * 0.06;
+    case "Coarse":
+      return 1 + Math.sin(t * 12 + seed) * 0.12;
+    case "Lobed":
+      return 1 + Math.sin(t * 5 + seed) * 0.2 * Math.sin(Math.PI * t);
+    case "Crenate":
+      return 1 + (Math.sin(t * 16 + seed) > 0 ? 0.08 : -0.04);
+    case "Dentate":
+      return 1 + (((t * 14 + seed * 0.1) % 1) < 0.5 ? 0.1 : -0.05);
+    case "Doubly":
+      return 1 + Math.sin(t * 20 + seed) * 0.07 + Math.sin(t * 8 + seed * 2) * 0.1;
+    default:
+      return 1;
+  }
+}
+
+/** Generate a botanical leaf at a stem attachment point.
+ *  Shape, serration, droop, and curl driven by spec data. */
 function generateLeafAt(
   x: number, y: number,
   angle: number,
   size: number,
+  leaf?: ParsedLeaf,
 ): DrawCmd[] {
-  const len = size * 0.9;
-  const halfW = size * 0.28;
-  const segments = 10;
+  const ld = leaf ?? DEFAULT_LEAF;
+  const len = size * (0.8 + ld.size * 0.4);
+  const halfW = size * 0.32;
+  const segments = 14;
   const cosA = Math.cos(angle);
   const sinA = Math.sin(angle);
+  const droopAmt = ld.droop * len * 0.25;
+  const curlAmt = ld.curl * 0.15;
+  const seed = angle * 7.3 + size * 3.1;
 
   const leftPts: Vec2[] = [];
   const rightPts: Vec2[] = [];
 
   for (let i = 0; i <= segments; i++) {
     const t = i / segments;
-    // Leaf width profile: widest at ~35%, tapers to point
-    const w = halfW * Math.sin(Math.PI * Math.pow(t, 0.65)) * (1 - t * 0.15);
-    const along = t * len;
-    // Slight droop curve
-    const droop = t * t * len * 0.12;
-    const lx = cosA * along - sinA * droop;
-    const ly = sinA * along + cosA * droop;
 
-    leftPts.push([x + lx - sinA * w * -1, y + ly + cosA * w * -1]);
-    rightPts.push([x + lx + sinA * w * -1, y + ly - cosA * w * -1]);
+    // Width from shape profile + serration
+    const w = halfW * leafProfile(ld.shape, t) * leafSerration(ld.serration, t, seed);
+
+    // Position along midrib
+    const along = t * len;
+
+    // Natural droop — quadratic gravity curve
+    const droop = droopAmt * t * t;
+
+    // Curl — tip recurves backward
+    const curl = t > 0.6 ? curlAmt * Math.pow((t - 0.6) / 0.4, 2) * len : 0;
+
+    // Midrib position in local leaf space (along = forward, droop = perpendicular)
+    const lx = along - curl;
+    const ly = droop;
+
+    // Slight asymmetry — one side ~10% wider for naturalism
+    const leftW = w * 1.05;
+    const rightW = w * 0.95;
+
+    // Rotate to world space and offset
+    // Left side: midrib + perpendicular * width
+    const perpX = -sinA;
+    const perpY = cosA;
+
+    const mx = x + cosA * lx - sinA * ly;
+    const my = y + sinA * lx + cosA * ly;
+
+    leftPts.push([mx + perpX * leftW, my + perpY * leftW]);
+    rightPts.push([mx - perpX * rightW, my - perpY * rightW]);
   }
 
+  // Build closed outline: left edge → bridge → right edge reversed
   const cmds = smoothCmds(leftPts);
   const rightCmds = smoothCmds(rightPts.toReversed());
 
