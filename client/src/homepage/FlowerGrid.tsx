@@ -24,7 +24,7 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
   const orders = useOrders(conn);
   const onlineCount = users.filter(u => u.online).length;
 
-  const myIdentity = conn ? String(conn.identity) : null;
+  const { identityHex } = useSession();
 
   // Build a session lookup by id for O(1) access
   const sessionById = sessions.reduce<Map<string, FlowerSession>>(
@@ -61,7 +61,7 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
         session: currentSession,
         allSessions: sessionsByOwner.get(String(user.identity)) ?? [],
         incomingOrders: ordersByOwner.get(String(user.identity)) ?? 0,
-        isYours: String(user.identity) === myIdentity,
+        isYours: String(user.identity) === identityHex,
       };
     })
     .sort((a, b) => {

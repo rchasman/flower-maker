@@ -44,6 +44,7 @@ function useTable<T>(
     const table = conn.db[tableName] as unknown as {
       iter(): Iterable<T>;
       onInsert(cb: (ctx: unknown, row: T) => void): void;
+      onUpdate(cb: (ctx: unknown, old: T, next: T) => void): void;
       onDelete(cb: (ctx: unknown, row: T) => void): void;
     };
 
@@ -51,6 +52,7 @@ function useTable<T>(
 
     const refresh = () => setRows([...table.iter()]);
     table.onInsert(refresh);
+    table.onUpdate(refresh);
     table.onDelete(refresh);
   }, [conn, tableName]);
 
