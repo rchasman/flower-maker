@@ -39,7 +39,7 @@ flowerRoutes.post("/generate", async c => {
   const body = await c.req.json<{ prompt: string; template_name?: string }>();
 
   const result = streamText({
-    model: anthropic("claude-sonnet-4.6"),
+    model: anthropic("claude-sonnet-4-6"),
     system: FLORIST_SYSTEM_PROMPT,
     prompt: body.template_name
       ? `Create a ${body.template_name} flower based on this description: ${body.prompt}. Use the real botanical properties of ${body.template_name} as a starting point but make it unique.`
@@ -84,7 +84,7 @@ flowerRoutes.post("/combine", async c => {
   });
 
   const result = streamText({
-    model: anthropic("claude-sonnet-4.6"),
+    model: anthropic("claude-sonnet-4-6"),
     system: COMBINE_SYSTEM_PROMPT,
     prompt: `Combine these flowers into a ${body.level} arrangement (${body.total_count} total flowers):
 

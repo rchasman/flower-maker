@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "portless api.flower-maker bun run --hot index.ts",
+    "dev": "portless api.flower-maker bun --env-file=../.env run --hot index.ts",
     "check": "tsc --noEmit"
   },
   "devDependencies": {

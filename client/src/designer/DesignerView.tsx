@@ -82,8 +82,25 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     conn?.reducers.updatePosition({ sessionId: BigInt(sid), x, y });
   }, [conn]);
 
+  // When AI generates a spec, create a session then push the spec once it appears
+  const pendingSpecRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!pendingSpecRef.current || !conn) return;
+    // Find the newest session we own that still has an empty spec
+    const newest = mySessions[mySessions.length - 1];
+    if (!newest) return;
+    const sid = Number(newest.id);
+    const spec = specs.find(s => Number(s.sessionId) === sid);
+    if (spec && spec.specJson === "{}") {
+      conn.reducers.updateFlowerSpec({ sessionId: BigInt(sid), specJson: pendingSpecRef.current });
+      pendingSpecRef.current = null;
+    }
+  }, [mySessions, specs, conn]);
+
   const handleFlowerGenerated = (specJson: string) => {
-    conn?.reducers.createSession({ prompt: specJson });
+    pendingSpecRef.current = specJson;
+    conn?.reducers.createSession({ prompt: specJson.slice(0, 40) });
   };
 
   return (
