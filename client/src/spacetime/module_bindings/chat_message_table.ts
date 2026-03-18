@@ -9,17 +9,10 @@ import {
   type AlgebraicTypeType as __AlgebraicTypeType,
   type Infer as __Infer,
 } from "spacetimedb";
-import {
-  EmoteKind,
-} from "./types";
-
 
 export default __t.row({
   id: __t.u64().primaryKey(),
   sender: __t.identity(),
   text: __t.string(),
   sentAt: __t.timestamp().name("sent_at"),
-  get emote() {
-    return __t.option(EmoteKind);
-  },
 });

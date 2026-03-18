@@ -15,52 +15,8 @@ export const ChatMessage = __t.object("ChatMessage", {
   sender: __t.identity(),
   text: __t.string(),
   sentAt: __t.timestamp(),
-  get emote() {
-    return __t.option(EmoteKind);
-  },
 });
 export type ChatMessage = __Infer<typeof ChatMessage>;
-
-// The tagged union or sum type for the algebraic type `EmoteKind`.
-export const EmoteKind = __t.enum("EmoteKind", {
-  Wave: __t.unit(),
-  Sparkle: __t.unit(),
-  Rain: __t.unit(),
-  Bloom: __t.unit(),
-  Wilt: __t.unit(),
-  Dance: __t.unit(),
-  Pollinate: __t.unit(),
-});
-export type EmoteKind = __Infer<typeof EmoteKind>;
-
-export const EmoteUnlock = __t.object("EmoteUnlock", {
-  id: __t.u64(),
-  owner: __t.identity(),
-  get emote() {
-    return EmoteKind;
-  },
-  unlockedAt: __t.timestamp(),
-});
-export type EmoteUnlock = __Infer<typeof EmoteUnlock>;
-
-export const Environment = __t.object("Environment", {
-  id: __t.u64(),
-  name: __t.string(),
-  configJson: __t.string(),
-  isActive: __t.bool(),
-  createdAt: __t.timestamp(),
-});
-export type Environment = __Infer<typeof Environment>;
-
-export const FitnessScore = __t.object("FitnessScore", {
-  id: __t.u64(),
-  sessionId: __t.u64(),
-  environmentId: __t.u64(),
-  score: __t.f64(),
-  generation: __t.u32(),
-  evaluatedAt: __t.timestamp(),
-});
-export type FitnessScore = __Infer<typeof FitnessScore>;
 
 export const FlowerOrder = __t.object("FlowerOrder", {
   id: __t.u64(),
@@ -97,7 +53,6 @@ export const FlowerSession = __t.object("FlowerSession", {
   arrangementLevel: __t.u32(),
   flowerCount: __t.u32(),
   generation: __t.u32(),
-  fitnessJson: __t.string(),
 });
 export type FlowerSession = __Infer<typeof FlowerSession>;
 
@@ -108,18 +63,6 @@ export const FlowerSpec = __t.object("FlowerSpec", {
   updatedAt: __t.timestamp(),
 });
 export type FlowerSpec = __Infer<typeof FlowerSpec>;
-
-export const LeaderboardEntry = __t.object("LeaderboardEntry", {
-  id: __t.u64(),
-  environmentId: __t.u64(),
-  sessionId: __t.u64(),
-  owner: __t.identity(),
-  score: __t.f64(),
-  rank: __t.u32(),
-  flowerName: __t.string(),
-  updatedAt: __t.timestamp(),
-});
-export type LeaderboardEntry = __Infer<typeof LeaderboardEntry>;
 
 // The tagged union or sum type for the algebraic type `OrderSource`.
 export const OrderSource = __t.enum("OrderSource", {
@@ -136,46 +79,13 @@ export const SessionStatus = __t.enum("SessionStatus", {
 });
 export type SessionStatus = __Infer<typeof SessionStatus>;
 
-export const SkinDefinition = __t.object("SkinDefinition", {
-  id: __t.u64(),
-  name: __t.string(),
-  description: __t.string(),
-  get rarity() {
-    return SkinRarity;
-  },
-  unlockXp: __t.u64(),
-  cssClass: __t.string(),
-});
-export type SkinDefinition = __Infer<typeof SkinDefinition>;
-
-// The tagged union or sum type for the algebraic type `SkinRarity`.
-export const SkinRarity = __t.enum("SkinRarity", {
-  Common: __t.unit(),
-  Uncommon: __t.unit(),
-  Rare: __t.unit(),
-  Epic: __t.unit(),
-  Legendary: __t.unit(),
-});
-export type SkinRarity = __Infer<typeof SkinRarity>;
-
 export const User = __t.object("User", {
   identity: __t.identity(),
   name: __t.option(__t.string()),
   online: __t.bool(),
   currentSessionId: __t.option(__t.u64()),
   totalOrders: __t.u32(),
-  xp: __t.u64(),
-  level: __t.u32(),
   joinedAt: __t.timestamp(),
 });
 export type User = __Infer<typeof User>;
-
-export const UserSkin = __t.object("UserSkin", {
-  id: __t.u64(),
-  owner: __t.identity(),
-  skinId: __t.u64(),
-  unlockedAt: __t.timestamp(),
-  equipped: __t.bool(),
-});
-export type UserSkin = __Infer<typeof UserSkin>;
 

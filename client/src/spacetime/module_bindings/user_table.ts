@@ -16,7 +16,5 @@ export default __t.row({
   online: __t.bool(),
   currentSessionId: __t.option(__t.u64()).name("current_session_id"),
   totalOrders: __t.u32().name("total_orders"),
-  xp: __t.u64(),
-  level: __t.u32(),
   joinedAt: __t.timestamp().name("joined_at"),
 });

@@ -37,13 +37,10 @@ import {
 import CompleteSessionReducer from "./complete_session_reducer";
 import CreateSessionReducer from "./create_session_reducer";
 import DeletePartOverrideReducer from "./delete_part_override_reducer";
-import EquipSkinReducer from "./equip_skin_reducer";
-import EvaluateSessionFitnessReducer from "./evaluate_session_fitness_reducer";
 import ForkPartReducer from "./fork_part_reducer";
 import MergeSessionsReducer from "./merge_sessions_reducer";
 import PlaceOrderReducer from "./place_order_reducer";
 import SendChatReducer from "./send_chat_reducer";
-import SendEmoteReducer from "./send_emote_reducer";
 import SetNameReducer from "./set_name_reducer";
 import UpdateFlowerSpecReducer from "./update_flower_spec_reducer";
 import UpdatePartOverrideReducer from "./update_part_override_reducer";
@@ -52,17 +49,11 @@ import UpdatePartOverrideReducer from "./update_part_override_reducer";
 
 // Import all table schema definitions
 import ChatMessageRow from "./chat_message_table";
-import EmoteUnlockRow from "./emote_unlock_table";
-import EnvironmentRow from "./environment_table";
-import FitnessScoreRow from "./fitness_score_table";
 import FlowerOrderRow from "./flower_order_table";
 import FlowerSessionRow from "./flower_session_table";
 import FlowerSpecRow from "./flower_spec_table";
-import LeaderboardEntryRow from "./leaderboard_entry_table";
 import PartOverrideRow from "./part_override_table";
-import SkinDefinitionRow from "./skin_definition_table";
 import UserRow from "./user_table";
-import UserSkinRow from "./user_skin_table";
 
 /** Type-only namespace exports for generated type groups. */
 
@@ -79,45 +70,6 @@ const tablesSchema = __schema({
       { name: 'chat_message_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, ChatMessageRow),
-  emote_unlock: __table({
-    name: 'emote_unlock',
-    indexes: [
-      { accessor: 'id', name: 'emote_unlock_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-    ],
-    constraints: [
-      { name: 'emote_unlock_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, EmoteUnlockRow),
-  environment: __table({
-    name: 'environment',
-    indexes: [
-      { accessor: 'id', name: 'environment_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-    ],
-    constraints: [
-      { name: 'environment_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, EnvironmentRow),
-  fitness_score: __table({
-    name: 'fitness_score',
-    indexes: [
-      { accessor: 'idx_fitness_env', name: 'fitness_score_environment_id_idx_btree', algorithm: 'btree', columns: [
-        'environmentId',
-      ] },
-      { accessor: 'id', name: 'fitness_score_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-      { accessor: 'idx_fitness_session', name: 'fitness_score_session_id_idx_btree', algorithm: 'btree', columns: [
-        'sessionId',
-      ] },
-    ],
-    constraints: [
-      { name: 'fitness_score_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, FitnessScoreRow),
   flower_order: __table({
     name: 'flower_order',
     indexes: [
@@ -154,20 +106,6 @@ const tablesSchema = __schema({
       { name: 'flower_spec_session_id_key', constraint: 'unique', columns: ['sessionId'] },
     ],
   }, FlowerSpecRow),
-  leaderboard_entry: __table({
-    name: 'leaderboard_entry',
-    indexes: [
-      { accessor: 'idx_lb_env', name: 'leaderboard_entry_environment_id_idx_btree', algorithm: 'btree', columns: [
-        'environmentId',
-      ] },
-      { accessor: 'id', name: 'leaderboard_entry_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-    ],
-    constraints: [
-      { name: 'leaderboard_entry_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, LeaderboardEntryRow),
   part_override: __table({
     name: 'part_override',
     indexes: [
@@ -182,17 +120,6 @@ const tablesSchema = __schema({
       { name: 'part_override_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, PartOverrideRow),
-  skin_definition: __table({
-    name: 'skin_definition',
-    indexes: [
-      { accessor: 'id', name: 'skin_definition_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-    ],
-    constraints: [
-      { name: 'skin_definition_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, SkinDefinitionRow),
   user: __table({
     name: 'user',
     indexes: [
@@ -204,20 +131,6 @@ const tablesSchema = __schema({
       { name: 'user_identity_key', constraint: 'unique', columns: ['identity'] },
     ],
   }, UserRow),
-  user_skin: __table({
-    name: 'user_skin',
-    indexes: [
-      { accessor: 'id', name: 'user_skin_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-      { accessor: 'idx_uskin_owner', name: 'user_skin_owner_idx_btree', algorithm: 'btree', columns: [
-        'owner',
-      ] },
-    ],
-    constraints: [
-      { name: 'user_skin_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, UserSkinRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
@@ -225,13 +138,10 @@ const reducersSchema = __reducers(
   __reducerSchema("complete_session", CompleteSessionReducer),
   __reducerSchema("create_session", CreateSessionReducer),
   __reducerSchema("delete_part_override", DeletePartOverrideReducer),
-  __reducerSchema("equip_skin", EquipSkinReducer),
-  __reducerSchema("evaluate_session_fitness", EvaluateSessionFitnessReducer),
   __reducerSchema("fork_part", ForkPartReducer),
   __reducerSchema("merge_sessions", MergeSessionsReducer),
   __reducerSchema("place_order", PlaceOrderReducer),
   __reducerSchema("send_chat", SendChatReducer),
-  __reducerSchema("send_emote", SendEmoteReducer),
   __reducerSchema("set_name", SetNameReducer),
   __reducerSchema("update_flower_spec", UpdateFlowerSpecReducer),
   __reducerSchema("update_part_override", UpdatePartOverrideReducer),

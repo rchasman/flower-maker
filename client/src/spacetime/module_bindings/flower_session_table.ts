@@ -27,5 +27,4 @@ export default __t.row({
   arrangementLevel: __t.u32().name("arrangement_level"),
   flowerCount: __t.u32().name("flower_count"),
   generation: __t.u32(),
-  fitnessJson: __t.string().name("fitness_json"),
 });
