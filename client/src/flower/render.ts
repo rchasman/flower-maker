@@ -708,18 +708,36 @@ function parseFoliage(specJson: string | undefined): ParsedFoliage | null {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rawLeaves = Array.isArray(foliage.leaves) ? foliage.leaves : [];
+    // Handle both AI-generated format (position/side) and Rust-serialized format
+    // (shape/size without position/side). Alternate sides and spread evenly when
+    // position/side are missing.
+    const count = Math.min(rawLeaves.length, 6);
     const leaves: ParsedLeafInstance[] = rawLeaves.slice(0, 6).map((l: any, i: number) => ({
-      position: Math.max(0.25, Math.min(0.85, l.position ?? 0.3 + i * 0.2)),
-      side: l.side === "right" ? "right" as const : "left" as const,
+      position: Math.max(0.25, Math.min(0.85,
+        l.position ?? 0.25 + (i / Math.max(1, count - 1)) * 0.55)),
+      side: l.side === "right" || l.side === "left"
+        ? l.side as "left" | "right"
+        : (i % 2 === 0 ? "left" as const : "right" as const),
       size: Math.max(0.2, Math.min(1.0, l.size ?? 0.5)),
-      angleOffset: Math.max(-0.3, Math.min(0.3, l.angle_offset ?? 0)),
+      angleOffset: Math.max(-0.3, Math.min(0.3,
+        l.angle_offset ?? (i % 2 === 0 ? 0.05 : -0.08))),
     }));
 
+    // leaf_shape/leaf_color come from AI format; Rust serializes shape/color
+    // on individual Leaf objects — pull from first leaf as fallback
+    const firstLeaf = rawLeaves[0];
+    const leafShape = foliage.leaf_shape
+      ?? firstLeaf?.shape
+      ?? "Ovate";
+    const leafColor = colorToHex(foliage.leaf_color)
+      ?? colorToHex(firstLeaf?.color?.stops?.[0]?.color)
+      ?? 0x3a7d32;
+
     return {
-      shape: foliage.leaf_shape ?? "Ovate",
-      color: colorToHex(foliage.leaf_color) ?? 0x3a7d32,
-      serration: foliage.serration ?? "None",
-      droop: foliage.droop ?? 0.15,
+      shape: leafShape,
+      color: leafColor,
+      serration: foliage.serration ?? firstLeaf?.serration ?? "None",
+      droop: foliage.droop ?? firstLeaf?.droop ?? 0.15,
       leaves: leaves.length > 0 ? leaves : DEFAULT_FOLIAGE.leaves,
     };
   } catch {
@@ -1080,14 +1098,16 @@ export function createArrangementPlan(
 
     const stem: StemPlan = { cmds: stemCmds, color: stemColor };
 
-    // Use at most 2 leaves per arrangement stem (only when foliage data exists)
-    const leaves: LeafPlan[] = foliage
-      ? foliage.leaves.slice(0, 2).map(l => {
-          const pt = stemPointAt(0, baseY, slot.offsetX, slot.offsetY, stemCurvature, l.position);
+    // One leaf per arrangement stem, placed mid-stem, smaller to avoid overlap
+    const leaves: LeafPlan[] = foliage && foliage.leaves.length > 0
+      ? [foliage.leaves[0]!].map(l => {
+          // Place at 40-60% up the stem (avoid crowded base area)
+          const pos = Math.max(0.4, Math.min(0.6, l.position));
+          const pt = stemPointAt(0, baseY, slot.offsetX, slot.offsetY, stemCurvature, pos);
           const side = l.side === "right" ? -1 : 1;
           const leafAngle = pt.angle + side * (Math.PI * 0.35) + l.angleOffset;
-          const scale = 0.3 + l.size * 0.25;
-          const leaf = generateLeaf(pt.x, pt.y, leafAngle, scale, foliage);
+          const leafScale = (0.2 + l.size * 0.15) * slot.scale;
+          const leaf = generateLeaf(pt.x, pt.y, leafAngle, leafScale, foliage);
           return { cmds: leaf.outline, veins: leaf.veins, color: foliage.color };
         })
       : [];
