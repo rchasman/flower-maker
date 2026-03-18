@@ -128,6 +128,9 @@ impl GardenSimulation {
         let data: Vec<serde_json::Value> = self.flowers.iter().map(|f| {
             let pos = self.world.position(f.body_handle);
             let rot = self.world.rotation(f.body_handle);
+            let (pr, pg, pb) = primary_petal_color(&f.spec);
+            let petal_count = f.spec.petals.layers.first()
+                .map(|l| l.count).unwrap_or(5);
             serde_json::json!({
                 "sid": f.session_id,
                 "x": pos.0,
@@ -139,6 +142,10 @@ impl GardenSimulation {
                 "has_aura": f.spec.aura.is_some(),
                 "has_glow": f.spec.ornamentation.glow.is_some(),
                 "particles": f.anim.particles.len(),
+                "petal_color_r": pr,
+                "petal_color_g": pg,
+                "petal_color_b": pb,
+                "petal_count": petal_count,
             })
         }).collect();
         serde_json::to_string(&data).unwrap_or_else(|_| "[]".into())
@@ -151,17 +158,22 @@ impl GardenSimulation {
         let flowers: Vec<_> = self.flowers.iter().map(|f| {
             let pos = self.world.position(f.body_handle);
             let rot = self.world.rotation(f.body_handle);
-            (
-                f.session_id,
-                pos.0,
-                pos.1,
-                rot,
-                f.anim.scale() as f32,
-                f.anim.alpha() as f32,
-                f.spec.aura.is_some(),
-                f.spec.ornamentation.glow.is_some(),
-                f.anim.particles.len(),
-            )
+            let (pr, pg, pb) = primary_petal_color(&f.spec);
+            let petal_count = f.spec.petals.layers.first()
+                .map(|l| l.count).unwrap_or(5);
+            buffer::FlowerData {
+                session_id: f.session_id,
+                x: pos.0, y: pos.1, rotation: rot,
+                scale: f.anim.scale() as f32,
+                alpha: f.anim.alpha() as f32,
+                has_aura: f.spec.aura.is_some(),
+                has_glow: f.spec.ornamentation.glow.is_some(),
+                particles: f.anim.particles.len(),
+                petal_color_r: pr,
+                petal_color_g: pg,
+                petal_color_b: pb,
+                petal_count,
+            }
         }).collect();
         self.render_buf.write(buf, &flowers) as u32
     }
@@ -186,4 +198,12 @@ impl GardenSimulation {
     pub fn wind_y(&self) -> f64 { self.physics.wind_y }
     pub fn ambient_light(&self) -> f64 { self.physics.ambient_light }
     pub fn time_of_day(&self) -> f64 { self.physics.time_of_day }
+}
+
+/// Extract the dominant petal color from a FlowerSpec as (r, g, b) in 0.0–1.0.
+fn primary_petal_color(spec: &FlowerSpec) -> (f32, f32, f32) {
+    spec.petals.layers.first()
+        .and_then(|layer| layer.color.stops.first())
+        .map(|stop| (stop.color.r as f32, stop.color.g as f32, stop.color.b as f32))
+        .unwrap_or((0.8, 0.4, 0.6)) // fallback pink
 }

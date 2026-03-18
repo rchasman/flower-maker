@@ -88,6 +88,10 @@ function createStub(): GardenSim {
         has_aura: false,
         has_glow: false,
         particles: 0,
+        petal_color_r: 0.8,
+        petal_color_g: 0.4,
+        petal_color_b: 0.6,
+        petal_count: 5,
       }));
       return JSON.stringify(data);
     },

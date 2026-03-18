@@ -18,10 +18,14 @@ export interface FlowerRenderData {
   has_aura: boolean;
   has_glow: boolean;
   particles: number;
+  petal_color_r: number;
+  petal_color_g: number;
+  petal_color_b: number;
+  petal_count: number;
 }
 
 // SharedArrayBuffer layout constants (must match buffer.rs)
-const FLOATS_PER_FLOWER = 10;
+const FLOATS_PER_FLOWER = 14;
 const HEADER_FLOATS = 2;
 
 let animFrameId: number | null = null;
@@ -76,6 +80,10 @@ function readFromBuffer(buf: Float32Array): FlowerRenderData[] {
       has_aura: buf[off + 6]! > 0.5,
       has_glow: buf[off + 7]! > 0.5,
       particles: buf[off + 8]!,
+      petal_color_r: buf[off + 9]!,
+      petal_color_g: buf[off + 10]!,
+      petal_color_b: buf[off + 11]!,
+      petal_count: buf[off + 12]!,
     });
   }
 
