@@ -42,12 +42,27 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     ? specs.find(s => s.sessionId === selected.id)
     : null;
 
-  // Push spec data to canvas whenever specs update
+  // Refs for stable access in callbacks (avoids stale closures)
+  const specsRef = useRef(specs);
+  specsRef.current = specs;
+  const sessionsRef = useRef(mySessions);
+  sessionsRef.current = mySessions;
+
+  // Streaming state: SID of the flower currently being generated
+  const streamingSidRef = useRef<number | null>(null);
+  const streamingSpecRef = useRef<string | null>(null);
+  const preStreamSessionCountRef = useRef(0);
+
+  // Push spec data to canvas whenever specs update, merging any streaming spec
   useEffect(() => {
     const specMap = specs.reduce<Map<number, string>>(
       (acc, s) => acc.set(Number(s.sessionId), s.specJson),
       new Map(),
     );
+    // Overlay streaming spec so it isn't clobbered by the empty "{}" from SpacetimeDB
+    if (streamingSidRef.current !== null && streamingSpecRef.current) {
+      specMap.set(streamingSidRef.current, streamingSpecRef.current);
+    }
     canvasRef.current?.setSpecMap(specMap);
   }, [specs]);
 
@@ -102,26 +117,45 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     conn?.reducers.updatePosition({ sessionId: BigInt(sid), x: nx, y: ny });
   }, [conn]);
 
-  // When AI generates a spec, create a session then push the spec once it appears
-  const pendingSpecRef = useRef<string | null>(null);
+  // ── Streaming generation handlers ──
 
-  useEffect(() => {
-    if (!pendingSpecRef.current || !conn) return;
-    // Find the newest session we own that still has an empty spec
-    const newest = mySessions[mySessions.length - 1];
-    if (!newest) return;
-    const sid = Number(newest.id);
-    const spec = specs.find(s => Number(s.sessionId) === sid);
-    if (spec && spec.specJson === "{}") {
-      conn.reducers.updateFlowerSpec({ sessionId: BigInt(sid), specJson: pendingSpecRef.current });
-      pendingSpecRef.current = null;
+  // Phase 1: Create session immediately so the flower body appears on canvas
+  const handleGenerationStart = useCallback((prompt: string) => {
+    preStreamSessionCountRef.current = sessionsRef.current.length;
+    streamingSidRef.current = null;
+    streamingSpecRef.current = null;
+    conn?.reducers.createSession({ prompt });
+  }, [conn]);
+
+  // Phase 2: Push partial spec to canvas as YAML streams in
+  const handleSpecProgress = useCallback((specJson: string) => {
+    // Detect the new session (appears after createSession round-trip)
+    if (streamingSidRef.current === null) {
+      if (sessionsRef.current.length <= preStreamSessionCountRef.current) return;
+      const newest = sessionsRef.current[sessionsRef.current.length - 1]!;
+      streamingSidRef.current = Number(newest.id);
     }
-  }, [mySessions, specs, conn]);
 
-  const handleFlowerGenerated = (specJson: string) => {
-    pendingSpecRef.current = specJson;
-    conn?.reducers.createSession({ prompt: specJson.slice(0, 40) });
-  };
+    streamingSpecRef.current = specJson;
+
+    // Push directly to canvas for immediate visual feedback
+    const specMap = specsRef.current.reduce<Map<number, string>>(
+      (acc, s) => acc.set(Number(s.sessionId), s.specJson),
+      new Map(),
+    );
+    specMap.set(streamingSidRef.current, specJson);
+    canvasRef.current?.setSpecMap(specMap);
+  }, []);
+
+  // Phase 3: Persist final spec to SpacetimeDB
+  const handleFlowerGenerated = useCallback((specJson: string) => {
+    const sid = streamingSidRef.current;
+    if (sid !== null) {
+      conn?.reducers.updateFlowerSpec({ sessionId: BigInt(sid), specJson });
+    }
+    streamingSidRef.current = null;
+    streamingSpecRef.current = null;
+  }, [conn]);
 
   return (
     <div style={{ width: "100%", height: "100%", display: "flex" }}>
@@ -163,12 +197,12 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
 
         {/* Templates section */}
         <div style={{ flex: "0 0 auto", maxHeight: "40%", overflow: "auto" }}>
-          <TemplatePicker conn={conn} onFlowerGenerated={handleFlowerGenerated} />
+          <TemplatePicker conn={conn} onGenerationStart={handleGenerationStart} onSpecProgress={handleSpecProgress} onFlowerGenerated={handleFlowerGenerated} />
         </div>
 
         {/* AI chat section */}
         <div style={{ flex: 1, minHeight: 0, borderTop: "1px solid #262626" }}>
-          <FlowerChat onFlowerGenerated={handleFlowerGenerated} />
+          <FlowerChat onGenerationStart={handleGenerationStart} onSpecProgress={handleSpecProgress} onFlowerGenerated={handleFlowerGenerated} />
         </div>
       </aside>
 

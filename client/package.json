@@ -3,7 +3,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "portless flower-maker vite",
+    "dev": "vite --port 9100",
     "build": "vite build",
     "preview": "vite preview",
     "check": "tsc --noEmit"
@@ -16,6 +16,7 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "spacetimedb": "catalog:",
+    "yaml": "^2.8.2",
     "zod": "catalog:"
   },
   "devDependencies": {

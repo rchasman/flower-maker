@@ -1,14 +1,26 @@
 import { useState } from "react";
 import type { DbConnection } from "../spacetime/types.ts";
 import { templatesByCategory, type TemplateInfo } from "../data/templates.ts";
-import { readStream } from "../lib/utils.ts";
+import { readStreamWithProgress } from "../lib/utils.ts";
+import { parse as parseYaml } from "yaml";
 
 interface TemplatePickerProps {
   conn: DbConnection | null;
+  onGenerationStart: (prompt: string) => void;
+  onSpecProgress: (specJson: string) => void;
   onFlowerGenerated: (specJson: string) => void;
 }
 
-export function TemplatePicker({ conn, onFlowerGenerated }: TemplatePickerProps) {
+function tryParseYamlToJson(raw: string): string | null {
+  try {
+    const parsed = parseYaml(raw);
+    return parsed && typeof parsed === "object" ? JSON.stringify(parsed) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function TemplatePicker({ conn, onGenerationStart, onSpecProgress, onFlowerGenerated }: TemplatePickerProps) {
   const [search, setSearch] = useState("");
   const [generating, setGenerating] = useState<string | null>(null);
   const groups = templatesByCategory();
@@ -30,6 +42,7 @@ export function TemplatePicker({ conn, onFlowerGenerated }: TemplatePickerProps)
   const handleTemplateClick = async (t: TemplateInfo) => {
     if (!conn || generating) return;
     setGenerating(t.name);
+    onGenerationStart(t.name);
     try {
       const res = await fetch("/api/flower/generate", {
         method: "POST",
@@ -37,7 +50,11 @@ export function TemplatePicker({ conn, onFlowerGenerated }: TemplatePickerProps)
         body: JSON.stringify({ prompt: t.name, template_name: t.name }),
       });
       if (!res.ok || !res.body) return;
-      const specJson = await readStream(res);
+      const raw = await readStreamWithProgress(res, accumulated => {
+        const specJson = tryParseYamlToJson(accumulated);
+        if (specJson) onSpecProgress(specJson);
+      });
+      const specJson = tryParseYamlToJson(raw) ?? "{}";
       onFlowerGenerated(specJson);
     } finally {
       setGenerating(null);

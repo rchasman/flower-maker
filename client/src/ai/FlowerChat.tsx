@@ -1,11 +1,37 @@
 import { useState, useRef, useEffect } from "react";
 import { readStreamWithProgress } from "../lib/utils.ts";
+import { parse as parseYaml } from "yaml";
 
 interface FlowerChatProps {
+  onGenerationStart?: (prompt: string) => void;
+  onSpecProgress?: (specJson: string) => void;
   onFlowerGenerated?: (specJson: string) => void;
 }
 
-export function FlowerChat({ onFlowerGenerated }: FlowerChatProps) {
+function yamlToJson(raw: string): { specJson: string; name: string } {
+  try {
+    const parsed = parseYaml(raw) as { name?: string };
+    return { specJson: JSON.stringify(parsed), name: parsed.name ?? "your flower" };
+  } catch {
+    try {
+      const parsed = JSON.parse(raw) as { name?: string };
+      return { specJson: raw, name: parsed.name ?? "your flower" };
+    } catch {
+      return { specJson: raw, name: "your flower" };
+    }
+  }
+}
+
+function tryParseYamlToJson(raw: string): string | null {
+  try {
+    const parsed = parseYaml(raw);
+    return parsed && typeof parsed === "object" ? JSON.stringify(parsed) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function FlowerChat({ onGenerationStart, onSpecProgress, onFlowerGenerated }: FlowerChatProps) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -41,19 +67,25 @@ export function FlowerChat({ onFlowerGenerated }: FlowerChatProps) {
         return;
       }
 
-      setMessages(prev => [...prev, { role: "assistant", content: "" }]);
+      setMessages(prev => [...prev, { role: "assistant", content: "Generating..." }]);
+      onGenerationStart?.(text);
 
-      const final = await readStreamWithProgress(res, accumulated => {
-        setMessages(prev => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last)
-            updated[updated.length - 1] = { ...last, content: accumulated };
-          return updated;
-        });
+      const raw = await readStreamWithProgress(res, accumulated => {
+        const specJson = tryParseYamlToJson(accumulated);
+        if (specJson) onSpecProgress?.(specJson);
       });
 
-      onFlowerGenerated?.(final);
+      const { specJson, name } = yamlToJson(raw);
+
+      setMessages(prev => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last)
+          updated[updated.length - 1] = { ...last, content: `Created ${name}` };
+        return updated;
+      });
+
+      onFlowerGenerated?.(specJson);
     } catch (err) {
       setMessages(prev => [
         ...prev,

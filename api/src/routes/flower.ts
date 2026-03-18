@@ -5,47 +5,65 @@ import { z } from "zod";
 
 export const flowerRoutes = new Hono();
 
-const FLORIST_SYSTEM_PROMPT = `You are an expert botanical florist. Generate a FlowerSpec as a single JSON object (no markdown, no explanation — ONLY the JSON).
+const FLORIST_SYSTEM_PROMPT = `You are an expert botanical florist. Generate a FlowerSpec as YAML (no markdown fences, no explanation — ONLY the YAML).
 
 EXACT SCHEMA (use these field names and enum string values):
 
-{
-  "name": "poetic name",
-  "species": "Scientific name",
-  "petals": {
-    "layers": [
-      {
-        "index": 0,
-        "count": 5,
-        "shape": "Ovate",
-        "arrangement": "Radial",
-        "curvature": 0.3,
-        "curl": 0.1,
-        "texture": "Velvet",
-        "color": { "stops": [{ "position": 0.0, "color": { "r": 0.8, "g": 0.2, "b": 0.2, "a": 1.0 } }] },
-        "opacity": 1.0,
-        "vein_pattern": "Branching",
-        "edge_style": "Smooth",
-        "width": 1.0,
-        "length": 1.5,
-        "angular_offset": 0.0,
-        "droop": 0.1,
-        "thickness": 0.4
-      }
-    ],
-    "bloom_progress": 1.0,
-    "wilt_progress": 0.0
-  },
-  "reproductive": {
-    "pistil": { "style": "Simple", "stigma_shape": "Capitate", "color": { "r": 0.9, "g": 0.8, "b": 0.1, "a": 1.0 }, "height": 0.3 },
-    "stamens": [{ "filament_curve": 0.2, "filament_color": { "r": 0.9, "g": 0.9, "b": 0.5, "a": 1.0 }, "anther_shape": "Versatile", "anther_color": { "r": 0.9, "g": 0.6, "b": 0.0, "a": 1.0 }, "pollen_load": 0.5, "height": 0.4, "sway": 0.3 }]
-  },
-  "structure": {
-    "stem": { "height": 0.5, "thickness": 0.3, "curvature": 0.1, "color": { "r": 0.1, "g": 0.5, "b": 0.2, "a": 1.0 } },
-    "sepals": [{ "shape": "Lanceolate", "color": { "r": 0.1, "g": 0.4, "b": 0.2, "a": 1.0 }, "reflex_angle": 90.0, "length": 0.3, "persistent": true }],
-    "receptacle": { "shape": "Flat", "size": 0.3, "color": { "r": 0.1, "g": 0.4, "b": 0.1, "a": 1.0 } }
-  }
-}
+name: poetic name
+species: Scientific name
+petals:
+  layers:
+    - index: 0
+      count: 5
+      shape: Ovate
+      arrangement: Radial
+      curvature: 0.3
+      curl: 0.1
+      texture: Velvet
+      color:
+        stops:
+          - position: 0.0
+            color: { r: 0.8, g: 0.2, b: 0.2, a: 1.0 }
+      opacity: 1.0
+      vein_pattern: Branching
+      edge_style: Smooth
+      width: 1.0
+      length: 1.5
+      angular_offset: 0.0
+      droop: 0.1
+      thickness: 0.4
+  bloom_progress: 1.0
+  wilt_progress: 0.0
+reproductive:
+  pistil:
+    style: Simple
+    stigma_shape: Capitate
+    color: { r: 0.9, g: 0.8, b: 0.1, a: 1.0 }
+    height: 0.3
+  stamens:
+    - filament_curve: 0.2
+      filament_color: { r: 0.9, g: 0.9, b: 0.5, a: 1.0 }
+      anther_shape: Versatile
+      anther_color: { r: 0.9, g: 0.6, b: 0.0, a: 1.0 }
+      pollen_load: 0.5
+      height: 0.4
+      sway: 0.3
+structure:
+  stem:
+    height: 0.5
+    thickness: 0.3
+    curvature: 0.1
+    color: { r: 0.1, g: 0.5, b: 0.2, a: 1.0 }
+  sepals:
+    - shape: Lanceolate
+      color: { r: 0.1, g: 0.4, b: 0.2, a: 1.0 }
+      reflex_angle: 90.0
+      length: 0.3
+      persistent: true
+  receptacle:
+    shape: Flat
+    size: 0.3
+    color: { r: 0.1, g: 0.4, b: 0.1, a: 1.0 }
 
 ENUM VALUES (use exact strings):
 - shape (petal): Ovate, Lanceolate, Spatulate, Oblong, Orbicular, Cordate, Deltoid, Falcate, Ligulate, Tubular, Fimbriate, Laciniate, Runcinate
@@ -57,7 +75,7 @@ ENUM VALUES (use exact strings):
 - receptacle shape: Flat, Convex, Concave, Conical, Urceolate
 
 RULES:
-- Colors: { "r": 0.0-1.0, "g": 0.0-1.0, "b": 0.0-1.0, "a": 1.0 }
+- Colors use flow syntax: { r: 0.0-1.0, g: 0.0-1.0, b: 0.0-1.0, a: 1.0 }
 - Roses: 3 layers (5 outer, 8 middle, 13 inner) with Spiral arrangement, increasing curvature inward
 - Daisies: 1 layer of 13-21 Ligulate or Spatulate petals, large receptacle (size: 0.7+)
 - Sunflowers: 1 layer of 21-34 Ligulate petals, very large receptacle (size: 0.8+)
