@@ -25,7 +25,20 @@ function isMySession(session: FlowerSession): boolean {
   return identityHex(session.owner) === myHex;
 }
 
-/** Spread flowers across the canvas when server positions are all zero. */
+/** Canvas viewport dimensions — updated by FlowerCanvas on mount/resize. */
+let viewportW = 800;
+let viewportH = 600;
+
+export function setCanvasViewport(w: number, h: number) {
+  viewportW = w;
+  viewportH = h;
+}
+
+export function getCanvasViewport(): { w: number; h: number; pad: number } {
+  return { w: viewportW, h: viewportH, pad: 60 };
+}
+
+/** Map server positions (0–100 range) to fill the canvas viewport with padding. */
 function resolvePosition(
   session: FlowerSession,
   index: number,
@@ -33,20 +46,25 @@ function resolvePosition(
 ): [number, number] {
   const cx = Number(session.canvasX);
   const cy = Number(session.canvasY);
-  if (cx !== 0 || cy !== 0) return [cx, cy];
 
-  // Distribute in a grid across the full canvas viewport with padding
-  const padX = 100;
-  const padY = 100;
-  const canvasW = 800; // usable range: padX .. canvasW
-  const canvasH = 700; // usable range: padY .. canvasH
+  const pad = 60;
+  const usableW = viewportW - pad * 2;
+  const usableH = viewportH - pad * 2;
+
+  if (cx !== 0 || cy !== 0) {
+    // Server stores 0–100, scale to fill canvas
+    return [pad + (cx / 100) * usableW, pad + (cy / 100) * usableH];
+  }
+
+  // Fallback grid when position is unset
   const cols = Math.max(1, Math.ceil(Math.sqrt(total)));
   const rows = Math.max(1, Math.ceil(total / cols));
-  const spacingX = (canvasW - padX) / Math.max(1, cols);
-  const spacingY = (canvasH - padY) / Math.max(1, rows);
   const col = index % cols;
   const row = Math.floor(index / cols);
-  return [padX + spacingX * (col + 0.5), padY + spacingY * (row + 0.5)];
+  return [
+    pad + (usableW / Math.max(1, cols)) * (col + 0.5),
+    pad + (usableH / Math.max(1, rows)) * (row + 0.5),
+  ];
 }
 
 /// Wire SpacetimeDB table callbacks to the WASM simulation.

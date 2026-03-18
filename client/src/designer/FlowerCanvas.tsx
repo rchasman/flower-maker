@@ -12,6 +12,7 @@ import {
   type ArrangementPlan,
   type DrawCmd,
 } from "../flower/render.ts";
+import { setCanvasViewport, getCanvasViewport } from "../spacetime/bridge.ts";
 
 export type ConstituentEntry = { specJson: string; sid: number };
 
@@ -403,6 +404,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           }
           el.appendChild(app.canvas as HTMLCanvasElement);
           appRef.current = app;
+          setCanvasViewport(el.clientWidth, el.clientHeight);
 
           const flowerContainer = new Container();
           app.stage.addChild(flowerContainer);

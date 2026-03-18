@@ -12,7 +12,7 @@ import { FlowerCanvas } from "./FlowerCanvas.tsx";
 import type { FlowerCanvasHandle } from "./FlowerCanvas.tsx";
 import { loadWasm, type GardenSim } from "../wasm/loader.ts";
 import { startLoop, stopLoop } from "../wasm/loop.ts";
-import { wireToWasm, handleMerge } from "../spacetime/bridge.ts";
+import { wireToWasm, handleMerge, getCanvasViewport } from "../spacetime/bridge.ts";
 import type { FlowerSession } from "../spacetime/types.ts";
 import { isVariant } from "../spacetime/types.ts";
 
@@ -95,7 +95,11 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
   }, []);
 
   const handleFlowerDragEnd = useCallback((sid: number, x: number, y: number) => {
-    conn?.reducers.updatePosition({ sessionId: BigInt(sid), x, y });
+    // Normalize pixel coords back to 0–100 for server storage
+    const { w, h, pad } = getCanvasViewport();
+    const nx = Math.max(0, Math.min(100, ((x - pad) / (w - pad * 2)) * 100));
+    const ny = Math.max(0, Math.min(100, ((y - pad) / (h - pad * 2)) * 100));
+    conn?.reducers.updatePosition({ sessionId: BigInt(sid), x: nx, y: ny });
   }, [conn]);
 
   // When AI generates a spec, create a session then push the spec once it appears
