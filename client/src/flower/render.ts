@@ -641,10 +641,22 @@ export type ArrangementMember = {
   angle: number;
 };
 
+export type AdornmentPlan = {
+  /** Main shape (wrap body, vase body, pedestal, etc.) */
+  cmds: DrawCmd[];
+  color: number;
+  opacity: number;
+  /** Optional accent detail (ribbon, bow, trim line) */
+  accent?: { cmds: DrawCmd[]; color: number; opacity: number };
+  /** Optional second accent (bow loops, vase rim, etc.) */
+  detail?: { cmds: DrawCmd[]; color: number; opacity: number };
+};
+
 /** Pre-computed rendering plan for a multi-flower arrangement. */
 export type ArrangementPlan = {
   members: readonly ArrangementMember[];
   baseY: number;
+  adornment: AdornmentPlan | null;
 };
 
 // ── Stem/leaf spec parsing ──
@@ -1066,6 +1078,251 @@ function layoutForLevel(count: number, level: number): LayoutSlot[] {
   });
 }
 
+// ── Adornment generators ──
+// Each returns DrawCmd[] in unit space, centered on x=0, anchored at baseY.
+
+const WRAP_KRAFT = 0x8B7355;    // warm kraft brown
+const WRAP_TISSUE = 0xD4C5B0;   // soft tissue beige
+const RIBBON_COLOR = 0xC4A882;  // natural twine
+const VASE_COLOR = 0x6B7B8D;    // slate ceramic
+const VASE_RIM = 0x8899A6;      // lighter ceramic rim
+const STAND_COLOR = 0x5A5A5A;   // stone gray
+const STAND_TOP = 0x707070;     // lighter stone
+
+/** Simple tie/band around stems — Group level (2-3 flowers). */
+function generateTieAdornment(baseY: number): AdornmentPlan {
+  const bandY = baseY - 0.18;  // just above convergence point
+  const bandH = 0.025;
+  const bandW = 0.08;
+
+  const cmds: DrawCmd[] = [
+    { op: "M", x: -bandW, y: bandY - bandH },
+    { op: "C", c1x: -bandW, c1y: bandY - bandH * 2, c2x: bandW, c2y: bandY - bandH * 2, x: bandW, y: bandY - bandH },
+    { op: "L", x: bandW, y: bandY + bandH },
+    { op: "C", c1x: bandW, c1y: bandY + bandH * 2, c2x: -bandW, c2y: bandY + bandH * 2, x: -bandW, y: bandY + bandH },
+    { op: "Z" },
+  ];
+
+  // Small knot/bow center
+  const knotR = 0.015;
+  const accent: DrawCmd[] = [
+    { op: "M", x: -knotR, y: bandY },
+    { op: "C", c1x: -knotR, c1y: bandY - knotR * 2, c2x: knotR, c2y: bandY - knotR * 2, x: knotR, y: bandY },
+    { op: "C", c1x: knotR, c1y: bandY + knotR * 2, c2x: -knotR, c2y: bandY + knotR * 2, x: -knotR, y: bandY },
+    { op: "Z" },
+  ];
+
+  return {
+    cmds,
+    color: RIBBON_COLOR,
+    opacity: 0.85,
+    accent: { cmds: accent, color: darkenColor(RIBBON_COLOR, 0.7), opacity: 0.9 },
+  };
+}
+
+/** Paper wrap cone — Bunch level (4-6 flowers). */
+function generateWrapAdornment(baseY: number): AdornmentPlan {
+  const topY = baseY - 0.35;   // wrap opens wide near the flower heads
+  const botY = baseY + 0.05;   // wraps slightly past the base
+  const topW = 0.35;           // wide opening
+  const botW = 0.06;           // narrow bottom point
+
+  // Wrap body — tapered cone with curved edges
+  const cmds: DrawCmd[] = [
+    { op: "M", x: -topW, y: topY },
+    { op: "C", c1x: -topW * 0.9, c1y: topY + (botY - topY) * 0.4,
+      c2x: -botW * 1.5, c2y: botY - (botY - topY) * 0.2,
+      x: -botW, y: botY },
+    { op: "C", c1x: -botW * 0.3, c1y: botY + 0.02,
+      c2x: botW * 0.3, c2y: botY + 0.02,
+      x: botW, y: botY },
+    { op: "C", c1x: botW * 1.5, c1y: botY - (botY - topY) * 0.2,
+      c2x: topW * 0.9, c2y: topY + (botY - topY) * 0.4,
+      x: topW, y: topY },
+    // Curved top edge (paper fold)
+    { op: "C", c1x: topW * 0.7, c1y: topY - 0.03,
+      c2x: -topW * 0.7, c2y: topY - 0.03,
+      x: -topW, y: topY },
+    { op: "Z" },
+  ];
+
+  // Ribbon tie around the middle of the wrap
+  const tieY = baseY - 0.1;
+  const tieW = 0.12;
+  const tieH = 0.018;
+  const accent: DrawCmd[] = [
+    { op: "M", x: -tieW, y: tieY - tieH },
+    { op: "L", x: tieW, y: tieY - tieH },
+    { op: "L", x: tieW, y: tieY + tieH },
+    { op: "L", x: -tieW, y: tieY + tieH },
+    { op: "Z" },
+  ];
+
+  return {
+    cmds,
+    color: WRAP_KRAFT,
+    opacity: 0.75,
+    accent: { cmds: accent, color: RIBBON_COLOR, opacity: 0.85 },
+  };
+}
+
+/** Vase — Arrangement/Bouquet level (7-19 flowers). */
+function generateVaseAdornment(baseY: number): AdornmentPlan {
+  const lipY = baseY - 0.3;    // vase lip
+  const neckY = baseY - 0.22;  // narrow neck
+  const bulgeY = baseY - 0.05; // widest body point
+  const footY = baseY + 0.08;  // vase foot
+  const lipW = 0.16;
+  const neckW = 0.1;
+  const bulgeW = 0.22;
+  const footW = 0.14;
+
+  // Vase silhouette — left side down, bottom, right side up, lip
+  const cmds: DrawCmd[] = [
+    { op: "M", x: -lipW, y: lipY },
+    // Neck narrows
+    { op: "C", c1x: -lipW, c1y: lipY + 0.03,
+      c2x: -neckW, c2y: neckY - 0.02,
+      x: -neckW, y: neckY },
+    // Body bulges out
+    { op: "C", c1x: -neckW * 1.1, c1y: neckY + (bulgeY - neckY) * 0.3,
+      c2x: -bulgeW, c2y: bulgeY - (bulgeY - neckY) * 0.3,
+      x: -bulgeW, y: bulgeY },
+    // Taper to foot
+    { op: "C", c1x: -bulgeW, c1y: bulgeY + (footY - bulgeY) * 0.5,
+      c2x: -footW, c2y: footY - 0.02,
+      x: -footW, y: footY },
+    // Flat bottom
+    { op: "L", x: footW, y: footY },
+    // Right side up — foot to bulge
+    { op: "C", c1x: footW, c1y: footY - 0.02,
+      c2x: bulgeW, c2y: bulgeY + (footY - bulgeY) * 0.5,
+      x: bulgeW, y: bulgeY },
+    // Bulge to neck
+    { op: "C", c1x: bulgeW, c1y: bulgeY - (bulgeY - neckY) * 0.3,
+      c2x: neckW * 1.1, c2y: neckY + (bulgeY - neckY) * 0.3,
+      x: neckW, y: neckY },
+    // Neck to lip
+    { op: "C", c1x: neckW, c1y: neckY - 0.02,
+      c2x: lipW, c2y: lipY + 0.03,
+      x: lipW, y: lipY },
+    // Lip top edge
+    { op: "C", c1x: lipW * 0.5, c1y: lipY - 0.015,
+      c2x: -lipW * 0.5, c2y: lipY - 0.015,
+      x: -lipW, y: lipY },
+    { op: "Z" },
+  ];
+
+  // Rim highlight
+  const rimH = 0.012;
+  const accent: DrawCmd[] = [
+    { op: "M", x: -lipW * 0.95, y: lipY },
+    { op: "C", c1x: -lipW * 0.5, c1y: lipY - rimH,
+      c2x: lipW * 0.5, c2y: lipY - rimH,
+      x: lipW * 0.95, y: lipY },
+    { op: "C", c1x: lipW * 0.5, c1y: lipY + rimH,
+      c2x: -lipW * 0.5, c2y: lipY + rimH,
+      x: -lipW * 0.95, y: lipY },
+    { op: "Z" },
+  ];
+
+  // Foot base highlight
+  const detail: DrawCmd[] = [
+    { op: "M", x: -footW * 0.9, y: footY },
+    { op: "L", x: footW * 0.9, y: footY },
+    { op: "L", x: footW * 0.85, y: footY + 0.015 },
+    { op: "L", x: -footW * 0.85, y: footY + 0.015 },
+    { op: "Z" },
+  ];
+
+  return {
+    cmds,
+    color: VASE_COLOR,
+    opacity: 0.8,
+    accent: { cmds: accent, color: VASE_RIM, opacity: 0.9 },
+    detail: { cmds: detail, color: darkenColor(VASE_COLOR, 0.7), opacity: 0.7 },
+  };
+}
+
+/** Pedestal/stand — Centerpiece+ level (20+ flowers). */
+function generatePedestalAdornment(baseY: number): AdornmentPlan {
+  // Pedestal sits below a vase shape
+  const topY = baseY + 0.06;   // top of pedestal (just under the vase foot)
+  const midY = baseY + 0.18;   // column midsection
+  const baseTopY = baseY + 0.22; // base platform top
+  const botY = baseY + 0.26;   // very bottom
+  const topW = 0.13;
+  const colW = 0.08;
+  const baseW = 0.2;
+
+  // Pedestal — column on a wide base
+  const cmds: DrawCmd[] = [
+    // Top platform
+    { op: "M", x: -topW, y: topY },
+    { op: "L", x: topW, y: topY },
+    { op: "L", x: topW, y: topY + 0.02 },
+    // Column right side
+    { op: "C", c1x: topW * 0.8, c1y: topY + 0.04,
+      c2x: colW, c2y: midY - 0.02,
+      x: colW, y: midY },
+    // Flare to base
+    { op: "C", c1x: colW, c1y: midY + 0.02,
+      c2x: baseW * 0.7, c2y: baseTopY - 0.01,
+      x: baseW, y: baseTopY },
+    // Base bottom
+    { op: "L", x: baseW, y: botY },
+    { op: "L", x: -baseW, y: botY },
+    { op: "L", x: -baseW, y: baseTopY },
+    // Left flare up
+    { op: "C", c1x: -baseW * 0.7, c1y: baseTopY - 0.01,
+      c2x: -colW, c2y: midY + 0.02,
+      x: -colW, y: midY },
+    // Left column up
+    { op: "C", c1x: -colW, c1y: midY - 0.02,
+      c2x: -topW * 0.8, c2y: topY + 0.04,
+      x: -topW, y: topY + 0.02 },
+    { op: "L", x: -topW, y: topY },
+    { op: "Z" },
+  ];
+
+  // Top platform edge highlight
+  const accent: DrawCmd[] = [
+    { op: "M", x: -topW * 0.95, y: topY },
+    { op: "L", x: topW * 0.95, y: topY },
+    { op: "L", x: topW * 0.95, y: topY + 0.012 },
+    { op: "L", x: -topW * 0.95, y: topY + 0.012 },
+    { op: "Z" },
+  ];
+
+  return {
+    cmds,
+    color: STAND_COLOR,
+    opacity: 0.85,
+    accent: { cmds: accent, color: STAND_TOP, opacity: 0.9 },
+  };
+}
+
+/** Pick the right adornment for an arrangement level. */
+function adornmentForLevel(level: number, baseY: number): AdornmentPlan | null {
+  if (level <= 1) return null;                         // single stem — no adornment
+  if (level <= 2) return generateTieAdornment(baseY);  // group (2-3)
+  if (level <= 3) return generateWrapAdornment(baseY); // bunch (4-6)
+  if (level <= 5) return generateVaseAdornment(baseY); // arrangement/bouquet (7-19)
+  // centerpiece/installation (20+) — vase on a pedestal
+  // Use pedestal as the base adornment, vase drawn as accent/detail layers
+  const vase = generateVaseAdornment(baseY);
+  const pedestal = generatePedestalAdornment(baseY);
+  return {
+    cmds: pedestal.cmds,
+    color: pedestal.color,
+    opacity: pedestal.opacity,
+    // Vase body as accent layer (drawn on top of pedestal)
+    accent: { cmds: vase.cmds, color: vase.color, opacity: vase.opacity },
+    // Vase rim as detail layer
+    detail: vase.accent,
+  };
+}
+
 /** Create a complete arrangement plan from constituent flower specs. */
 export function createArrangementPlan(
   constituents: ReadonlyArray<{ specJson: string; sid: number }>,
@@ -1131,7 +1388,9 @@ export function createArrangementPlan(
     };
   });
 
-  return { members, baseY };
+  const adornment = adornmentForLevel(level, baseY);
+
+  return { members, baseY, adornment };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

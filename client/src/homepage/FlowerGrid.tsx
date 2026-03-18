@@ -288,6 +288,31 @@ function SvgArrangement({ x, y, r, constituents, level }: {
         />
       ))}
 
+      {/* Adornment (wrap, vase, pedestal) */}
+      {plan.adornment && (
+        <g>
+          <path
+            d={cmdsToSvgD(plan.adornment.cmds, x, y, scale)}
+            fill={hexString(plan.adornment.color)}
+            opacity={plan.adornment.opacity}
+          />
+          {plan.adornment.accent && (
+            <path
+              d={cmdsToSvgD(plan.adornment.accent.cmds, x, y, scale)}
+              fill={hexString(plan.adornment.accent.color)}
+              opacity={plan.adornment.accent.opacity}
+            />
+          )}
+          {plan.adornment.detail && (
+            <path
+              d={cmdsToSvgD(plan.adornment.detail.cmds, x, y, scale)}
+              fill={hexString(plan.adornment.detail.color)}
+              opacity={plan.adornment.detail.opacity}
+            />
+          )}
+        </g>
+      )}
+
       {/* Leaves */}
       {plan.members.map((member, mi) =>
         member.leaves.map((leaf, li) => (

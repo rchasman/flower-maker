@@ -10,6 +10,7 @@ import {
   createArrangementPlan,
   type FlowerPlan,
   type ArrangementPlan,
+  type AdornmentPlan,
   type DrawCmd,
 } from "../flower/render.ts";
 import { setCanvasViewport, getCanvasViewport } from "../spacetime/bridge.ts";
@@ -152,7 +153,25 @@ function drawArrangementFromPlan(
     return null;
   });
 
-  // Pass 2: All leaves
+  // Pass 2: Adornment (wrap, vase, pedestal — sits on top of stems, behind leaves/heads)
+  if (plan.adornment) {
+    const ad = plan.adornment;
+    // Main body — may contain merged shapes (e.g. pedestal + vase)
+    drawCmds(g, ad.cmds, scale);
+    g.fill({ color: ad.color, alpha: alpha * ad.opacity });
+    // Accent detail (ribbon, rim highlight)
+    if (ad.accent) {
+      drawCmds(g, ad.accent.cmds, scale);
+      g.fill({ color: ad.accent.color, alpha: alpha * ad.accent.opacity });
+    }
+    // Secondary detail (foot, platform edge)
+    if (ad.detail) {
+      drawCmds(g, ad.detail.cmds, scale);
+      g.fill({ color: ad.detail.color, alpha: alpha * ad.detail.opacity });
+    }
+  }
+
+  // Pass 3: All leaves
   plan.members.map((member) => {
     member.leaves.map((leaf) => {
       drawCmds(g, leaf.cmds, scale);
