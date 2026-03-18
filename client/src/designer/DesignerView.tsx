@@ -163,7 +163,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
 
         {/* Templates section */}
         <div style={{ flex: "0 0 auto", maxHeight: "40%", overflow: "auto" }}>
-          <TemplatePicker conn={conn} />
+          <TemplatePicker conn={conn} onFlowerGenerated={handleFlowerGenerated} />
         </div>
 
         {/* AI chat section */}
