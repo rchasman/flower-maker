@@ -746,7 +746,7 @@ function parseFoliage(specJson: string | undefined): ParsedFoliage {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rawLeaves = Array.isArray(foliage.leaves) ? foliage.leaves : [];
     const leaves: ParsedLeafInstance[] = rawLeaves.slice(0, 6).map((l: any, i: number) => ({
-      position: Math.max(0.1, Math.min(0.85, l.position ?? 0.3 + i * 0.2)),
+      position: Math.max(0.25, Math.min(0.85, l.position ?? 0.3 + i * 0.2)),
       side: l.side === "right" ? "right" as const : "left" as const,
       size: Math.max(0.2, Math.min(1.0, l.size ?? 0.5)),
       angleOffset: Math.max(-0.3, Math.min(0.3, l.angle_offset ?? 0)),

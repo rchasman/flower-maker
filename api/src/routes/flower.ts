@@ -102,14 +102,14 @@ RULES:
 - Orchids: 2 layers — 3 Falcate + 3 Orbicular with angular_offset: 60
 - Lilies: 1 layer of 6 Lanceolate petals with negative curvature (recurved), prominent stamens
 - Use multiple layers with angular_offset for complex flowers (roses, peonies, dahlias)
-- Foliage: each leaf has position (0.0-1.0 along stem), side (left/right), size (0.3-0.8), angle_offset (-0.2 to 0.2 radians)
+- Foliage: each leaf has position (0.25-0.85 along stem, never below 0.25), side (left/right), size (0.3-0.8), angle_offset (-0.2 to 0.2 radians)
 - Vary size and angle_offset per leaf for natural look — no two leaves should be identical
 - Alternate left/right sides down the stem
 - Roses: 2-3 Ovate leaves, Fine serration, clustered mid-stem
 - Sunflowers: 3-4 large Cordate leaves, Coarse serration, distributed evenly
-- Daisies: 2 small Lanceolate basal leaves near base
-- Orchids: 1-2 thick Oblong leaves low on stem
-- Lilies: 3-5 Linear leaves distributed along full stem
+- Daisies: 2 small Lanceolate leaves, positions [0.25, 0.35]
+- Orchids: 1-2 thick Oblong leaves, positions [0.25, 0.4]
+- Lilies: 3-5 Linear leaves distributed along stem, starting at 0.25
 - Be botanically accurate but creatively expressive`;
 
 const COMBINE_SYSTEM_PROMPT = `You are an expert florist describing what happens when flowers are combined into arrangements. Given two flower specs and their counts, describe what the combination becomes.
