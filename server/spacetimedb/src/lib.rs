@@ -408,6 +408,9 @@ pub fn merge_sessions(
         generation: new_generation,
     });
 
+    // Clone child_json before moving into FlowerSpec — needed for constituent override below
+    let child_json_for_constituent = child_json.clone();
+
     ctx.db.flower_spec().insert(FlowerSpec {
         session_id: child_session.id,
         spec_json: child_json,
@@ -425,6 +428,58 @@ pub fn merge_sessions(
             forked_from: format!("merge:{}+{}", session_a_id, session_b_id),
             created_at: ctx.timestamp,
         });
+    }
+
+    // Preserve constituent flower specs so arrangements render all flowers.
+    // constituent:0 = hero (crossed genetics child), then parent constituents follow.
+    let mut constituent_idx: u32 = 0;
+
+    // Hero flower is constituent:0
+    ctx.db.part_override().insert(FlowerPartOverride {
+        id: 0,
+        session_id: child_session.id,
+        part_path: format!("constituent:{constituent_idx}"),
+        override_json: child_json_for_constituent,
+        forked_from: format!("cross:{}+{}", session_a_id, session_b_id),
+        created_at: ctx.timestamp,
+    });
+    constituent_idx += 1;
+
+    // Collect constituents from each parent (propagate if parent is already an arrangement)
+    for parent_id in [session_a_id, session_b_id] {
+        let parent_constituents: Vec<String> = ctx.db.part_override().iter()
+            .filter(|o| o.session_id == parent_id && o.part_path.starts_with("constituent:"))
+            .map(|o| o.override_json.clone())
+            .collect();
+
+        if parent_constituents.is_empty() {
+            // Parent is a single flower — use its spec directly
+            let parent_spec = ctx.db.flower_spec().session_id().find(parent_id);
+            if let Some(ps) = parent_spec {
+                ctx.db.part_override().insert(FlowerPartOverride {
+                    id: 0,
+                    session_id: child_session.id,
+                    part_path: format!("constituent:{constituent_idx}"),
+                    override_json: ps.spec_json.clone(),
+                    forked_from: format!("parent:{parent_id}"),
+                    created_at: ctx.timestamp,
+                });
+                constituent_idx += 1;
+            }
+        } else {
+            // Parent is an arrangement — propagate all its constituents
+            for spec_json in parent_constituents {
+                ctx.db.part_override().insert(FlowerPartOverride {
+                    id: 0,
+                    session_id: child_session.id,
+                    part_path: format!("constituent:{constituent_idx}"),
+                    override_json: spec_json,
+                    forked_from: format!("parent:{parent_id}"),
+                    created_at: ctx.timestamp,
+                });
+                constituent_idx += 1;
+            }
+        }
     }
 
     // Archive parents
