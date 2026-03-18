@@ -29,6 +29,7 @@ interface FlowerCanvasProps {
   onFlowerClick?: (sid: number) => void;
   onFlowerDrag?: (sid: number, x: number, y: number) => void;
   onFlowerDragEnd?: (sid: number, x: number, y: number) => void;
+  onMergeDrop?: (dragSid: number, targetSid: number) => void;
   selectedId?: number | null;
 }
 
@@ -249,10 +250,11 @@ function offsetCmd(cmd: DrawCmd, dx: number, dy: number): DrawCmd {
 
 const FLOWER_BASE_RADIUS = 90;
 const SELECTION_RING_PAD = 6;
+const MERGE_RANGE = FLOWER_BASE_RADIUS * 3;
 
 export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
   function FlowerCanvas(
-    { onFlowerClick, onFlowerDrag, onFlowerDragEnd, selectedId },
+    { onFlowerClick, onFlowerDrag, onFlowerDragEnd, onMergeDrop, selectedId },
     ref,
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -263,6 +265,9 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const dragRef = useRef<{ sid: number } | null>(null);
     const onFlowerDragRef = useRef(onFlowerDrag);
     const onFlowerDragEndRef = useRef(onFlowerDragEnd);
+    const onMergeDropRef = useRef(onMergeDrop);
+    const mergeTargetRef = useRef<{ dragSid: number; targetSid: number; distance: number } | null>(null);
+    const mergeOverlayRef = useRef<Graphics | null>(null);
 
     // Spec map, constituent map, and cached plans
     const specMapRef = useRef<Map<number, string>>(new Map());
@@ -273,6 +278,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     selectedIdRef.current = selectedId;
     onFlowerDragRef.current = onFlowerDrag;
     onFlowerDragEndRef.current = onFlowerDragEnd;
+    onMergeDropRef.current = onMergeDrop;
 
     /** Get or create the cached plan (FlowerPlan or ArrangementPlan) for a given sid. */
     const getPlan = useCallback((sid: number): { plan: FlowerPlan | ArrangementPlan; isArrangement: boolean } => {
@@ -389,6 +395,49 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
 
           return flower.sid;
         });
+
+        // ── Merge proximity detection ──
+        const drag = dragRef.current;
+        if (drag) {
+          const dragged = data.find(f => f.sid === drag.sid);
+          if (dragged) {
+            const nearest = data
+              .filter(f => f.sid !== dragged.sid)
+              .map(f => ({ sid: f.sid, dist: Math.hypot(f.x - dragged.x, f.y - dragged.y), x: f.x, y: f.y }))
+              .filter(f => f.dist < MERGE_RANGE)
+              .sort((a, b) => a.dist - b.dist)[0] ?? null;
+
+            mergeTargetRef.current = nearest
+              ? { dragSid: dragged.sid, targetSid: nearest.sid, distance: nearest.dist }
+              : null;
+          }
+        } else {
+          mergeTargetRef.current = null;
+        }
+
+        // ── Merge overlay ring ──
+        if (!mergeOverlayRef.current && stage) {
+          mergeOverlayRef.current = new Graphics();
+          stage.addChild(mergeOverlayRef.current);
+        }
+        const overlay = mergeOverlayRef.current;
+        if (overlay) {
+          overlay.clear();
+          const mt = mergeTargetRef.current;
+          if (mt) {
+            const targetFlower = data.find(f => f.sid === mt.targetSid);
+            if (targetFlower) {
+              const proximity = 1 - mt.distance / MERGE_RANGE;
+              const pulse = 0.3 + 0.2 * Math.sin(performance.now() / 200);
+              const alpha = proximity * pulse;
+              const ringR = FLOWER_BASE_RADIUS * targetFlower.scale * 0.6 + 12;
+              overlay.circle(targetFlower.x, targetFlower.y, ringR);
+              overlay.stroke({ color: 0xffffff, width: 2.5, alpha });
+              overlay.circle(targetFlower.x, targetFlower.y, ringR + 6);
+              overlay.stroke({ color: 0xffffff, width: 1, alpha: alpha * 0.4 });
+            }
+          }
+        }
       },
       [onFlowerClick, getPlan],
     );
@@ -438,29 +487,26 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             onFlowerDragRef.current?.(drag.sid, pos.x, pos.y);
           });
 
-          app.stage.on("pointerup", () => {
+          const handlePointerUp = () => {
             const drag = dragRef.current;
             if (drag) {
               const g = flowerGraphicsRef.current.get(drag.sid);
-              if (g) {
-                g.cursor = "grab";
-                onFlowerDragEndRef.current?.(drag.sid, g.position.x, g.position.y);
-              }
-              dragRef.current = null;
-            }
-          });
+              if (g) g.cursor = "grab";
 
-          app.stage.on("pointerupoutside", () => {
-            const drag = dragRef.current;
-            if (drag) {
-              const g = flowerGraphicsRef.current.get(drag.sid);
-              if (g) {
-                g.cursor = "grab";
+              const mt = mergeTargetRef.current;
+              if (mt && mt.dragSid === drag.sid) {
+                onMergeDropRef.current?.(drag.sid, mt.targetSid);
+              } else if (g) {
                 onFlowerDragEndRef.current?.(drag.sid, g.position.x, g.position.y);
               }
+
               dragRef.current = null;
+              mergeTargetRef.current = null;
             }
-          });
+          };
+
+          app.stage.on("pointerup", handlePointerUp);
+          app.stage.on("pointerupoutside", handlePointerUp);
         });
 
       return () => {
@@ -468,6 +514,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         stageContainerRef.current = null;
         flowerGraphicsRef.current.clear();
         planCacheRef.current.clear();
+        mergeOverlayRef.current = null;
         if (appRef.current) {
           appRef.current.destroy(true);
           appRef.current = null;
