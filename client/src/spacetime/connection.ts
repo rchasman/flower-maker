@@ -3,7 +3,7 @@ import type { DbConnection } from "./types.ts";
 const SPACETIMEDB_URI =
   import.meta.env.VITE_SPACETIMEDB_URI ?? "ws://db.flower-maker.localhost:1355";
 const SPACETIMEDB_MODULE =
-  import.meta.env.VITE_SPACETIMEDB_MODULE ?? "flower-maker";
+  import.meta.env.VITE_SPACETIMEDB_MODULE ?? "flower-picker";
 const TOKEN_KEY = "spacetimedb_token";
 
 let connection: DbConnection | null = null;
@@ -60,7 +60,7 @@ export async function connect(): Promise<DbConnection> {
         .withDatabaseName(SPACETIMEDB_MODULE)
         .withToken(savedToken)
         .onConnect((...args: unknown[]) => {
-          myIdentity = args[0]; // SpacetimeDB identity
+          myIdentity = args[1]; // SpacetimeDB identity (args: ctx, identity, token)
           const token = args[2] as string | undefined;
           if (token) localStorage.setItem(TOKEN_KEY, token);
           connection = conn as DbConnection;
