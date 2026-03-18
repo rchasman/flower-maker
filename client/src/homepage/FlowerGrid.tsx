@@ -1,7 +1,7 @@
 import { run, scoreColor } from "../lib/utils.ts";
 import { useSession } from "../session/SessionProvider.tsx";
-import { useFlowerSessions, useOrders, useUsers } from "../spacetime/hooks.ts";
-import type { FlowerSession, User } from "../spacetime/types.ts";
+import { useFlowerSessions, useFlowerSpecs, useOrders, useUsers } from "../spacetime/hooks.ts";
+import type { FlowerSession, FlowerSpec, User } from "../spacetime/types.ts";
 import { isVariant } from "../spacetime/types.ts";
 
 interface FlowerGridProps {
@@ -20,9 +20,16 @@ type ZoneData = {
 export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
   const { state, conn, identityHex } = useSession();
   const sessions = useFlowerSessions(conn);
+  const specs = useFlowerSpecs(conn);
   const users = useUsers(conn);
   const orders = useOrders(conn);
   const onlineCount = users.filter(u => u.online).length;
+
+  // Build a spec lookup by sessionId for O(1) access
+  const specBySessionId = specs.reduce<Map<string, FlowerSpec>>(
+    (acc, s) => acc.set(String(s.sessionId), s),
+    new Map(),
+  );
 
   // Build a session lookup by id for O(1) access
   const sessionById = sessions.reduce<Map<string, FlowerSession>>(
@@ -136,6 +143,7 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
           <ZoneCard
             key={String(zone.user.identity)}
             zone={zone}
+            specBySessionId={specBySessionId}
             onClick={zone.isYours ? onEnterDesigner : undefined}
           />
         ))}
@@ -201,7 +209,34 @@ function sidHash(sid: number, salt: number): number {
   return ((sid * 2654435761 + salt * 40503) >>> 0) / 4294967296;
 }
 
-function flowerColor(sid: number): string {
+/** Extract petal color + count from specJson, matching WASM's primary_petal_color logic. */
+function parseSpecVisuals(specJson: string | undefined): { color: string | null; petalCount: number } {
+  if (!specJson) return { color: null, petalCount: 0 };
+  try {
+    const spec = JSON.parse(specJson) as {
+      petals?: {
+        layers?: Array<{
+          count?: number;
+          color?: { stops?: Array<{ color?: { r?: number; g?: number; b?: number } }> };
+        }>;
+      };
+    };
+    const layer = spec.petals?.layers?.[0];
+    const stop = layer?.color?.stops?.[0]?.color;
+    const petalCount = layer?.count ?? 0;
+    if (stop && (stop.r ?? 0) + (stop.g ?? 0) + (stop.b ?? 0) > 0.05) {
+      const ri = Math.round(Math.max(0, Math.min(1, stop.r ?? 0)) * 255);
+      const gi = Math.round(Math.max(0, Math.min(1, stop.g ?? 0)) * 255);
+      const bi = Math.round(Math.max(0, Math.min(1, stop.b ?? 0)) * 255);
+      return { color: `#${((ri << 16) | (gi << 8) | bi).toString(16).padStart(6, "0")}`, petalCount };
+    }
+    return { color: null, petalCount };
+  } catch {
+    return { color: null, petalCount: 0 };
+  }
+}
+
+function fallbackColor(sid: number): string {
   return HUES[sid % HUES.length]!;
 }
 
@@ -214,9 +249,10 @@ function darkenHex(hex: string, factor: number): string {
 }
 
 /** Render one SVG flower at a given position (matches PixiJS petal logic). */
-function SvgFlower({ sid, x, y, r }: { sid: number; x: number; y: number; r: number }) {
-  const color = flowerColor(sid);
-  const petalCount = 5 + Math.floor(sidHash(sid, 1) * 3);
+function SvgFlower({ sid, x, y, r, specJson }: { sid: number; x: number; y: number; r: number; specJson?: string }) {
+  const visuals = parseSpecVisuals(specJson);
+  const color = visuals.color ?? fallbackColor(sid);
+  const petalCount = visuals.petalCount > 0 ? visuals.petalCount : 5 + Math.floor(sidHash(sid, 1) * 3);
   const petalLength = 0.75 + sidHash(sid, 2) * 0.35;
   const petalWidth = 0.28 + sidHash(sid, 3) * 0.18;
   const rotOffset = sidHash(sid, 5) * Math.PI * 2;
@@ -278,12 +314,13 @@ function SvgFlower({ sid, x, y, r }: { sid: number; x: number; y: number; r: num
 }
 
 /** Live mini-canvas: renders all of a user's flowers at their real positions, scaled to fit. */
-function MiniCanvas({ sessions, size }: { sessions: readonly FlowerSession[]; size: number }) {
+function MiniCanvas({ sessions, specBySessionId, size }: { sessions: readonly FlowerSession[]; specBySessionId: Map<string, FlowerSpec>; size: number }) {
   if (sessions.length === 0) return null;
 
   // Compute bounding box of all flower positions
   const positions = sessions.map(s => ({
     sid: Number(s.id),
+    sessionKey: String(s.id),
     x: Number(s.canvasX),
     y: Number(s.canvasY),
   }));
@@ -326,7 +363,7 @@ function MiniCanvas({ sessions, size }: { sessions: readonly FlowerSession[]; si
     >
       <rect x={vbX} y={vbY} width={bboxW} height={bboxH} fill="#0d0d0d" />
       {resolved.map(p => (
-        <SvgFlower key={p.sid} sid={p.sid} x={p.x} y={p.y} r={flowerR} />
+        <SvgFlower key={p.sid} sid={p.sid} x={p.x} y={p.y} r={flowerR} specJson={specBySessionId.get(p.sessionKey)?.specJson} />
       ))}
     </svg>
   );
@@ -349,9 +386,11 @@ function EmptyZoneIcon({ isYours }: { isYours: boolean }) {
 
 function ZoneCard({
   zone,
+  specBySessionId,
   onClick,
 }: {
   zone: ZoneData;
+  specBySessionId: Map<string, FlowerSpec>;
   onClick?: () => void;
 }) {
   const { user, session, allSessions, incomingOrders, isYours } = zone;
@@ -404,7 +443,7 @@ function ZoneCard({
       }}
     >
       {allSessions.length > 0 ? (
-        <MiniCanvas sessions={allSessions} size={100} />
+        <MiniCanvas sessions={allSessions} specBySessionId={specBySessionId} size={100} />
       ) : (
         <EmptyZoneIcon isYours={isYours} />
       )}
