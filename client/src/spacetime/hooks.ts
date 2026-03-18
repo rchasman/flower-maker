@@ -8,10 +8,6 @@ import type {
   User,
   FlowerOrder,
   ChatMessage,
-  LeaderboardEntry,
-  FitnessScore,
-  Environment,
-  SkinDefinition,
 } from "./types.ts";
 
 export function useSpacetimeDB() {
@@ -79,21 +75,6 @@ export function useChatMessages(conn: DbConnection | null) {
   return useTable<ChatMessage>(conn, "chat_message");
 }
 
-export function useLeaderboard(conn: DbConnection | null) {
-  return useTable<LeaderboardEntry>(conn, "leaderboard_entry");
-}
-
-export function useFitnessScores(conn: DbConnection | null) {
-  return useTable<FitnessScore>(conn, "fitness_score");
-}
-
-export function useEnvironments(conn: DbConnection | null) {
-  return useTable<Environment>(conn, "environment");
-}
-
-export function useSkinDefinitions(conn: DbConnection | null) {
-  return useTable<SkinDefinition>(conn, "skin_definition");
-}
 
 export function useMyIdentity(_conn: DbConnection | null): string | null {
   const token =

@@ -3,21 +3,13 @@
 
 export type {
   ChatMessage,
-  EmoteKind,
-  EmoteUnlock,
-  Environment,
-  FitnessScore,
   FlowerOrder,
   FlowerPartOverride,
   FlowerSession,
   FlowerSpec,
-  LeaderboardEntry,
   OrderSource,
   SessionStatus,
-  SkinDefinition,
-  SkinRarity,
   User,
-  UserSkin,
 } from "./module_bindings/types.ts";
 
 export type {

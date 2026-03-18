@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useSession } from "../session/SessionProvider.tsx";
 import { useChatMessages } from "../spacetime/hooks.ts";
-import { variantTag } from "../spacetime/types.ts";
 
 export function Chat() {
   const { conn } = useSession();
@@ -47,28 +46,17 @@ export function Chat() {
           gap: "0.25rem",
         }}
       >
-        {sorted.map(msg => {
-          const emoteTag = variantTag(msg.emote);
-          return (
-            <div
-              key={Number(msg.id)}
-              style={{ fontSize: "0.6875rem", lineHeight: 1.4 }}
-            >
-              {emoteTag ? (
-                <span style={{ color: "#8b5cf6" }}>
-                  {emoteEmoji(emoteTag)} {emoteTag}
-                </span>
-              ) : (
-                <>
-                  <span style={{ color: "#525252" }}>
-                    {String(msg.sender).slice(0, 8)}:
-                  </span>{" "}
-                  <span style={{ color: "#a3a3a3" }}>{msg.text}</span>
-                </>
-              )}
-            </div>
-          );
-        })}
+        {sorted.map(msg => (
+          <div
+            key={Number(msg.id)}
+            style={{ fontSize: "0.6875rem", lineHeight: 1.4 }}
+          >
+            <span style={{ color: "#525252" }}>
+              {String(msg.sender).slice(0, 8)}:
+            </span>{" "}
+            <span style={{ color: "#a3a3a3" }}>{msg.text}</span>
+          </div>
+        ))}
         {sorted.length === 0 && (
           <div
             style={{
@@ -115,17 +103,4 @@ export function Chat() {
       </div>
     </div>
   );
-}
-
-function emoteEmoji(emote: string): string {
-  const map: Record<string, string> = {
-    Wave: "👋",
-    Sparkle: "✨",
-    Rain: "🌧️",
-    Bloom: "🌸",
-    Wilt: "🥀",
-    Dance: "💃",
-    Pollinate: "🐝",
-  };
-  return map[emote] ?? "✦";
 }

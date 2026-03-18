@@ -41,9 +41,6 @@ export function ConnectedUsers() {
           >
             {user.name ?? String(user.identity).slice(0, 12)}
           </span>
-          <span style={{ color: "#404040", marginLeft: "auto", flexShrink: 0 }}>
-            lvl {Number(user.level)}
-          </span>
         </div>
       ))}
     </div>

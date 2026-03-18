@@ -1,6 +1,5 @@
 import { useState } from "react";
 import type { FlowerSession } from "../spacetime/types.ts";
-import { run, scoreColor } from "../lib/utils.ts";
 
 interface OrderFlowProps {
   session: FlowerSession | null;
@@ -22,18 +21,6 @@ export function OrderFlow({ session, onOrder }: OrderFlowProps) {
     );
   }
 
-  const fitnessScores: Record<string, number> = run(() => {
-    try {
-      const parsed: unknown = JSON.parse(session.fitnessJson);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        return parsed as Record<string, number>;
-      }
-      return {};
-    } catch {
-      return {};
-    }
-  });
-
   const handleOrder = async () => {
     setIsOrdering(true);
     try {
@@ -46,7 +33,6 @@ export function OrderFlow({ session, onOrder }: OrderFlowProps) {
           arrangement_level: levelName(Number(session.arrangementLevel)),
           flower_count: Number(session.flowerCount),
           generation: Number(session.generation),
-          fitness_scores: fitnessScores,
           prompt: session.prompt,
         }),
       });
@@ -81,48 +67,6 @@ export function OrderFlow({ session, onOrder }: OrderFlowProps) {
           <span>Gen {Number(session.generation)}</span>
         </div>
       </div>
-
-      {/* Fitness scores */}
-      {Object.keys(fitnessScores).length > 0 && (
-        <div
-          style={{
-            padding: "0.75rem",
-            background: "#141414",
-            borderRadius: "0.375rem",
-            border: "1px solid #1a1a1a",
-            fontSize: "0.6875rem",
-          }}
-        >
-          <div
-            style={{
-              color: "#737373",
-              marginBottom: "0.375rem",
-              fontWeight: 500,
-            }}
-          >
-            Fitness
-          </div>
-          {Object.entries(fitnessScores).map(([env, score]) => (
-            <div
-              key={env}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                color: "#525252",
-              }}
-            >
-              <span>{env}</span>
-              <span
-                style={{
-                  color: scoreColor(score),
-                }}
-              >
-                {score.toFixed(1)}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Order button */}
       <button

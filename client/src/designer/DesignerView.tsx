@@ -5,8 +5,6 @@ import { TemplatePicker } from "./TemplatePicker.tsx";
 import { FlowerChat } from "../ai/FlowerChat.tsx";
 import { OrderFlow } from "../orders/OrderFlow.tsx";
 import { OrderFeed } from "../orders/OrderFeed.tsx";
-import { FitnessBreakdown } from "../metagame/FitnessBreakdown.tsx";
-import { Leaderboard } from "../metagame/Leaderboard.tsx";
 import { Chat } from "../social/Chat.tsx";
 import { ConnectedUsers } from "../social/ConnectedUsers.tsx";
 import { PartEditor } from "./PartEditor.tsx";
@@ -22,7 +20,7 @@ interface DesignerViewProps {
   onBackToGrid: () => void;
 }
 
-type RightPanel = "order" | "parts" | "fitness" | "leaderboard" | "chat";
+type RightPanel = "order" | "parts" | "chat";
 
 export function DesignerView({ onBackToGrid }: DesignerViewProps) {
   const { conn } = useSession();
@@ -222,8 +220,6 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
             [
               ["order", "Order"],
               ["parts", "Parts"],
-              ["fitness", "Fitness"],
-              ["leaderboard", "Board"],
               ["chat", "Chat"],
             ] as const
           ).map(([key, label]) => (
@@ -263,10 +259,6 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
               Select a flower to edit parts.
             </div>
           )}
-          {rightPanel === "fitness" && (
-            <FitnessBreakdown sessionId={selectedId} />
-          )}
-          {rightPanel === "leaderboard" && <Leaderboard />}
           {rightPanel === "chat" && (
             <div
               style={{
