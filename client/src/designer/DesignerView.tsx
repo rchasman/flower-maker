@@ -91,7 +91,12 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
       startLoop(
         sim,
         event => {
-          handleMerge(conn, event.a, event.b);
+          const key = [Math.min(event.a, event.b), Math.max(event.a, event.b)].join("+");
+          if (pendingMergesRef.current.has(key)) return;
+          pendingMergesRef.current.add(key);
+          handleMerge(conn, event.a, event.b).finally(() => {
+            pendingMergesRef.current.delete(key);
+          });
         },
         data => {
           setFlowerCount(data.length);
@@ -103,6 +108,18 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     return () => {
       stopLoop();
     };
+  }, [conn]);
+
+  // Double-merge guard: prevent physics overlap + drop handler from both firing
+  const pendingMergesRef = useRef<Set<string>>(new Set());
+
+  const handleMergeDrop = useCallback((dragSid: number, targetSid: number) => {
+    const key = [Math.min(dragSid, targetSid), Math.max(dragSid, targetSid)].join("+");
+    if (pendingMergesRef.current.has(key)) return;
+    pendingMergesRef.current.add(key);
+    handleMerge(conn!, dragSid, targetSid).finally(() => {
+      pendingMergesRef.current.delete(key);
+    });
   }, [conn]);
 
   const handleFlowerDrag = useCallback((sid: number, x: number, y: number) => {
@@ -223,6 +240,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
             onFlowerClick={setSelectedId}
             onFlowerDrag={handleFlowerDrag}
             onFlowerDragEnd={handleFlowerDragEnd}
+            onMergeDrop={handleMergeDrop}
           />
           {flowerCount > 0 && (
             <div
