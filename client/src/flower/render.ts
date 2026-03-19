@@ -618,7 +618,7 @@ export function createFlowerPlan(
   const stemLen = stemData ? Math.max(0.6, Math.min(1.8, stemData.height * 1.4)) : 0;
 
   const stem: StemPlan | null = stemData
-    ? { cmds: generateStem(0, stemLen, 0, 0, stemData.curvature, Math.max(0.03, Math.min(0.08, stemData.thickness * 0.08)), stemData.color), color: stemData.color }
+    ? { cmds: generateStem(0, stemLen, 0, 0, stemData.curvature ?? 0.1, Math.max(0.03, Math.min(0.08, (stemData.thickness ?? 0.3) * 0.08)), stemData.color ?? 0x2d5a27), color: stemData.color ?? 0x2d5a27 }
     : null;
 
   // Place leaves only when both stem and foliage data exist
@@ -1535,11 +1535,13 @@ function extractAdornmentColors(
   // Phase 2: structured spec colors take priority
   if (meta.adornment_spec) {
     const spec = meta.adornment_spec;
-    const rawMain = rgbToNumber(spec.container.color);
-    const materialMod = MATERIAL_MODIFIERS[spec.container.material];
-    const main = materialMod ? materialMod.colorAdjust(rawMain) : rawMain;
-    const accent = rgbToNumber(spec.accent.color);
-    return { main, accent };
+    if (spec.container?.color && spec.accent?.color) {
+      const rawMain = rgbToNumber(spec.container.color);
+      const materialMod = MATERIAL_MODIFIERS[spec.container.material];
+      const main = materialMod ? materialMod.colorAdjust(rawMain) : rawMain;
+      const accent = rgbToNumber(spec.accent.color);
+      return { main, accent };
+    }
   }
 
   // Phase 1 fallback: sprite_hints colors
@@ -1591,7 +1593,7 @@ function generateAdornmentFromSpec(baseY: number, spec: AdornmentSpec): Adornmen
   const plan = gen(baseY, colors);
 
   // Layer on a base if specified
-  if (spec.base && spec.base.type !== "none") {
+  if (spec.base && spec.base.type !== "none" && spec.base.color) {
     const baseColor = rgbToNumber(spec.base.color);
     const baseColors = { main: baseColor, accent: lightenColor(baseColor, 0.1) };
     const basePlan = generatePedestalAdornment(baseY, baseColors);
