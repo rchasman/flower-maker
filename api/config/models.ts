@@ -9,6 +9,7 @@ export interface ModelConfig {
 
 export const MODELS = [
   // Anthropic
+  { id: "claude-haiku-4.5", fullName: "anthropic/claude-haiku-4.5", provider: "anthropic" },
   { id: "claude-sonnet-4.6", fullName: "anthropic/claude-sonnet-4.6", provider: "anthropic" },
   { id: "claude-opus-4.6", fullName: "anthropic/claude-opus-4.6", provider: "anthropic" },
 

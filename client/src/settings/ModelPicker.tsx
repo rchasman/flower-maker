@@ -8,6 +8,7 @@ export interface ModelConfig {
 
 // Mirrored from api/config/models.ts — kept client-side to avoid cross-workspace import
 const MODELS: ModelConfig[] = [
+  { id: "claude-haiku-4.5", fullName: "anthropic/claude-haiku-4.5", provider: "anthropic" },
   { id: "claude-sonnet-4.6", fullName: "anthropic/claude-sonnet-4.6", provider: "anthropic" },
   { id: "claude-opus-4.6", fullName: "anthropic/claude-opus-4.6", provider: "anthropic" },
   { id: "gpt-oss-20b", fullName: "openai/gpt-oss-20b", provider: "openai" },
