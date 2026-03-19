@@ -707,24 +707,22 @@ export type ArrangementMeta = {
   adornment_spec?: AdornmentSpec;
 };
 
-/** Structured adornment spec — AI picks the visual vocabulary.
- *  container/accent are typed as optional because pre-structured-output
- *  records may be missing them. New records are validated by Output.object(). */
+/** Structured adornment spec — AI picks the visual vocabulary. */
 export type AdornmentSpec = {
-  container?: {
+  container: {
     type: "tie" | "wrap" | "basket" | "vase" | "urn";
-    material?: "kraft" | "tissue" | "silk" | "ceramic" | "glass" | "wicker" | "metal";
-    color?: { r: number; g: number; b: number };
+    material: "kraft" | "tissue" | "silk" | "ceramic" | "glass" | "wicker" | "metal";
+    color: { r: number; g: number; b: number };
   };
-  accent?: {
+  accent: {
     type: "ribbon" | "bow" | "twine" | "trim" | "band" | "none";
-    color?: { r: number; g: number; b: number };
+    color: { r: number; g: number; b: number };
   };
   base?: {
     type: "none" | "saucer" | "pedestal" | "plinth";
     color: { r: number; g: number; b: number };
   };
-  mood?: string;
+  mood: string;
   evolved_from?: string;
 };
 
@@ -1578,7 +1576,7 @@ function applyMaterialOpacity(plan: AdornmentPlan, opacityMul: number): Adornmen
 
 type AdornmentGenerator = (baseY: number, colors?: { main: number; accent: number }) => AdornmentPlan;
 
-const CONTAINER_GENERATORS: Record<NonNullable<AdornmentSpec["container"]>["type"], AdornmentGenerator> = {
+const CONTAINER_GENERATORS: Record<AdornmentSpec["container"]["type"], AdornmentGenerator> = {
   tie: generateTieAdornment,
   wrap: generateWrapAdornment,
   basket: generateBasketAdornment,
@@ -1591,7 +1589,7 @@ function generateAdornmentFromSpec(baseY: number, spec: AdornmentSpec): Adornmen
   const colors = extractAdornmentColors({ adornment_spec: spec });
   const opacityMul = resolveOpacityMul(spec);
 
-  const gen = (spec.container?.type ? CONTAINER_GENERATORS[spec.container.type] : undefined) ?? generateVaseAdornment;
+  const gen = CONTAINER_GENERATORS[spec.container.type] ?? generateVaseAdornment;
   const plan = gen(baseY, colors);
 
   // Layer on a base if specified
