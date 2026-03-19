@@ -1,10 +1,8 @@
 {
   "name": "api",
-  "module": "index.ts",
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "PORT=9200 bun --env-file=../.env run --hot index.ts",
     "check": "tsc --noEmit"
   },
   "devDependencies": {
@@ -16,7 +14,6 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.58",
     "ai": "catalog:",
-    "hono": "^4.12.8",
     "zod": "catalog:"
   }
 }
