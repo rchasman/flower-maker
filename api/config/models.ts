@@ -23,6 +23,7 @@ export const MODELS = [
   { id: "gemini-3.1-pro", fullName: "google/gemini-3.1-pro-preview", provider: "google" },
 
   // xAI
+  { id: "grok-4.20-agent", fullName: "xai/grok-4.20-multi-agent-beta", provider: "xai" },
   { id: "grok-4.20", fullName: "xai/grok-4.20-non-reasoning-beta", provider: "xai" },
   { id: "grok-4.1-fast", fullName: "xai/grok-4.1-fast-non-reasoning", provider: "xai" },
 
