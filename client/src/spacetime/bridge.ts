@@ -175,17 +175,14 @@ export async function handleMerge(
     Number(sessionA?.flowerCount ?? 1) + Number(sessionB?.flowerCount ?? 1);
   const level = levelForCount(totalCount);
 
-  // Look up existing arrangement overrides for parent adornment inheritance
-  const parentAdornments = [sessionAId, sessionBId]
-    .map(sid => {
-      for (const o of conn.db.part_override.iter()) {
-        if (Number(o.sessionId) === sid && o.partPath === "arrangement") {
-          try { return JSON.parse(o.overrideJson); } catch { return null; }
-        }
-      }
-      return null;
-    })
-    .filter(Boolean);
+  // Look up existing arrangement overrides for parent adornment inheritance (single pass)
+  const targetSids = new Set([sessionAId, sessionBId]);
+  const parentAdornments: unknown[] = [];
+  for (const o of conn.db.part_override.iter()) {
+    if (targetSids.has(Number(o.sessionId)) && o.partPath === "arrangement") {
+      try { parentAdornments.push(JSON.parse(o.overrideJson)); } catch { /* skip */ }
+    }
+  }
 
   try {
     const res = await fetch("/api/flower/combine", {

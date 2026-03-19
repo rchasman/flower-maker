@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { run, scoreColor } from "../lib/utils.ts";
 import { useSession } from "../session/SessionProvider.tsx";
 import { useFlowerSessions, useFlowerSpecs, useUsers, usePartOverrides } from "../spacetime/hooks.ts";
@@ -24,7 +25,7 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
   const onlineCount = users.filter(u => u.online).length;
 
   // Build constituent map for arrangement rendering
-  const constituentMap = partOverrides
+  const constituentMap = useMemo(() => partOverrides
     .filter(o => o.partPath.startsWith("constituent:"))
     .reduce<Map<string, Array<{ specJson: string; sid: number }>>>((acc, o) => {
       const key = String(o.sessionId);
@@ -33,17 +34,17 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
       existing[idx] = { specJson: o.overrideJson, sid: idx };
       acc.set(key, existing);
       return acc;
-    }, new Map());
+    }, new Map()), [partOverrides]);
 
   // Build arrangement meta map (AI-generated adornment hints)
-  const arrangementMetaMap = partOverrides
+  const arrangementMetaMap = useMemo(() => partOverrides
     .filter(o => o.partPath === "arrangement")
     .reduce<Map<string, ArrangementMeta>>((acc, o) => {
       try {
         acc.set(String(o.sessionId), JSON.parse(o.overrideJson));
       } catch { /* skip */ }
       return acc;
-    }, new Map());
+    }, new Map()), [partOverrides]);
 
   // Build a spec lookup by sessionId for O(1) access
   const specBySessionId = specs.reduce<Map<string, FlowerSpec>>(

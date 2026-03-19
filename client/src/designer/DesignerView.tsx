@@ -93,14 +93,13 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     // Extract arrangement metadata (AI-generated adornment info)
     const arrangementMetaMap = partOverrides
       .filter(o => o.partPath === "arrangement")
-      .reduce<Map<number, Record<string, unknown>>>((acc, o) => {
+      .reduce<Map<number, import("../flower/render.ts").ArrangementMeta>>((acc, o) => {
         try {
-          const parsed = JSON.parse(o.overrideJson);
-          acc.set(Number(o.sessionId), parsed);
+          acc.set(Number(o.sessionId), JSON.parse(o.overrideJson));
         } catch { /* skip unparseable */ }
         return acc;
       }, new Map());
-    canvasRef.current?.setArrangementMetaMap(arrangementMetaMap as Map<number, import("../flower/render.ts").ArrangementMeta>);
+    canvasRef.current?.setArrangementMetaMap(arrangementMetaMap);
   }, [partOverrides]);
 
   useEffect(() => {

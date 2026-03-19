@@ -1521,11 +1521,6 @@ function parseHexColor(hex: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-/** Parse an RGB 0-1 object to a hex color number. */
-function rgbToHex(rgb: { r: number; g: number; b: number }): number {
-  return colorFromSpec(rgb.r, rgb.g, rgb.b);
-}
-
 /** Extract adornment colors from arrangement metadata. */
 function extractAdornmentColors(
   meta: ArrangementMeta | undefined,
@@ -1535,10 +1530,10 @@ function extractAdornmentColors(
   // Phase 2: structured spec colors take priority
   if (meta.adornment_spec) {
     const spec = meta.adornment_spec;
-    const rawMain = rgbToHex(spec.container.color);
+    const rawMain = colorFromSpec(spec.container.color.r, spec.container.color.g, spec.container.color.b);
     const materialMod = MATERIAL_MODIFIERS[spec.container.material];
     const main = materialMod ? materialMod.colorAdjust(rawMain) : rawMain;
-    const accent = rgbToHex(spec.accent.color);
+    const accent = colorFromSpec(spec.accent.color.r, spec.accent.color.g, spec.accent.color.b);
     return { main, accent };
   }
 
@@ -1572,25 +1567,29 @@ function applyMaterialOpacity(plan: AdornmentPlan, opacityMul: number): Adornmen
   };
 }
 
+type AdornmentGenerator = (baseY: number, colors?: { main: number; accent: number }) => AdornmentPlan;
+
+const CONTAINER_GENERATORS: Record<string, AdornmentGenerator> = {
+  tie: generateTieAdornment,
+  wrap: generateWrapAdornment,
+  basket: generateBasketAdornment,
+  vase: generateVaseAdornment,
+  urn: generateUrnAdornment,
+};
+
 /** Route to the correct shape generator based on AdornmentSpec container type. */
 function generateAdornmentFromSpec(baseY: number, spec: AdornmentSpec): AdornmentPlan {
   const colors = extractAdornmentColors({ adornment_spec: spec });
   const opacityMul = resolveOpacityMul(spec);
 
-  const generators: Record<string, (baseY: number, colors?: { main: number; accent: number }) => AdornmentPlan> = {
-    tie: generateTieAdornment,
-    wrap: generateWrapAdornment,
-    basket: generateBasketAdornment,
-    vase: generateVaseAdornment,
-    urn: generateUrnAdornment,
-  };
-
-  const gen = generators[spec.container.type] ?? generateVaseAdornment;
+  const gen = CONTAINER_GENERATORS[spec.container.type] ?? generateVaseAdornment;
   const plan = gen(baseY, colors);
 
   // Layer on a base if specified
   if (spec.base && spec.base.type !== "none") {
-    const baseColors = { main: rgbToHex(spec.base.color), accent: lightenColor(rgbToHex(spec.base.color), 0.1) };
+    const { r, g, b } = spec.base.color;
+    const baseColor = colorFromSpec(r, g, b);
+    const baseColors = { main: baseColor, accent: lightenColor(baseColor, 0.1) };
     const basePlan = generatePedestalAdornment(baseY, baseColors);
     return applyMaterialOpacity({
       cmds: basePlan.cmds,
