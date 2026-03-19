@@ -1,11 +1,13 @@
+import { useMemo } from "react";
 import { useSession } from "../session/SessionProvider.tsx";
 import { useUsers } from "../spacetime/hooks.ts";
-import { identityToColor } from "./Chat.tsx";
+import { buildColorMap, colorForIdentity } from "./Chat.tsx";
 
 export function ConnectedUsers() {
   const { conn } = useSession();
   const users = useUsers(conn);
 
+  const colorMap = useMemo(() => buildColorMap(users), [users]);
   const online = users.filter(u => u.online);
 
   return (
@@ -34,7 +36,7 @@ export function ConnectedUsers() {
           />
           <span
             style={{
-              color: identityToColor(String(user.identity)),
+              color: colorForIdentity(colorMap, String(user.identity)),
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
