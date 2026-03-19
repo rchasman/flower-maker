@@ -8,5 +8,10 @@
       "entrypoint": "api",
       "routePrefix": "/api"
     }
+  },
+  "functions": {
+    "api/**": {
+      "runtime": "bun@1"
+    }
   }
 }
