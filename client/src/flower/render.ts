@@ -227,6 +227,58 @@ const SHAPE_PROFILES: Record<string, (t: number) => number> = {
 
   // Backward-toothed — base shape, intrinsic serrate edge
   Runcinate: (t) => Math.sin(Math.PI * Math.pow(t, 0.7)),
+
+  // ── v2 shapes ──
+
+  // Wedge — narrow base, widest at the very tip, abrupt end
+  Cuneate: (t) => t < 0.85 ? Math.pow(t / 0.85, 1.5) * 0.95 : 0.95 * Math.cos((Math.PI * 0.5 * (t - 0.85)) / 0.15),
+
+  // Long-tapered pointed tip — like lanceolate but with exaggerated tip
+  Acuminate: (t) => Math.sin(Math.PI * t) * Math.pow(1 - t, 0.6) * 1.3,
+
+  // Fiddle/violin — pinched waist at ~50%
+  Panduriform: (t) => {
+    const base = Math.sin(Math.PI * Math.pow(t, 0.65));
+    const pinch = 1 - 0.4 * Math.exp(-Math.pow((t - 0.5) / 0.12, 2));
+    return base * pinch;
+  },
+
+  // Clawed base (narrow stalk) widening into broad blade
+  Unguiculate: (t) =>
+    t < 0.25
+      ? (t / 0.25) * 0.2
+      : 0.2 + 0.8 * Math.sin((Math.PI * (t - 0.25)) / 0.75),
+
+  // Fan-shaped — very wide at the outer edge, narrow base
+  Flabellate: (t) =>
+    t < 0.15
+      ? (t / 0.15) * 0.15
+      : 0.15 + 0.85 * Math.pow(Math.sin((Math.PI * (t - 0.15)) / 0.85), 0.5),
+
+  // Reverse egg — widest at ~65% from base
+  Obovate: (t) => Math.sin(Math.PI * Math.pow(t, 1.4)),
+
+  // Diamond — widest at exact center, angular taper both ways
+  Rhomboid: (t) =>
+    t < 0.5
+      ? t * 2 * 0.85
+      : (1 - t) * 2 * 0.85,
+
+  // Thread-like — extremely narrow throughout
+  Filiform: (t) => {
+    if (t < 0.05) return (t / 0.05) * 0.12;
+    if (t > 0.9) return 0.12 * (1 - (t - 0.9) / 0.1);
+    return 0.12;
+  },
+
+  // Kidney-shaped — very wide and short, almost wider than long
+  Reniform: (t) => Math.sqrt(Math.max(0, Math.sin(Math.PI * t))) * 1.4,
+
+  // Arrow-shaped — barbed backward-pointing base lobes
+  Sagittate: (t) => {
+    if (t < 0.12) return 0.7 + (1 - t / 0.12) * 0.5;
+    return Math.sin(Math.PI * Math.pow(t, 0.7)) * 0.85;
+  },
 };
 
 function shapeProfile(shape: string, t: number): number {
@@ -258,6 +310,17 @@ function edgeModifier(style: string, t: number, seed: number): number {
         1 +
         Math.sin(t * 9 + seed * 3) * Math.cos(t * 13 + seed * 7) * 0.18
       );
+    // ── v2 edge styles ──
+    case "Lobed":
+      return 1 + Math.sin(t * 4 + seed * 2) * 0.25 * Math.sin(Math.PI * t);
+    case "Plicate":
+      return 1 + Math.abs(Math.sin(t * 12 + seed * 3)) * 0.1 - 0.05;
+    case "Revolute":
+      return t > 0.3 ? 1 - (t - 0.3) * 0.18 : 1;
+    case "Dentate":
+      return 1 + (((t * 16 + seed * 0.1) % 1) < 0.4 ? 0.14 : -0.04);
+    case "Erose":
+      return 1 + (Math.sin(t * 31 + seed * 11) * Math.cos(t * 19 + seed * 5)) * 0.13;
     default:
       return 1;
   }
@@ -618,7 +681,7 @@ export function createFlowerPlan(
   const stemLen = stemData ? Math.max(0.6, Math.min(1.8, stemData.height * 1.4)) : 0;
 
   const stem: StemPlan | null = stemData
-    ? { cmds: generateStem(0, stemLen, 0, 0, stemData.curvature ?? 0.1, Math.max(0.03, Math.min(0.08, (stemData.thickness ?? 0.3) * 0.08)), stemData.color ?? 0x2d5a27), color: stemData.color ?? 0x2d5a27 }
+    ? { cmds: generateStem(0, stemLen, 0, 0, stemData.curvature ?? 0.1, Math.max(0.03, Math.min(0.08, (stemData.thickness ?? 0.3) * 0.08)), stemData.color ?? 0x2d5a27, stemData.style), color: stemData.color ?? 0x2d5a27 }
     : null;
 
   // Place leaves only when both stem and foliage data exist
@@ -751,6 +814,7 @@ type ParsedStem = {
   thickness: number;
   curvature: number;
   color: number;
+  style: string;
 };
 
 function parseSpecStem(specJson: string | undefined): ParsedStem | null {
@@ -765,6 +829,7 @@ function parseSpecStem(specJson: string | undefined): ParsedStem | null {
       thickness: stem.thickness ?? 0.3,
       curvature: stem.curvature ?? 0,
       color: colorToHex(stem.color) ?? 0x2d5a27,
+      style: stem.style ?? "Straight",
     };
   } catch {
     return null;
@@ -844,6 +909,30 @@ function parseFoliage(specJson: string | undefined): ParsedFoliage | null {
 
 // ── Stem generation ──
 
+/** Apply stem style modifiers — returns adjusted curvature, halfWidth, and taperRatio. */
+function stemStyleModifiers(style: string, curvature: number, halfWidth: number): {
+  curvature: number; halfWidth: number; tipRatio: number; segments: number;
+} {
+  switch (style) {
+    case "Arching":
+      return { curvature: Math.max(0.2, curvature + 0.15), halfWidth, tipRatio: 0.45, segments: 2 };
+    case "Sinuous":
+      return { curvature, halfWidth, tipRatio: 0.5, segments: 3 }; // S-curve uses 3 segments
+    case "Zigzag":
+      return { curvature: 0, halfWidth: halfWidth * 0.9, tipRatio: 0.6, segments: 4 }; // angular
+    case "Succulent":
+      return { curvature: curvature * 0.5, halfWidth: halfWidth * 2.2, tipRatio: 0.8, segments: 2 };
+    case "Woody":
+      return { curvature: curvature * 0.7, halfWidth: halfWidth * 1.6, tipRatio: 0.35, segments: 2 };
+    case "Trailing":
+      return { curvature: Math.min(-0.2, curvature - 0.3), halfWidth, tipRatio: 0.55, segments: 2 };
+    case "Twining":
+      return { curvature, halfWidth: halfWidth * 0.85, tipRatio: 0.5, segments: 3 };
+    default: // Straight
+      return { curvature, halfWidth, tipRatio: 0.5, segments: 2 };
+  }
+}
+
 /** Generate a stem outline as a closed path (two parallel bezier curves). */
 function generateStem(
   fromX: number, fromY: number,
@@ -851,7 +940,12 @@ function generateStem(
   curvature: number,
   halfWidth: number,
   _color: number,
+  style?: string,
 ): DrawCmd[] {
+  const mods = stemStyleModifiers(style ?? "Straight", curvature, halfWidth);
+  const effCurvature = mods.curvature;
+  const effHW = mods.halfWidth;
+
   const dx = toX - fromX;
   const dy = toY - fromY;
   const len = Math.sqrt(dx * dx + dy * dy);
@@ -861,14 +955,81 @@ function generateStem(
   const nx = -dy / len;
   const ny = dx / len;
 
-  // Curvature offset at midpoint (lateral bend)
-  const curvOff = curvature * len * 0.3;
+  // ── Sinuous / Twining: S-curve with two midpoints ──
+  if ((style === "Sinuous" || style === "Twining") && len > 0.1) {
+    const sway = style === "Twining" ? len * 0.18 : len * 0.22;
+    const t1 = 0.33, t2 = 0.66;
+    const m1x = fromX + dx * t1 + nx * sway;
+    const m1y = fromY + dy * t1 + ny * sway;
+    const m2x = fromX + dx * t2 - nx * sway;
+    const m2y = fromY + dy * t2 - ny * sway;
+
+    const baseW = effHW;
+    const tipW = effHW * mods.tipRatio;
+    const w1 = baseW * 0.75 + tipW * 0.25;
+    const w2 = baseW * 0.35 + tipW * 0.65;
+
+    // Simplified S-curve: base → m1 → m2 → tip, each side
+    const pts: Vec2[] = [
+      [fromX, fromY], [m1x, m1y], [m2x, m2y], [toX, toY],
+    ];
+    const ws = [baseW, w1, w2, tipW];
+
+    const left = pts.map((p, i) => [p[0] + nx * ws[i]!, p[1] + ny * ws[i]!] as Vec2);
+    const right = pts.map((p, i) => [p[0] - nx * ws[i]!, p[1] - ny * ws[i]!] as Vec2);
+    const leftCmds = smoothCmds(left);
+    const rightCmds = smoothCmds(right.toReversed());
+
+    const cmds: DrawCmd[] = [...leftCmds];
+    if (rightCmds.length > 0 && rightCmds[0]!.op === "M") {
+      cmds.push({ op: "L", x: rightCmds[0]!.x, y: rightCmds[0]!.y });
+      cmds.push(...rightCmds.slice(1));
+    }
+    cmds.push({ op: "Z" });
+    return cmds;
+  }
+
+  // ── Zigzag: angular segments ──
+  if (style === "Zigzag" && len > 0.1) {
+    const segs = 4;
+    const zigAmt = len * 0.08;
+    const pts: Vec2[] = [[fromX, fromY]];
+    for (let i = 1; i < segs; i++) {
+      const t = i / segs;
+      const sign = i % 2 === 1 ? 1 : -1;
+      pts.push([
+        fromX + dx * t + nx * zigAmt * sign,
+        fromY + dy * t + ny * zigAmt * sign,
+      ]);
+    }
+    pts.push([toX, toY]);
+
+    const baseW = effHW;
+    const tipW = effHW * mods.tipRatio;
+    const left = pts.map((p, i) => {
+      const w = baseW + (tipW - baseW) * (i / (pts.length - 1));
+      return [p[0] + nx * w, p[1] + ny * w] as Vec2;
+    });
+    const right = pts.map((p, i) => {
+      const w = baseW + (tipW - baseW) * (i / (pts.length - 1));
+      return [p[0] - nx * w, p[1] - ny * w] as Vec2;
+    });
+
+    // Use line segments for the angular look
+    const cmds: DrawCmd[] = [{ op: "M", x: left[0]![0], y: left[0]![1] }];
+    left.slice(1).map(p => { cmds.push({ op: "L", x: p[0], y: p[1] }); return null; });
+    right.toReversed().map(p => { cmds.push({ op: "L", x: p[0], y: p[1] }); return null; });
+    cmds.push({ op: "Z" });
+    return cmds;
+  }
+
+  // ── Standard stem (Straight, Arching, Woody, Succulent, Trailing) ──
+  const curvOff = effCurvature * len * 0.3;
   const midX = (fromX + toX) / 2 + nx * curvOff;
   const midY = (fromY + toY) / 2 + ny * curvOff;
 
-  // Taper: wider at base, narrower at top
-  const baseW = halfWidth;
-  const tipW = halfWidth * 0.5;
+  const baseW = effHW;
+  const tipW = effHW * mods.tipRatio;
 
   // Left side (base → tip)
   const lb1x = fromX + nx * baseW;
@@ -979,6 +1140,52 @@ const LEAF_PROFILES: Record<string, (t: number) => number> = {
     if (t < 0.12) return 0.5 + (1 - t / 0.12) * 0.4;
     return Math.sin(Math.PI * Math.pow(t, 0.65)) * 0.85;
   },
+
+  // ── v2 leaf shapes ──
+
+  // Reverse egg — widest near tip (~65%)
+  Obovate: (t) => Math.sin(Math.PI * Math.pow(t, 1.4)),
+
+  // Evenly oval — symmetric, widest at center
+  Elliptic: (t) => Math.sin(Math.PI * t) * 0.95,
+
+  // Reverse lance — widest near tip, long basal taper
+  Oblanceolate: (t) => Math.sin(Math.PI * t) * Math.pow(t, 0.3) * 1.05,
+
+  // Triangular — widest at base, straight taper
+  Deltoid: (t) => Math.max(0, 1 - t * 0.9) * Math.sqrt(Math.min(1, t * 6)),
+
+  // Spoon-shaped — narrow stalk, rounded broad tip
+  Spatulate: (t) =>
+    t < 0.35
+      ? (t / 0.35) * 0.25
+      : 0.25 + 0.75 * Math.sin((Math.PI * (t - 0.35)) / 0.65),
+
+  // Round — nearly circular outline
+  Orbicular: (t) => Math.sqrt(Math.max(0, Math.sin(Math.PI * t))) * 1.3,
+
+  // Lyre-shaped — large terminal lobe, smaller basal lobes
+  Lyrate: (t) => {
+    if (t < 0.15) return 0.5 + Math.sin((Math.PI * t) / 0.15) * 0.3;
+    if (t < 0.35) return 0.3 + (t - 0.15) / 0.2 * 0.2;
+    return 0.5 + 0.5 * Math.sin((Math.PI * (t - 0.35)) / 0.65);
+  },
+
+  // Wedge — narrow base, widens steadily to blunt tip
+  Cuneate: (t) =>
+    t < 0.85
+      ? Math.pow(t / 0.85, 1.3) * 0.9
+      : 0.9 * Math.cos((Math.PI * 0.5 * (t - 0.85)) / 0.15),
+
+  // Sickle-shaped — asymmetric curve (handled via the profile + noise)
+  Falcate: (t) => Math.sin(Math.PI * t) * 0.6,
+
+  // Doubly feathered — fern-like with pronounced scallops
+  Bipinnate: (t) => {
+    const base = Math.sin(Math.PI * t) * 0.65;
+    const fronds = 1 + Math.sin(t * Math.PI * 12) * 0.2 * Math.sin(Math.PI * t);
+    return base * fronds;
+  },
 };
 
 function leafProfile(shape: string, t: number): number {
@@ -1000,6 +1207,10 @@ function leafSerration(style: string, t: number, seed: number): number {
       return 1 + (((t * 14 + seed * 0.1) % 1) < 0.5 ? 0.1 : -0.05);
     case "Doubly":
       return 1 + Math.sin(t * 20 + seed) * 0.07 + Math.sin(t * 8 + seed * 2) * 0.1;
+    case "Spinose":
+      return 1 + (((t * 8 + seed * 0.1) % 1) < 0.3 ? 0.18 : -0.02);
+    case "Ciliate":
+      return 1 + Math.sin(t * 40 + seed) * 0.04;
     default:
       return 1;
   }
@@ -1676,12 +1887,14 @@ export function createArrangementPlan(
     const overshoot = 0.06; // push tip 6% of unit radius into the flower head
     const tipX = stemDist > 0.01 ? slot.offsetX + (dx / stemDist) * overshoot : slot.offsetX;
     const tipY = stemDist > 0.01 ? slot.offsetY + (dy / stemDist) * overshoot : slot.offsetY;
+    const stemStyle = stemData?.style ?? "Straight";
     const stemCmds = generateStem(
       0, baseY,
       tipX, tipY,
       stemCurvature,
       stemHalfW,
       stemColor,
+      stemStyle,
     );
 
     const stem: StemPlan = { cmds: stemCmds, color: stemColor };
