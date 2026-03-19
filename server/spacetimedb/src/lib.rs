@@ -489,6 +489,151 @@ pub fn set_name(ctx: &ReducerContext, name: String) -> Result<(), String> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Delete & Split
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[spacetimedb::reducer]
+pub fn delete_session(ctx: &ReducerContext, session_id: u64) -> Result<(), String> {
+    let session = require_session_owner(ctx, session_id)?;
+
+    if session.status == SessionStatus::Ordered {
+        return Err("Cannot delete an ordered session".to_string());
+    }
+
+    // Delete all part overrides for this session
+    let override_ids: Vec<u64> = ctx.db.part_override().iter()
+        .filter(|o| o.session_id == session_id)
+        .map(|o| o.id)
+        .collect();
+    for oid in override_ids {
+        ctx.db.part_override().id().delete(oid);
+    }
+
+    // Delete the flower spec
+    ctx.db.flower_spec().session_id().delete(session_id);
+
+    // Delete any orders
+    let order_ids: Vec<u64> = ctx.db.flower_order().iter()
+        .filter(|o| o.session_id == session_id)
+        .map(|o| o.id)
+        .collect();
+    for oid in order_ids {
+        ctx.db.flower_order().id().delete(oid);
+    }
+
+    // Clear user's current_session_id if it points here
+    if let Some(user) = ctx.db.user().identity().find(ctx.sender()) {
+        if user.current_session_id == Some(session_id) {
+            ctx.db.user().identity().update(User {
+                current_session_id: None,
+                ..user
+            });
+        }
+    }
+
+    // Delete the session itself
+    ctx.db.flower_session().id().delete(session_id);
+
+    log::info!("Deleted session {}", session_id);
+    Ok(())
+}
+
+#[spacetimedb::reducer]
+pub fn split_constituent(ctx: &ReducerContext, session_id: u64, constituent_index: u32) -> Result<(), String> {
+    let session = require_session_owner(ctx, session_id)?;
+
+    if session.status != SessionStatus::Designing {
+        return Err("Session is not in designing state".to_string());
+    }
+
+    // Gather all constituent overrides
+    let mut constituents: Vec<(u64, u32, String, String)> = ctx.db.part_override().iter()
+        .filter(|o| o.session_id == session_id && o.part_path.starts_with("constituent:"))
+        .filter_map(|o| {
+            let idx: u32 = o.part_path.strip_prefix("constituent:")?.parse().ok()?;
+            Some((o.id, idx, o.override_json.clone(), o.forked_from.clone()))
+        })
+        .collect();
+    constituents.sort_by_key(|&(_, idx, _, _)| idx);
+
+    if constituents.len() <= 1 {
+        return Err("Cannot split a single flower".to_string());
+    }
+
+    // Find the constituent to extract
+    let (target_id, _, ref spec_json, _) = *constituents.iter()
+        .find(|&&(_, idx, _, _)| idx == constituent_index)
+        .ok_or_else(|| format!("Constituent {} not found", constituent_index))?;
+
+    let extracted_spec = spec_json.clone();
+
+    // Random canvas position for the new session
+    let x = (ctx.rng().r#gen::<u32>() % 10000) as f64 / 100.0;
+    let y = (ctx.rng().r#gen::<u32>() % 10000) as f64 / 100.0;
+
+    // Create new standalone session with the extracted spec
+    let new_session = ctx.db.flower_session().insert(FlowerSession {
+        id: 0,
+        owner: ctx.sender(),
+        created_at: ctx.timestamp,
+        status: SessionStatus::Designing,
+        prompt: format!("split from #{}", session_id),
+        canvas_x: x,
+        canvas_y: y,
+        arrangement_level: 1,
+        flower_count: 1,
+        generation: 0,
+    });
+
+    ctx.db.flower_spec().insert(FlowerSpec {
+        session_id: new_session.id,
+        spec_json: extracted_spec,
+        version: 0,
+        updated_at: ctx.timestamp,
+    });
+
+    // Remove the constituent from the original session
+    ctx.db.part_override().id().delete(target_id);
+
+    // Re-index remaining constituents
+    let mut remaining: Vec<(u64, u32)> = ctx.db.part_override().iter()
+        .filter(|o| o.session_id == session_id && o.part_path.starts_with("constituent:"))
+        .filter_map(|o| {
+            let idx: u32 = o.part_path.strip_prefix("constituent:")?.parse().ok()?;
+            Some((o.id, idx))
+        })
+        .collect();
+    remaining.sort_by_key(|&(_, idx)| idx);
+
+    for (new_idx, &(oid, _)) in remaining.iter().enumerate() {
+        let existing = ctx.db.part_override().id().find(oid)
+            .ok_or_else(|| "Override disappeared".to_string())?;
+        let new_path = format!("constituent:{new_idx}");
+        if existing.part_path != new_path {
+            ctx.db.part_override().id().update(FlowerPartOverride {
+                part_path: new_path,
+                ..existing
+            });
+        }
+    }
+
+    // Update original session's flower count and arrangement level
+    let new_count = remaining.len() as u32;
+    let new_level = arrangement_level_for_count(new_count);
+    ctx.db.flower_session().id().update(FlowerSession {
+        flower_count: new_count,
+        arrangement_level: new_level,
+        ..session
+    });
+
+    log::info!(
+        "Split constituent {} from session {} → new session {} ({} remaining)",
+        constituent_index, session_id, new_session.id, new_count
+    );
+    Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Merge & Fitness
 // ═══════════════════════════════════════════════════════════════════════════
 
