@@ -138,6 +138,11 @@ function coolShift(color: number): number {
   return (r << 16) | (g << 8) | b;
 }
 
+/** Convert an { r, g, b } object (0–1 range) to a packed hex color number. */
+function rgbToNumber(c: { r: number; g: number; b: number }): number {
+  return colorFromSpec(c.r, c.g, c.b);
+}
+
 /** Convert a hex color number to a CSS hex string. */
 export function hexString(color: number): string {
   return `#${color.toString(16).padStart(6, "0")}`;
@@ -1530,10 +1535,10 @@ function extractAdornmentColors(
   // Phase 2: structured spec colors take priority
   if (meta.adornment_spec) {
     const spec = meta.adornment_spec;
-    const rawMain = colorFromSpec(spec.container.color.r, spec.container.color.g, spec.container.color.b);
+    const rawMain = rgbToNumber(spec.container.color);
     const materialMod = MATERIAL_MODIFIERS[spec.container.material];
     const main = materialMod ? materialMod.colorAdjust(rawMain) : rawMain;
-    const accent = colorFromSpec(spec.accent.color.r, spec.accent.color.g, spec.accent.color.b);
+    const accent = rgbToNumber(spec.accent.color);
     return { main, accent };
   }
 
@@ -1569,7 +1574,7 @@ function applyMaterialOpacity(plan: AdornmentPlan, opacityMul: number): Adornmen
 
 type AdornmentGenerator = (baseY: number, colors?: { main: number; accent: number }) => AdornmentPlan;
 
-const CONTAINER_GENERATORS: Record<string, AdornmentGenerator> = {
+const CONTAINER_GENERATORS: Record<AdornmentSpec["container"]["type"], AdornmentGenerator> = {
   tie: generateTieAdornment,
   wrap: generateWrapAdornment,
   basket: generateBasketAdornment,
@@ -1587,8 +1592,7 @@ function generateAdornmentFromSpec(baseY: number, spec: AdornmentSpec): Adornmen
 
   // Layer on a base if specified
   if (spec.base && spec.base.type !== "none") {
-    const { r, g, b } = spec.base.color;
-    const baseColor = colorFromSpec(r, g, b);
+    const baseColor = rgbToNumber(spec.base.color);
     const baseColors = { main: baseColor, accent: lightenColor(baseColor, 0.1) };
     const basePlan = generatePedestalAdornment(baseY, baseColors);
     return applyMaterialOpacity({
