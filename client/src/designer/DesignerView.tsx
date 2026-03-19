@@ -14,9 +14,37 @@ import type { FlowerCanvasHandle } from "./FlowerCanvas.tsx";
 import { loadWasm, type GardenSim } from "../wasm/loader.ts";
 import { startLoop, stopLoop } from "../wasm/loop.ts";
 import { wireToWasm, handleMerge, getCanvasViewport } from "../spacetime/bridge.ts";
-import type { FlowerSession } from "../spacetime/types.ts";
+import type { FlowerSession, FlowerPartOverride } from "../spacetime/types.ts";
 import { isVariant } from "../spacetime/types.ts";
 import { parseArrangementMeta } from "../flower/render.ts";
+
+/** Merge field-level part overrides (e.g. "structure.stem.height") into a spec JSON string. */
+function applyFieldOverrides(specJson: string, overrides: FlowerPartOverride[]): string {
+  // Filter to field overrides only (skip constituent:* and arrangement)
+  const fieldOverrides = overrides.filter(
+    o => !o.partPath.startsWith("constituent:") && o.partPath !== "arrangement",
+  );
+  if (fieldOverrides.length === 0) return specJson;
+
+  const spec = JSON.parse(specJson) as Record<string, unknown>;
+
+  for (const o of fieldOverrides) {
+    const keys = o.partPath.split(".");
+    let target: Record<string, unknown> = spec;
+    for (let i = 0; i < keys.length - 1; i++) {
+      const k = keys[i]!;
+      if (target[k] == null || typeof target[k] !== "object") {
+        target[k] = {};
+      }
+      target = target[k] as Record<string, unknown>;
+    }
+    // Parse as number if possible, otherwise use raw string
+    const num = Number(o.overrideJson);
+    target[keys[keys.length - 1]!] = Number.isNaN(num) ? o.overrideJson : num;
+  }
+
+  return JSON.stringify(spec);
+}
 
 interface DesignerViewProps {
   onBackToGrid: () => void;
@@ -52,8 +80,8 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
   sessionsRef.current = mySessions;
 
   // Streaming state: track multiple concurrent generations by genId
-  // Each entry: { sid: resolved session ID | null, spec: latest streamed spec, preCount: session count before creation }
-  const streamingRef = useRef<Map<string, { sid: number | null; spec: string | null; preCount: number }>>(new Map());
+  // Each entry: { sid, spec, preCount, lastPushedSpec (last spec sent to SpacetimeDB) }
+  const streamingRef = useRef<Map<string, { sid: number | null; spec: string | null; preCount: number; lastPushedSpec: string | null }>>(new Map());
   const genCounter = useRef(0);
 
   // Push spec data to canvas whenever specs update, merging any streaming specs.
@@ -91,8 +119,23 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
         specMap.set(entry.sid, entry.spec);
       }
     }
+    // Merge field-level part overrides into each spec
+    const overridesBySid = partOverrides.reduce<Map<number, FlowerPartOverride[]>>(
+      (acc, o) => {
+        const sid = Number(o.sessionId);
+        acc.set(sid, [...(acc.get(sid) ?? []), o]);
+        return acc;
+      },
+      new Map(),
+    );
+    for (const [sid, specJson] of specMap) {
+      const sidOverrides = overridesBySid.get(sid);
+      if (sidOverrides) {
+        specMap.set(sid, applyFieldOverrides(specJson, sidOverrides));
+      }
+    }
     canvasRef.current?.setSpecMap(specMap);
-  }, [specs, mySessions.length]);
+  }, [specs, mySessions.length, partOverrides]);
 
   // Push constituent data and arrangement metadata to canvas for arrangement rendering
   useEffect(() => {
@@ -181,6 +224,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
       sid: null,
       spec: null,
       preCount: sessionsRef.current.length,
+      lastPushedSpec: null,
     });
     conn?.reducers.createSession({ prompt });
     return genId;
@@ -205,7 +249,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     return null;
   }, []);
 
-  // Phase 2: Push partial spec to canvas as YAML streams in
+  // Phase 2: Push partial spec to canvas + SpacetimeDB as YAML streams in
   const handleSpecProgress = useCallback((genId: string, specJson: string) => {
     const entry = streamingRef.current.get(genId);
     if (!entry) return;
@@ -215,7 +259,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
 
     if (entry.sid === null) return; // SID not yet available, spec is buffered
 
-    // Push directly to canvas for immediate visual feedback
+    // Push directly to canvas for immediate local feedback
     const specMap = specsRef.current.reduce<Map<number, string>>(
       (acc, s) => acc.set(Number(s.sessionId), s.specJson),
       new Map(),
@@ -224,16 +268,18 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
       if (e.sid !== null && e.spec) specMap.set(e.sid, e.spec);
     }
     canvasRef.current?.setSpecMap(specMap);
-  }, [resolveStreamingSid]);
 
-  // Phase 3: Persist final spec to SpacetimeDB
-  const handleFlowerGenerated = useCallback((genId: string, specJson: string) => {
-    const entry = streamingRef.current.get(genId);
-    if (entry?.sid !== null && entry?.sid !== undefined) {
+    // Push to SpacetimeDB so other players see it streaming live (skip if unchanged)
+    if (specJson !== entry.lastPushedSpec) {
+      entry.lastPushedSpec = specJson;
       conn?.reducers.updateFlowerSpec({ sessionId: BigInt(entry.sid), specJson });
     }
+  }, [resolveStreamingSid, conn]);
+
+  // Phase 3: Clean up streaming state (final spec already persisted via Phase 2)
+  const handleFlowerGenerated = useCallback((genId: string, _specJson: string) => {
     streamingRef.current.delete(genId);
-  }, [conn]);
+  }, []);
 
   // Cleanup: delete the orphaned session when streaming fails
   const handleGenerationFailed = useCallback((genId: string) => {
