@@ -11,7 +11,7 @@ import type {
   ChatMessage,
 } from "./types.ts";
 
-export function useSpacetimeDB() {
+export function useSpacetimeDB(oidcToken?: string) {
   const [state, setState] = useState<ConnectionState>("disconnected");
   const [conn, setConn] = useState<DbConnection | null>(getConnection());
 
@@ -20,11 +20,11 @@ export function useSpacetimeDB() {
       setState(s);
       setConn(c);
     });
-    connect().catch(() => {});
+    connect(oidcToken).catch(() => {});
     return () => {
       unsub();
     };
-  }, []);
+  }, [oidcToken]);
 
   return { state, conn };
 }
@@ -81,10 +81,3 @@ export function usePartOverrides(conn: DbConnection | null) {
 }
 
 
-export function useMyIdentity(_conn: DbConnection | null): string | null {
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("spacetimedb_token")
-      : null;
-  return token ? "self" : null;
-}

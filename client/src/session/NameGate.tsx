@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { useAuth } from "react-oidc-context";
 import { useSession } from "./SessionProvider.tsx";
 
 interface NameGateProps {
@@ -6,13 +7,12 @@ interface NameGateProps {
 }
 
 /**
- * Gates the app behind a name prompt for anonymous users.
- * SpacetimeDB auto-generates an identity on first connect, but the User row
- * starts with name: null. This component prompts for a display name before
- * letting the user through to the grid.
+ * Gates the app behind a name prompt.
+ * Users can enter a name anonymously or sign in via SpacetimeAuth.
  */
 export function NameGate({ children }: NameGateProps) {
   const { state, conn, myUser } = useSession();
+  const auth = useAuth();
   const [draft, setDraft] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,21 +20,12 @@ export function NameGate({ children }: NameGateProps) {
   // Show connection status while waiting
   if (state !== "connected" || !conn) {
     return (
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#0a0a0a",
-          color: "#525252",
-          fontSize: "0.8125rem",
-        }}
-      >
-        {state === "connecting"
-          ? "Connecting to SpacetimeDB..."
-          : "Not connected — start SpacetimeDB and refresh"}
+      <div style={centerStyle}>
+        <span style={{ color: "#525252", fontSize: "0.8125rem" }}>
+          {state === "connecting"
+            ? "Connecting to SpacetimeDB..."
+            : "Not connected — start SpacetimeDB and refresh"}
+        </span>
       </div>
     );
   }
@@ -52,22 +43,11 @@ export function NameGate({ children }: NameGateProps) {
     setSubmitting(true);
     setError(null);
     conn.reducers.setName({ name: trimmed });
-    // The User table will update via subscription — SessionProvider re-derives myUser
-    // Give it a moment to propagate
     setTimeout(() => setSubmitting(false), 500);
   };
 
   return (
-    <div
-      style={{
-        width: "100%",
-        height: "100%",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "#0a0a0a",
-      }}
-    >
+    <div style={centerStyle}>
       <div
         style={{
           display: "flex",
@@ -142,7 +122,41 @@ export function NameGate({ children }: NameGateProps) {
         {error && (
           <p style={{ fontSize: "0.75rem", color: "#f87171" }}>{error}</p>
         )}
+
+        {!auth.isAuthenticated && (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", width: "100%" }}>
+              <div style={{ flex: 1, height: 1, background: "#333" }} />
+              <span style={{ fontSize: "0.6875rem", color: "#525252" }}>or</span>
+              <div style={{ flex: 1, height: 1, background: "#333" }} />
+            </div>
+            <button
+              onClick={() => auth.signinRedirect()}
+              style={{
+                width: "100%",
+                padding: "0.5rem 1rem",
+                background: "transparent",
+                border: "1px solid #333",
+                borderRadius: "0.25rem",
+                color: "#737373",
+                fontSize: "0.8125rem",
+                cursor: "pointer",
+              }}
+            >
+              Sign in with SpacetimeAuth
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
 }
+
+const centerStyle: React.CSSProperties = {
+  width: "100%",
+  height: "100%",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "#0a0a0a",
+};

@@ -4,7 +4,6 @@ const SPACETIMEDB_URI =
   import.meta.env.VITE_SPACETIMEDB_URI ?? "ws://localhost:9300";
 const SPACETIMEDB_MODULE =
   import.meta.env.VITE_SPACETIMEDB_MODULE ?? "flower-picker";
-const TOKEN_KEY = "spacetimedb_token";
 
 let connection: DbConnection | null = null;
 let myIdentity: unknown = null;
@@ -41,7 +40,32 @@ export function getConnection(): DbConnection | null {
   return connection;
 }
 
-export async function connect(): Promise<DbConnection> {
+const ANON_TOKEN_KEY = "spacetimedb_token";
+const ANON_IDENTITY_KEY = "spacetimedb_anon_identity";
+
+/** Get the saved anonymous identity hex (for claiming after OIDC sign-in). */
+export function getSavedAnonIdentityHex(): string | null {
+  return localStorage.getItem(ANON_IDENTITY_KEY);
+}
+
+/** Clear the saved anonymous identity after a successful claim. */
+export function clearSavedAnonIdentity(): void {
+  localStorage.removeItem(ANON_IDENTITY_KEY);
+  localStorage.removeItem(ANON_TOKEN_KEY);
+}
+
+/** Disconnect the current connection so we can reconnect with a different token. */
+export function disconnect(): void {
+  if (connection) {
+    connection.disconnect();
+    connection = null;
+    connectPromise = null;
+    myIdentity = null;
+    notify("disconnected", null);
+  }
+}
+
+export async function connect(oidcToken?: string): Promise<DbConnection> {
   if (connection) return connection;
   if (connectPromise) return connectPromise;
 
@@ -51,18 +75,27 @@ export async function connect(): Promise<DbConnection> {
   connectPromise = (async () => {
     try {
       const mod = await import("./module_bindings/index.ts");
-      const savedToken = localStorage.getItem(TOKEN_KEY) ?? undefined;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- SDK builder API varies by version
       const builder = mod.DbConnection.builder() as any
+      // Use OIDC token if signed in, otherwise fall back to saved anonymous token
+      const token = oidcToken ?? localStorage.getItem(ANON_TOKEN_KEY) ?? undefined;
+
       const conn = builder
         .withUri(SPACETIMEDB_URI)
         .withDatabaseName(SPACETIMEDB_MODULE)
-        .withToken(savedToken)
+        .withToken(token)
         .onConnect((...args: unknown[]) => {
           myIdentity = args[1]; // SpacetimeDB identity (args: ctx, identity, token)
-          const token = args[2] as string | undefined;
-          if (token) localStorage.setItem(TOKEN_KEY, token);
+          if (!oidcToken) {
+            // Persist anonymous token + identity for session continuity and future claim
+            const newToken = args[2] as string | undefined;
+            if (newToken) localStorage.setItem(ANON_TOKEN_KEY, newToken);
+            const identityHex = String(myIdentity);
+            if (identityHex && !identityHex.startsWith("[object")) {
+              localStorage.setItem(ANON_IDENTITY_KEY, identityHex);
+            }
+          }
           connection = conn as DbConnection;
 
           // Subscribe to all tables — defer "connected" until cache is populated
