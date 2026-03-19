@@ -10,6 +10,7 @@ import {
   createArrangementPlan,
   type FlowerPlan,
   type ArrangementPlan,
+  type ArrangementMeta,
   type AdornmentPlan,
   type DrawCmd,
 } from "../flower/render.ts";
@@ -24,6 +25,8 @@ export interface FlowerCanvasHandle {
   setSpecMap(specs: Map<number, string>): void;
   /** Update the constituent map (sid → array of constituent specs) for arrangements. */
   setConstituentMap(constituents: Map<number, ConstituentEntry[]>): void;
+  /** Update the arrangement metadata map (sid → AI-generated arrangement meta). */
+  setArrangementMetaMap(meta: Map<number, ArrangementMeta>): void;
 }
 
 interface FlowerCanvasProps {
@@ -253,9 +256,10 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const mergeTargetRef = useRef<{ dragSid: number; targetSid: number; distance: number } | null>(null);
     const mergeOverlayRef = useRef<Graphics | null>(null);
 
-    // Spec map, constituent map, and cached plans
+    // Spec map, constituent map, arrangement meta, and cached plans
     const specMapRef = useRef<Map<number, string>>(new Map());
     const constituentMapRef = useRef<Map<number, ConstituentEntry[]>>(new Map());
+    const arrangementMetaMapRef = useRef<Map<number, ArrangementMeta>>(new Map());
     const planCacheRef = useRef<Map<number, { key: string; plan: FlowerPlan | ArrangementPlan; isArrangement: boolean }>>(new Map());
 
     // Keep refs in sync without re-running effects
@@ -268,11 +272,13 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const getPlan = useCallback((sid: number): { plan: FlowerPlan | ArrangementPlan; isArrangement: boolean } => {
       const specJson = specMapRef.current.get(sid) ?? "";
       const constituents = constituentMapRef.current.get(sid);
+      const meta = arrangementMetaMapRef.current.get(sid);
       const isArrangement = !!constituents && constituents.length > 1;
 
-      // Cache key includes constituent count so arrangement changes invalidate
+      // Cache key includes constituent count + meta so arrangement changes invalidate
+      const metaKey = meta ? JSON.stringify(meta) : "";
       const cacheKey = isArrangement
-        ? `arr:${constituents.length}:${constituents.map(c => c.specJson).join("|")}`
+        ? `arr:${constituents.length}:${constituents.map(c => c.specJson).join("|")}:${metaKey}`
         : specJson;
 
       const cached = planCacheRef.current.get(sid);
@@ -282,7 +288,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
 
       // Cache miss — recompute
       if (isArrangement) {
-        const plan = createArrangementPlan(constituents, Math.min(7, Math.ceil(constituents.length / 3)));
+        const plan = createArrangementPlan(constituents, Math.min(7, Math.ceil(constituents.length / 3)), meta);
         planCacheRef.current.set(sid, { key: cacheKey, plan, isArrangement: true });
         return { plan, isArrangement: true };
       }
@@ -298,6 +304,14 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
 
     const setConstituentMap = useCallback((constituents: Map<number, ConstituentEntry[]>) => {
       constituentMapRef.current = constituents;
+    }, []);
+
+    const setArrangementMetaMap = useCallback((meta: Map<number, ArrangementMeta>) => {
+      arrangementMetaMapRef.current = meta;
+      // Invalidate cached arrangement plans so they pick up new meta
+      planCacheRef.current.forEach((_, sid) => {
+        if (constituentMapRef.current.has(sid)) planCacheRef.current.delete(sid);
+      });
     }, []);
 
     const updateFlowers = useCallback(
@@ -426,10 +440,11 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
       [onFlowerClick, getPlan],
     );
 
-    useImperativeHandle(ref, () => ({ updateFlowers, setSpecMap, setConstituentMap }), [
+    useImperativeHandle(ref, () => ({ updateFlowers, setSpecMap, setConstituentMap, setArrangementMetaMap }), [
       updateFlowers,
       setSpecMap,
       setConstituentMap,
+      setArrangementMetaMap,
     ]);
 
     useEffect(() => {

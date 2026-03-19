@@ -76,7 +76,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     canvasRef.current?.setSpecMap(specMap);
   }, [specs, mySessions.length]);
 
-  // Push constituent data to canvas for arrangement rendering
+  // Push constituent data and arrangement metadata to canvas for arrangement rendering
   useEffect(() => {
     const constituentMap = partOverrides
       .filter(o => o.partPath.startsWith("constituent:"))
@@ -89,6 +89,18 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
         return acc;
       }, new Map());
     canvasRef.current?.setConstituentMap(constituentMap);
+
+    // Extract arrangement metadata (AI-generated adornment info)
+    const arrangementMetaMap = partOverrides
+      .filter(o => o.partPath === "arrangement")
+      .reduce<Map<number, Record<string, unknown>>>((acc, o) => {
+        try {
+          const parsed = JSON.parse(o.overrideJson);
+          acc.set(Number(o.sessionId), parsed);
+        } catch { /* skip unparseable */ }
+        return acc;
+      }, new Map());
+    canvasRef.current?.setArrangementMetaMap(arrangementMetaMap as Map<number, import("../flower/render.ts").ArrangementMeta>);
   }, [partOverrides]);
 
   useEffect(() => {
