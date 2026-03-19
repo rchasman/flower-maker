@@ -7,7 +7,7 @@
       "routePrefix": "/"
     },
     "api": {
-      "entrypoint": "api",
+      "entrypoint": "api/index.ts",
       "routePrefix": "/api"
     }
   }
