@@ -1,4 +1,6 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "bunVersion": "1.x",
   "experimentalServices": {
     "client": {
       "entrypoint": "client",
@@ -7,11 +9,6 @@
     "api": {
       "entrypoint": "api",
       "routePrefix": "/api"
-    }
-  },
-  "functions": {
-    "api/**": {
-      "runtime": "bun@1"
     }
   }
 }
