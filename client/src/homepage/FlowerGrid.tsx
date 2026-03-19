@@ -68,6 +68,7 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
       allSessions: sessionsByOwner.get(String(user.identity)) ?? [],
       isYours: String(user.identity) === identityHex,
     }))
+    .filter(z => z.allSessions.length > 0 || z.isYours)
     .sort((a, b) => {
       // "Your Zone" always first
       if (a.isYours) return -1;
@@ -126,12 +127,12 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
         </div>
       </header>
 
-      {/* Grid */}
+      {/* Grid — cells expand to fill the screen, shrink as more zones appear */}
       <div
         style={{
           flex: 1,
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+          gridTemplateColumns: `repeat(${Math.ceil(Math.sqrt(zones.length || 1))}, 1fr)`,
           gap: "0px",
           padding: "0px",
           overflow: "auto",
