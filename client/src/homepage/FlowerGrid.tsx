@@ -47,10 +47,10 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
     }, new Map()), [partOverrides]);
 
   // Build a spec lookup by sessionId for O(1) access
-  const specBySessionId = specs.reduce<Map<string, FlowerSpec>>(
+  const specBySessionId = useMemo(() => specs.reduce<Map<string, FlowerSpec>>(
     (acc, s) => acc.set(String(s.sessionId), s),
     new Map(),
-  );
+  ), [specs]);
 
   // Group all "Designing" sessions by owner
   const sessionsByOwner = sessions
