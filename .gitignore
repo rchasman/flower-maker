@@ -7,5 +7,10 @@ dist/
 .env.local
 .env*.local
 
-*.wasm
-client/src/wasm/pkg/
+# WASM pkg is committed for Vercel builds (no Rust toolchain in CI)
+# Rebuild locally with: cargo build + wasm-bindgen
+!client/src/wasm/pkg/
+.vercel
+
+# Rust build artifacts (not WASM output)
+*.rlib
