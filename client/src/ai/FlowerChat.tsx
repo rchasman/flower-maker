@@ -3,9 +3,9 @@ import { readStreamWithProgress } from "../lib/utils.ts";
 import { parse as parseYaml } from "yaml";
 
 interface FlowerChatProps {
-  onGenerationStart?: (prompt: string) => void;
-  onSpecProgress?: (specJson: string) => void;
-  onFlowerGenerated?: (specJson: string) => void;
+  onGenerationStart?: (prompt: string) => string;
+  onSpecProgress?: (genId: string, specJson: string) => void;
+  onFlowerGenerated?: (genId: string, specJson: string) => void;
 }
 
 function yamlToJson(raw: string): { specJson: string; name: string } {
@@ -34,7 +34,7 @@ function tryParseYamlToJson(raw: string): string | null {
 export function FlowerChat({ onGenerationStart, onSpecProgress, onFlowerGenerated }: FlowerChatProps) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMsg[]>([]);
-  const [isStreaming, setIsStreaming] = useState(false);
+  const [activeCount, setActiveCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -46,11 +46,13 @@ export function FlowerChat({ onGenerationStart, onSpecProgress, onFlowerGenerate
 
   const handleSubmit = async () => {
     const text = input.trim();
-    if (!text || isStreaming) return;
+    if (!text) return;
 
     setInput("");
     setMessages(prev => [...prev, { role: "user", content: text }]);
-    setIsStreaming(true);
+    setActiveCount(c => c + 1);
+    // Capture the message index for this generation's status line
+    const msgIdx = { current: -1 };
 
     try {
       const res = await fetch("/api/flower/generate", {
@@ -67,32 +69,31 @@ export function FlowerChat({ onGenerationStart, onSpecProgress, onFlowerGenerate
         return;
       }
 
-      setMessages(prev => [...prev, { role: "assistant", content: "Generating..." }]);
-      onGenerationStart?.(text);
+      setMessages(prev => {
+        msgIdx.current = prev.length;
+        return [...prev, { role: "assistant", content: "Generating..." }];
+      });
+      const genId = onGenerationStart?.(text) ?? "";
 
       const raw = await readStreamWithProgress(res, accumulated => {
         const specJson = tryParseYamlToJson(accumulated);
-        if (specJson) onSpecProgress?.(specJson);
+        if (specJson) onSpecProgress?.(genId, specJson);
       });
 
       const { specJson, name } = yamlToJson(raw);
 
-      setMessages(prev => {
-        const updated = [...prev];
-        const last = updated[updated.length - 1];
-        if (last)
-          updated[updated.length - 1] = { ...last, content: `Created ${name}` };
-        return updated;
-      });
+      setMessages(prev =>
+        prev.map((m, i) => i === msgIdx.current ? { ...m, content: `Created ${name}` } : m),
+      );
 
-      onFlowerGenerated?.(specJson);
+      onFlowerGenerated?.(genId, specJson);
     } catch (err) {
       setMessages(prev => [
         ...prev,
         { role: "assistant", content: `Error: ${String(err)}` },
       ]);
     } finally {
-      setIsStreaming(false);
+      setActiveCount(c => c - 1);
     }
   };
 
@@ -160,7 +161,7 @@ export function FlowerChat({ onGenerationStart, onSpecProgress, onFlowerGenerate
               color: msg.role === "user" ? "#c4c4f0" : "#a3a3a3",
             }}
           >
-            {msg.content || (isStreaming ? "..." : "")}
+            {msg.content || (activeCount > 0 ? "..." : "")}
           </div>
         ))}
       </div>
@@ -183,7 +184,6 @@ export function FlowerChat({ onGenerationStart, onSpecProgress, onFlowerGenerate
             }
           }}
           placeholder="A bioluminescent orchid with frost aura..."
-          disabled={isStreaming}
           style={{
             flex: 1,
             padding: "0.5rem 0.75rem",
@@ -197,18 +197,18 @@ export function FlowerChat({ onGenerationStart, onSpecProgress, onFlowerGenerate
         />
         <button
           onClick={handleSubmit}
-          disabled={isStreaming || !input.trim()}
+          disabled={!input.trim()}
           style={{
             padding: "0.5rem 1rem",
-            background: isStreaming ? "#1a1a1a" : "#262626",
+            background: "#262626",
             border: "none",
             borderRadius: "0.25rem",
             color: "#e5e5e5",
-            cursor: isStreaming ? "wait" : "pointer",
+            cursor: "pointer",
             fontSize: "0.8125rem",
           }}
         >
-          {isStreaming ? "..." : "Generate"}
+          {activeCount > 0 ? `Generate (${activeCount})` : "Generate"}
         </button>
       </div>
     </div>

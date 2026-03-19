@@ -48,20 +48,33 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
   const sessionsRef = useRef(mySessions);
   sessionsRef.current = mySessions;
 
-  // Streaming state: SID of the flower currently being generated
-  const streamingSidRef = useRef<number | null>(null);
-  const streamingSpecRef = useRef<string | null>(null);
-  const preStreamSessionCountRef = useRef(0);
+  // Streaming state: track multiple concurrent generations by genId
+  // Each entry: { sid: resolved session ID | null, spec: latest streamed spec, preCount: session count before creation }
+  const streamingRef = useRef<Map<string, { sid: number | null; spec: string | null; preCount: number }>>(new Map());
+  const genCounter = useRef(0);
 
-  // Push spec data to canvas whenever specs update, merging any streaming spec.
-  // Also resolves the streaming SID when the session first appears from SpacetimeDB,
-  // flushing any buffered spec that arrived before the round-trip completed.
+  // Push spec data to canvas whenever specs update, merging any streaming specs.
+  // Also resolves streaming SIDs when sessions first appear from SpacetimeDB.
   useEffect(() => {
-    // Resolve streaming SID if we have buffered spec but no SID yet
-    if (streamingSidRef.current === null && streamingSpecRef.current) {
-      if (sessionsRef.current.length > preStreamSessionCountRef.current) {
-        const newest = sessionsRef.current[sessionsRef.current.length - 1]!;
-        streamingSidRef.current = Number(newest.id);
+    // Resolve unresolved streaming SIDs — match each to the Nth new session since its preCount
+    const currentSessions = sessionsRef.current;
+    for (const entry of streamingRef.current.values()) {
+      if (entry.sid === null && entry.spec) {
+        if (currentSessions.length > entry.preCount) {
+          // Find the first unresolved session (not claimed by another stream)
+          const claimedSids = new Set(
+            [...streamingRef.current.values()]
+              .filter(e => e.sid !== null)
+              .map(e => e.sid!),
+          );
+          const unclaimed = currentSessions.filter(
+            s => Number(s.id) > 0 && !claimedSids.has(Number(s.id)),
+          );
+          // Take the newest unclaimed session that appeared after preCount
+          if (unclaimed.length > 0) {
+            entry.sid = Number(unclaimed[unclaimed.length - 1]!.id);
+          }
+        }
       }
     }
 
@@ -69,9 +82,11 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
       (acc, s) => acc.set(Number(s.sessionId), s.specJson),
       new Map(),
     );
-    // Overlay streaming spec so it isn't clobbered by the empty "{}" from SpacetimeDB
-    if (streamingSidRef.current !== null && streamingSpecRef.current) {
-      specMap.set(streamingSidRef.current, streamingSpecRef.current);
+    // Overlay all streaming specs so they aren't clobbered by empty "{}" from SpacetimeDB
+    for (const entry of streamingRef.current.values()) {
+      if (entry.sid !== null && entry.spec) {
+        specMap.set(entry.sid, entry.spec);
+      }
     }
     canvasRef.current?.setSpecMap(specMap);
   }, [specs, mySessions.length]);
@@ -155,26 +170,42 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     conn?.reducers.updatePosition({ sessionId: BigInt(sid), x: nx, y: ny });
   }, [conn]);
 
-  // ── Streaming generation handlers ──
+  // ── Streaming generation handlers (support concurrent generation) ──
 
-  // Phase 1: Create session immediately so the flower body appears on canvas
-  const handleGenerationStart = useCallback((prompt: string) => {
-    preStreamSessionCountRef.current = sessionsRef.current.length;
-    streamingSidRef.current = null;
-    streamingSpecRef.current = null;
+  // Phase 1: Create session immediately, return genId for tracking
+  const handleGenerationStart = useCallback((prompt: string): string => {
+    const genId = `gen-${++genCounter.current}-${Date.now()}`;
+    streamingRef.current.set(genId, {
+      sid: null,
+      spec: null,
+      preCount: sessionsRef.current.length,
+    });
     conn?.reducers.createSession({ prompt });
+    return genId;
   }, [conn]);
 
   // Phase 2: Push partial spec to canvas as YAML streams in
-  const handleSpecProgress = useCallback((specJson: string) => {
-    // Always buffer the latest spec (even before session appears from SpacetimeDB)
-    streamingSpecRef.current = specJson;
+  const handleSpecProgress = useCallback((genId: string, specJson: string) => {
+    const entry = streamingRef.current.get(genId);
+    if (!entry) return;
 
-    // Try to detect the new session (appears after createSession round-trip)
-    if (streamingSidRef.current === null) {
-      if (sessionsRef.current.length <= preStreamSessionCountRef.current) return;
-      const newest = sessionsRef.current[sessionsRef.current.length - 1]!;
-      streamingSidRef.current = Number(newest.id);
+    entry.spec = specJson;
+
+    // Try to resolve SID if not yet matched
+    if (entry.sid === null) {
+      const claimedSids = new Set(
+        [...streamingRef.current.values()]
+          .filter(e => e.sid !== null)
+          .map(e => e.sid!),
+      );
+      const unclaimed = sessionsRef.current.filter(
+        s => !claimedSids.has(Number(s.id)),
+      );
+      if (unclaimed.length > 0 && sessionsRef.current.length > entry.preCount) {
+        entry.sid = Number(unclaimed[unclaimed.length - 1]!.id);
+      } else {
+        return; // SID not yet available, spec is buffered
+      }
     }
 
     // Push directly to canvas for immediate visual feedback
@@ -182,18 +213,19 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
       (acc, s) => acc.set(Number(s.sessionId), s.specJson),
       new Map(),
     );
-    specMap.set(streamingSidRef.current, specJson);
+    for (const e of streamingRef.current.values()) {
+      if (e.sid !== null && e.spec) specMap.set(e.sid, e.spec);
+    }
     canvasRef.current?.setSpecMap(specMap);
   }, []);
 
   // Phase 3: Persist final spec to SpacetimeDB
-  const handleFlowerGenerated = useCallback((specJson: string) => {
-    const sid = streamingSidRef.current;
-    if (sid !== null) {
-      conn?.reducers.updateFlowerSpec({ sessionId: BigInt(sid), specJson });
+  const handleFlowerGenerated = useCallback((genId: string, specJson: string) => {
+    const entry = streamingRef.current.get(genId);
+    if (entry?.sid !== null && entry?.sid !== undefined) {
+      conn?.reducers.updateFlowerSpec({ sessionId: BigInt(entry.sid), specJson });
     }
-    streamingSidRef.current = null;
-    streamingSpecRef.current = null;
+    streamingRef.current.delete(genId);
   }, [conn]);
 
   return (

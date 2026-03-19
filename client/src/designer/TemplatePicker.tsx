@@ -6,9 +6,9 @@ import { parse as parseYaml } from "yaml";
 
 interface TemplatePickerProps {
   conn: DbConnection | null;
-  onGenerationStart: (prompt: string) => void;
-  onSpecProgress: (specJson: string) => void;
-  onFlowerGenerated: (specJson: string) => void;
+  onGenerationStart: (prompt: string) => string;
+  onSpecProgress: (genId: string, specJson: string) => void;
+  onFlowerGenerated: (genId: string, specJson: string) => void;
 }
 
 function tryParseYamlToJson(raw: string): string | null {
@@ -22,7 +22,7 @@ function tryParseYamlToJson(raw: string): string | null {
 
 export function TemplatePicker({ conn, onGenerationStart, onSpecProgress, onFlowerGenerated }: TemplatePickerProps) {
   const [search, setSearch] = useState("");
-  const [generating, setGenerating] = useState<string | null>(null);
+  const [generatingSet, setGeneratingSet] = useState<Set<string>>(new Set());
   const groups = templatesByCategory();
 
   const lowerSearch = search.toLowerCase();
@@ -40,9 +40,9 @@ export function TemplatePicker({ conn, onGenerationStart, onSpecProgress, onFlow
     .filter(g => g.templates.length > 0);
 
   const handleTemplateClick = async (t: TemplateInfo) => {
-    if (!conn || generating) return;
-    setGenerating(t.name);
-    onGenerationStart(t.name);
+    if (!conn) return;
+    setGeneratingSet(prev => new Set([...prev, t.name]));
+    const genId = onGenerationStart(t.name);
     try {
       const res = await fetch("/api/flower/generate", {
         method: "POST",
@@ -52,12 +52,16 @@ export function TemplatePicker({ conn, onGenerationStart, onSpecProgress, onFlow
       if (!res.ok || !res.body) return;
       const raw = await readStreamWithProgress(res, accumulated => {
         const specJson = tryParseYamlToJson(accumulated);
-        if (specJson) onSpecProgress(specJson);
+        if (specJson) onSpecProgress(genId, specJson);
       });
       const specJson = tryParseYamlToJson(raw) ?? "{}";
-      onFlowerGenerated(specJson);
+      onFlowerGenerated(genId, specJson);
     } finally {
-      setGenerating(null);
+      setGeneratingSet(prev => {
+        const next = new Set(prev);
+        next.delete(t.name);
+        return next;
+      });
     }
   };
 
@@ -125,8 +129,8 @@ export function TemplatePicker({ conn, onGenerationStart, onSpecProgress, onFlow
                 <TemplateRow
                   key={t.name}
                   template={t}
-                  disabled={!conn || generating !== null}
-                  generating={generating === t.name}
+                  disabled={!conn}
+                  generating={generatingSet.has(t.name)}
                   onClick={() => { void handleTemplateClick(t); }}
                 />
               ))}
