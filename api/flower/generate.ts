@@ -12,6 +12,7 @@ structure:
     height: 0.5
     thickness: 0.3
     curvature: 0.1
+    style: Straight
     color: { r: 0.1, g: 0.5, b: 0.2, a: 1.0 }
   sepals:
     - shape: Lanceolate
@@ -80,17 +81,19 @@ reproductive:
       sway: 0.3
 
 ENUM VALUES (use exact strings):
-- shape (petal): Ovate, Lanceolate, Spatulate, Oblong, Orbicular, Cordate, Deltoid, Falcate, Ligulate, Tubular, Fimbriate, Laciniate, Runcinate
-- arrangement: Radial, Spiral, Bilateral, Imbricate, Valvate, Contorted, Whorled
-- edge_style: Smooth, Ruffled, Fringed, Serrated, Rolled, Undulate, Crisped, Lacerate
-- texture: Smooth, Velvet, Silk, Papery, Waxy, Rough, Hairy, Glassy, Crystalline, Scaled
-- vein_pattern: None, Parallel, Branching, Palmate, Reticulate, Dichotomous, Arcuate
-- sepal shape: Lanceolate, Ovate, Triangular, Leaflike, Petaloid
-- receptacle shape: Flat, Convex, Concave, Conical, Urceolate
-- leaf_shape: Ovate, Lanceolate, Cordate, Palmate, Pinnate, Linear, Reniform, Sagittate, Peltate, Acicular, Hastate
-- serration: None, Fine, Coarse, Lobed, Crenate, Dentate, Doubly
-- stigma_shape: Capitate, Plumose, Fimbriate, Clavate, Discoid, Lobed
-- pistil_style: Simple, Compound, Split, Gynobasic, Capitate
+- shape (petal): Ovate, Lanceolate, Spatulate, Oblong, Orbicular, Cordate, Deltoid, Falcate, Ligulate, Tubular, Fimbriate, Laciniate, Runcinate, Cuneate, Acuminate, Panduriform, Unguiculate, Flabellate, Obovate, Rhomboid, Filiform, Reniform, Sagittate
+- arrangement: Radial, Spiral, Bilateral, Imbricate, Valvate, Contorted, Whorled, Papilionaceous, Cruciform, Zygomorphic
+- edge_style: Smooth, Ruffled, Fringed, Serrated, Rolled, Undulate, Crisped, Lacerate, Lobed, Plicate, Revolute, Dentate, Erose
+- texture: Smooth, Velvet, Silk, Papery, Waxy, Rough, Hairy, Glassy, Crystalline, Scaled, Metallic, Pearlescent, Fuzzy, Frosted, Leathery, Powdery
+- vein_pattern: None, Parallel, Branching, Palmate, Reticulate, Dichotomous, Arcuate, Pinnate, Anastomosing
+- sepal shape: Lanceolate, Ovate, Triangular, Leaflike, Petaloid, Aristate, Spatulate, Tubular
+- receptacle shape: Flat, Convex, Concave, Conical, Urceolate, Elongated, Hemispheric
+- leaf_shape: Ovate, Lanceolate, Cordate, Palmate, Pinnate, Linear, Reniform, Sagittate, Peltate, Acicular, Hastate, Obovate, Elliptic, Oblanceolate, Deltoid, Spatulate, Orbicular, Lyrate, Cuneate, Falcate, Bipinnate
+- serration: None, Fine, Coarse, Lobed, Crenate, Dentate, Doubly, Spinose, Ciliate
+- stigma_shape: Capitate, Plumose, Fimbriate, Clavate, Discoid, Lobed, Stellate, Bifid, Trifid
+- pistil_style: Simple, Compound, Split, Gynobasic, Capitate, Branched, Plumose
+- anther_shape: Versatile, Basifixed, Sagittate, Didynamous, Syngenesious, Dorsifixed, Poricidal, Apiculate
+- stem_style: Straight, Arching, Sinuous, Zigzag, Twining, Succulent, Woody, Trailing
 
 RULES:
 - Colors use flow syntax: { r: 0.0-1.0, g: 0.0-1.0, b: 0.0-1.0, a: 1.0 }
@@ -108,6 +111,17 @@ RULES:
 - Daisies: 2 small Lanceolate leaves, positions [0.25, 0.35]
 - Orchids: 1-2 thick Oblong leaves, positions [0.25, 0.4]
 - Lilies: 3-5 Linear leaves distributed along stem, starting at 0.25
+- Stem styles: Arching for graceful curves, Sinuous for S-bends, Zigzag for angular sympodial growth, Succulent for thick fleshy stems, Woody for tree-like bases, Trailing for pendulous habits, Twining for climbers
+- Fan flowers (Scaevola): use Flabellate petals with Zygomorphic arrangement
+- Proteas: use Acuminate petals in multiple layers with Leathery texture
+- Wisteria/sweet pea: use Papilionaceous arrangement
+- Mustard family: use Cruciform arrangement with 4 petals
+- Fern-like foliage: use Bipinnate leaf_shape with Fine or Ciliate serration
+- Fiddle-leaf plants: use Panduriform or Lyrate leaf_shape
+- Succulents: use Obovate petals, Succulent stem style, Powdery or Waxy texture
+- Carnivorous plants: use Unguiculate petals with Erose edges
+- Tropical flowers: use Flabellate or Sagittate petals, bold colors, Metallic or Pearlescent texture
+- Mix edge styles with shapes: Fimbriate + Fringed, Panduriform + Undulate, Flabellate + Lobed
 - Be botanically accurate but creatively expressive`;
 
 export async function handleGenerate(request: Request) {
