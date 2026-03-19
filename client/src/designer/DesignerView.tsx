@@ -152,14 +152,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
       wireToWasm(conn, sim);
       startLoop(
         sim,
-        event => {
-          const key = [Math.min(event.a, event.b), Math.max(event.a, event.b)].join("+");
-          if (pendingMergesRef.current.has(key)) return;
-          pendingMergesRef.current.add(key);
-          handleMerge(conn, event.a, event.b).finally(() => {
-            pendingMergesRef.current.delete(key);
-          });
-        },
+        () => {}, // merging is manual-only (drag-drop), ignore physics overlap
         data => {
           setFlowerCount(data.length);
           canvasRef.current?.updateFlowers(data);
@@ -172,7 +165,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     };
   }, [conn]);
 
-  // Double-merge guard: prevent physics overlap + drop handler from both firing
+  // Merge guard: prevent concurrent merges on the same pair
   const pendingMergesRef = useRef<Set<string>>(new Set());
 
   const handleMergeDrop = useCallback((dragSid: number, targetSid: number) => {
