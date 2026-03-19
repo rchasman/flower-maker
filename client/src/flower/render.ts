@@ -110,6 +110,34 @@ function lightenColor(color: number, amount: number): number {
   return (r << 16) | (g << 8) | b;
 }
 
+/** Desaturate a color by blending toward its luminance gray. */
+function desaturate(color: number, amount: number): number {
+  const r = (color >> 16) & 0xff;
+  const g = (color >> 8) & 0xff;
+  const b = color & 0xff;
+  const lum = Math.round(r * 0.299 + g * 0.587 + b * 0.114);
+  const nr = Math.round(r + (lum - r) * amount);
+  const ng = Math.round(g + (lum - g) * amount);
+  const nb = Math.round(b + (lum - b) * amount);
+  return (nr << 16) | (ng << 8) | nb;
+}
+
+/** Shift color toward warm (increase red, decrease blue). */
+function warmShift(color: number): number {
+  const r = Math.min(255, ((color >> 16) & 0xff) + 15);
+  const g = (color >> 8) & 0xff;
+  const b = Math.max(0, (color & 0xff) - 10);
+  return (r << 16) | (g << 8) | b;
+}
+
+/** Shift color toward cool (increase blue, decrease red). */
+function coolShift(color: number): number {
+  const r = Math.max(0, ((color >> 16) & 0xff) - 10);
+  const g = (color >> 8) & 0xff;
+  const b = Math.min(255, (color & 0xff) + 15);
+  return (r << 16) | (g << 8) | b;
+}
+
 /** Convert a hex color number to a CSS hex string. */
 export function hexString(color: number): string {
   return `#${color.toString(16).padStart(6, "0")}`;
@@ -482,20 +510,49 @@ const EMPTY_CENTER: CenterPlan = {
   discRadius: 0, discColor: 0, highlightRadius: 0, highlightColor: 0, stamens: [],
 };
 
+function buildCenter(parsed: NonNullable<ReturnType<typeof parseSpec>>, baseColor: number, sid: number): CenterPlan {
+  if (parsed.layers.length === 0) return EMPTY_CENTER;
+
+  const layerFactor = Math.max(0.4, 1 - parsed.layers.length * 0.15);
+  const discRadius = Math.max(
+    0.06,
+    Math.min(0.35, parsed.center.receptacleSize * 0.25 * layerFactor),
+  );
+  const pistilColor = parsed.center.pistilColor ?? darkenColor(baseColor, 0.4);
+
+  const stamens: StamenPlan[] = parsed.center.stamens.map((s, i) => ({
+    angle:
+      (i / Math.max(1, parsed.center.stamens.length)) * Math.PI * 2 +
+      sidHash(sid, 20 + i) * 0.4,
+    length: discRadius + s.height * 0.25,
+    filamentColor: s.filamentColor ?? darkenColor(baseColor, 0.6),
+    antherColor: s.antherColor ?? 0xffd700,
+    antherRadius: 0.025,
+  }));
+
+  return {
+    discRadius,
+    discColor: pistilColor,
+    highlightRadius: discRadius * 0.45,
+    highlightColor: lightenColor(pistilColor, 0.35),
+    stamens,
+  };
+}
+
 /** Create a complete, scale-independent rendering plan from a flower spec. */
 export function createFlowerPlan(
   specJson: string | undefined,
   sid: number,
 ): FlowerPlan {
   const parsed = parseSpec(specJson);
-  const baseColor =
-    parsed?.layers[0]?.color ?? fallbackColor(sid);
 
-  if (!parsed || parsed.layers.length === 0) {
-    // No layers yet (e.g. mid-stream) — return empty plan so only
-    // streamed-in parts appear instead of a random fallback flower.
+  if (!parsed) {
+    // Unparseable spec — return empty plan.
     return { sepals: [], layers: [], center: EMPTY_CENTER, stem: null, leaves: [] };
   }
+
+  const baseColor =
+    parsed.layers[0]?.color ?? fallbackColor(sid);
 
   // ── Petal layers (outer first for correct z-order) ──
   let cumulativeOffset = sidHash(sid, 5) * Math.PI * 2;
@@ -526,33 +583,8 @@ export function createFlowerPlan(
   });
 
   // ── Center (pistil + stamens) ──
-  // More petal layers → smaller visible center
-  const layerFactor = Math.max(0.4, 1 - parsed.layers.length * 0.15);
-  const discRadius = Math.max(
-    0.06,
-    Math.min(0.35, parsed.center.receptacleSize * 0.25 * layerFactor),
-  );
-
-  const pistilColor =
-    parsed.center.pistilColor ?? darkenColor(baseColor, 0.4);
-
-  const stamens: StamenPlan[] = parsed.center.stamens.map((s, i) => ({
-    angle:
-      (i / Math.max(1, parsed.center.stamens.length)) * Math.PI * 2 +
-      sidHash(sid, 20 + i) * 0.4,
-    length: discRadius + s.height * 0.25,
-    filamentColor: s.filamentColor ?? darkenColor(baseColor, 0.6),
-    antherColor: s.antherColor ?? 0xffd700,
-    antherRadius: 0.025,
-  }));
-
-  const center: CenterPlan = {
-    discRadius,
-    discColor: pistilColor,
-    highlightRadius: discRadius * 0.45,
-    highlightColor: lightenColor(pistilColor, 0.35),
-    stamens,
-  };
+  // Skip center when no petals yet (mid-stream: only stem/foliage so far)
+  const center: CenterPlan = buildCenter(parsed, baseColor, sid);
 
   // ── Sepals (behind petals) ──
   const sepalCount = parsed.sepals.length;
@@ -657,6 +689,36 @@ export type ArrangementPlan = {
   members: readonly ArrangementMember[];
   baseY: number;
   adornment: AdornmentPlan | null;
+};
+
+// ── AI-driven adornment types ──
+
+/** Metadata returned by the AI combine endpoint, stored as arrangement override. */
+export type ArrangementMeta = {
+  name?: string;
+  adornments?: string[];
+  sprite_hints?: { dominant_color?: string; secondary_color?: string; accent_style?: string };
+  harmony_note?: string;
+  adornment_spec?: AdornmentSpec;
+};
+
+/** Structured adornment spec — AI picks the visual vocabulary. */
+export type AdornmentSpec = {
+  container: {
+    type: "tie" | "wrap" | "basket" | "vase" | "urn";
+    material: "kraft" | "tissue" | "silk" | "ceramic" | "glass" | "wicker" | "metal";
+    color: { r: number; g: number; b: number };
+  };
+  accent: {
+    type: "ribbon" | "bow" | "twine" | "trim" | "band" | "none";
+    color: { r: number; g: number; b: number };
+  };
+  base?: {
+    type: "none" | "saucer" | "pedestal" | "plinth";
+    color: { r: number; g: number; b: number };
+  };
+  mood: string;
+  evolved_from?: string;
 };
 
 // ── Stem/leaf spec parsing ──
@@ -1090,7 +1152,7 @@ const STAND_COLOR = 0x5A5A5A;   // stone gray
 const STAND_TOP = 0x707070;     // lighter stone
 
 /** Simple tie/band around stems — Group level (2-3 flowers). */
-function generateTieAdornment(baseY: number): AdornmentPlan {
+function generateTieAdornment(baseY: number, colors?: { main: number; accent: number }): AdornmentPlan {
   const bandY = baseY - 0.18;  // just above convergence point
   const bandH = 0.025;
   const bandW = 0.08;
@@ -1112,16 +1174,19 @@ function generateTieAdornment(baseY: number): AdornmentPlan {
     { op: "Z" },
   ];
 
+  const mainColor = colors?.main ?? RIBBON_COLOR;
+  const accentColor = colors?.accent ?? darkenColor(RIBBON_COLOR, 0.7);
+
   return {
     cmds,
-    color: RIBBON_COLOR,
+    color: mainColor,
     opacity: 0.85,
-    accent: { cmds: accent, color: darkenColor(RIBBON_COLOR, 0.7), opacity: 0.9 },
+    accent: { cmds: accent, color: accentColor, opacity: 0.9 },
   };
 }
 
 /** Paper wrap cone — Bunch level (4-6 flowers). */
-function generateWrapAdornment(baseY: number): AdornmentPlan {
+function generateWrapAdornment(baseY: number, colors?: { main: number; accent: number }): AdornmentPlan {
   const topY = baseY - 0.35;   // wrap opens wide near the flower heads
   const botY = baseY + 0.05;   // wraps slightly past the base
   const topW = 0.35;           // wide opening
@@ -1158,16 +1223,19 @@ function generateWrapAdornment(baseY: number): AdornmentPlan {
     { op: "Z" },
   ];
 
+  const mainColor = colors?.main ?? WRAP_KRAFT;
+  const accentColor = colors?.accent ?? RIBBON_COLOR;
+
   return {
     cmds,
-    color: WRAP_KRAFT,
+    color: mainColor,
     opacity: 0.75,
-    accent: { cmds: accent, color: RIBBON_COLOR, opacity: 0.85 },
+    accent: { cmds: accent, color: accentColor, opacity: 0.85 },
   };
 }
 
 /** Vase — Arrangement/Bouquet level (7-19 flowers). */
-function generateVaseAdornment(baseY: number): AdornmentPlan {
+function generateVaseAdornment(baseY: number, colors?: { main: number; accent: number }): AdornmentPlan {
   const lipY = baseY - 0.3;    // vase lip
   const neckY = baseY - 0.22;  // narrow neck
   const bulgeY = baseY - 0.05; // widest body point
@@ -1235,17 +1303,20 @@ function generateVaseAdornment(baseY: number): AdornmentPlan {
     { op: "Z" },
   ];
 
+  const mainColor = colors?.main ?? VASE_COLOR;
+  const rimColor = colors?.accent ?? VASE_RIM;
+
   return {
     cmds,
-    color: VASE_COLOR,
+    color: mainColor,
     opacity: 0.8,
-    accent: { cmds: accent, color: VASE_RIM, opacity: 0.9 },
-    detail: { cmds: detail, color: darkenColor(VASE_COLOR, 0.7), opacity: 0.7 },
+    accent: { cmds: accent, color: rimColor, opacity: 0.9 },
+    detail: { cmds: detail, color: darkenColor(mainColor, 0.7), opacity: 0.7 },
   };
 }
 
 /** Pedestal/stand — Centerpiece+ level (20+ flowers). */
-function generatePedestalAdornment(baseY: number): AdornmentPlan {
+function generatePedestalAdornment(baseY: number, colors?: { main: number; accent: number }): AdornmentPlan {
   // Pedestal sits below a vase shape
   const topY = baseY + 0.06;   // top of pedestal (just under the vase foot)
   const midY = baseY + 0.18;   // column midsection
@@ -1294,31 +1365,259 @@ function generatePedestalAdornment(baseY: number): AdornmentPlan {
     { op: "Z" },
   ];
 
+  const mainColor = colors?.main ?? STAND_COLOR;
+  const topColor = colors?.accent ?? STAND_TOP;
+
   return {
     cmds,
-    color: STAND_COLOR,
+    color: mainColor,
     opacity: 0.85,
-    accent: { cmds: accent, color: STAND_TOP, opacity: 0.9 },
+    accent: { cmds: accent, color: topColor, opacity: 0.9 },
   };
 }
 
+// ── Material modifiers ──
+// Each material adjusts opacity and color feel for the container.
+
+const MATERIAL_MODIFIERS: Record<string, { opacityMul: number; colorAdjust: (c: number) => number }> = {
+  kraft:   { opacityMul: 0.75, colorAdjust: c => desaturate(warmShift(c), 0.3) },
+  tissue:  { opacityMul: 0.45, colorAdjust: c => lightenColor(c, 0.25) },
+  silk:    { opacityMul: 0.85, colorAdjust: c => c },
+  ceramic: { opacityMul: 0.8,  colorAdjust: c => coolShift(desaturate(c, 0.4)) },
+  glass:   { opacityMul: 0.35, colorAdjust: c => lightenColor(c, 0.3) },
+  wicker:  { opacityMul: 0.8,  colorAdjust: c => warmShift(desaturate(c, 0.5)) },
+  metal:   { opacityMul: 0.9,  colorAdjust: c => darkenColor(desaturate(c, 0.6), 0.5) },
+};
+
+/** Basket — wider than wrap, woven look. */
+function generateBasketAdornment(baseY: number, colors?: { main: number; accent: number }): AdornmentPlan {
+  const topY = baseY - 0.32;
+  const botY = baseY + 0.06;
+  const topW = 0.38;
+  const botW = 0.18;
+  const handleH = 0.12;
+
+  // Basket body — wider, rounded bottom
+  const cmds: DrawCmd[] = [
+    { op: "M", x: -topW, y: topY },
+    { op: "C", c1x: -topW * 0.95, c1y: topY + (botY - topY) * 0.3,
+      c2x: -botW * 1.8, c2y: botY - (botY - topY) * 0.15,
+      x: -botW, y: botY },
+    { op: "C", c1x: -botW * 0.5, c1y: botY + 0.03,
+      c2x: botW * 0.5, c2y: botY + 0.03,
+      x: botW, y: botY },
+    { op: "C", c1x: botW * 1.8, c1y: botY - (botY - topY) * 0.15,
+      c2x: topW * 0.95, c2y: topY + (botY - topY) * 0.3,
+      x: topW, y: topY },
+    { op: "L", x: -topW, y: topY },
+    { op: "Z" },
+  ];
+
+  // Handle arch
+  const accent: DrawCmd[] = [
+    { op: "M", x: -topW * 0.7, y: topY },
+    { op: "C", c1x: -topW * 0.6, c1y: topY - handleH,
+      c2x: topW * 0.6, c2y: topY - handleH,
+      x: topW * 0.7, y: topY },
+    { op: "C", c1x: topW * 0.55, c1y: topY - handleH + 0.025,
+      c2x: -topW * 0.55, c2y: topY - handleH + 0.025,
+      x: -topW * 0.7, y: topY },
+    { op: "Z" },
+  ];
+
+  const mainColor = colors?.main ?? warmShift(WRAP_KRAFT);
+  const accentColor = colors?.accent ?? darkenColor(mainColor, 0.6);
+
+  return {
+    cmds,
+    color: mainColor,
+    opacity: 0.8,
+    accent: { cmds: accent, color: accentColor, opacity: 0.75 },
+  };
+}
+
+/** Urn — wide mouth, heavy body, grand presence. */
+function generateUrnAdornment(baseY: number, colors?: { main: number; accent: number }): AdornmentPlan {
+  const lipY = baseY - 0.32;
+  const neckY = baseY - 0.26;
+  const bulgeY = baseY - 0.06;
+  const footY = baseY + 0.1;
+  const lipW = 0.22;
+  const neckW = 0.14;
+  const bulgeW = 0.28;
+  const footW = 0.16;
+
+  const cmds: DrawCmd[] = [
+    { op: "M", x: -lipW, y: lipY },
+    // Lip flare outward
+    { op: "C", c1x: -lipW * 1.1, c1y: lipY + 0.02,
+      c2x: -neckW * 0.9, c2y: neckY - 0.01,
+      x: -neckW, y: neckY },
+    // Body bulges wide
+    { op: "C", c1x: -neckW * 1.2, c1y: neckY + (bulgeY - neckY) * 0.25,
+      c2x: -bulgeW * 1.05, c2y: bulgeY - (bulgeY - neckY) * 0.25,
+      x: -bulgeW, y: bulgeY },
+    // Taper to foot
+    { op: "C", c1x: -bulgeW, c1y: bulgeY + (footY - bulgeY) * 0.6,
+      c2x: -footW * 1.1, c2y: footY - 0.02,
+      x: -footW, y: footY },
+    // Flat bottom
+    { op: "L", x: footW, y: footY },
+    // Right side — mirror
+    { op: "C", c1x: footW * 1.1, c1y: footY - 0.02,
+      c2x: bulgeW, c2y: bulgeY + (footY - bulgeY) * 0.6,
+      x: bulgeW, y: bulgeY },
+    { op: "C", c1x: bulgeW * 1.05, c1y: bulgeY - (bulgeY - neckY) * 0.25,
+      c2x: neckW * 1.2, c2y: neckY + (bulgeY - neckY) * 0.25,
+      x: neckW, y: neckY },
+    { op: "C", c1x: neckW * 0.9, c1y: neckY - 0.01,
+      c2x: lipW * 1.1, c2y: lipY + 0.02,
+      x: lipW, y: lipY },
+    // Lip top
+    { op: "C", c1x: lipW * 0.6, c1y: lipY - 0.018,
+      c2x: -lipW * 0.6, c2y: lipY - 0.018,
+      x: -lipW, y: lipY },
+    { op: "Z" },
+  ];
+
+  // Wide rim
+  const rimH = 0.015;
+  const accent: DrawCmd[] = [
+    { op: "M", x: -lipW * 0.95, y: lipY },
+    { op: "C", c1x: -lipW * 0.5, c1y: lipY - rimH,
+      c2x: lipW * 0.5, c2y: lipY - rimH,
+      x: lipW * 0.95, y: lipY },
+    { op: "C", c1x: lipW * 0.5, c1y: lipY + rimH,
+      c2x: -lipW * 0.5, c2y: lipY + rimH,
+      x: -lipW * 0.95, y: lipY },
+    { op: "Z" },
+  ];
+
+  // Foot ring
+  const detail: DrawCmd[] = [
+    { op: "M", x: -footW * 0.9, y: footY },
+    { op: "L", x: footW * 0.9, y: footY },
+    { op: "L", x: footW * 0.85, y: footY + 0.018 },
+    { op: "L", x: -footW * 0.85, y: footY + 0.018 },
+    { op: "Z" },
+  ];
+
+  const mainColor = colors?.main ?? coolShift(VASE_COLOR);
+  const rimColor = colors?.accent ?? lightenColor(mainColor, 0.15);
+
+  return {
+    cmds,
+    color: mainColor,
+    opacity: 0.85,
+    accent: { cmds: accent, color: rimColor, opacity: 0.9 },
+    detail: { cmds: detail, color: darkenColor(mainColor, 0.65), opacity: 0.7 },
+  };
+}
+
+/** Parse a CSS hex color string to a number. */
+function parseHexColor(hex: string): number | null {
+  const clean = hex.replace(/^#/, "");
+  const parsed = parseInt(clean, 16);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Parse an RGB 0-1 object to a hex color number. */
+function rgbToHex(rgb: { r: number; g: number; b: number }): number {
+  return colorFromSpec(rgb.r, rgb.g, rgb.b);
+}
+
+/** Extract adornment colors from arrangement metadata. */
+function extractAdornmentColors(
+  meta: ArrangementMeta | undefined,
+): { main: number; accent: number } | undefined {
+  if (!meta) return undefined;
+
+  // Phase 2: structured spec colors take priority
+  if (meta.adornment_spec) {
+    const spec = meta.adornment_spec;
+    const rawMain = rgbToHex(spec.container.color);
+    const materialMod = MATERIAL_MODIFIERS[spec.container.material];
+    const main = materialMod ? materialMod.colorAdjust(rawMain) : rawMain;
+    const accent = rgbToHex(spec.accent.color);
+    return { main, accent };
+  }
+
+  // Phase 1 fallback: sprite_hints colors
+  if (meta.sprite_hints?.dominant_color) {
+    const main = parseHexColor(meta.sprite_hints.dominant_color);
+    if (main === null) return undefined;
+    const accent = meta.sprite_hints.secondary_color
+      ? (parseHexColor(meta.sprite_hints.secondary_color) ?? lightenColor(main, 0.15))
+      : lightenColor(main, 0.15);
+    return { main, accent };
+  }
+
+  return undefined;
+}
+
+/** Resolve material opacity multiplier from an AdornmentSpec. */
+function resolveOpacityMul(spec: AdornmentSpec | undefined): number {
+  if (!spec) return 1;
+  return MATERIAL_MODIFIERS[spec.container.material]?.opacityMul ?? 1;
+}
+
+/** Apply material opacity to an adornment plan. */
+function applyMaterialOpacity(plan: AdornmentPlan, opacityMul: number): AdornmentPlan {
+  if (opacityMul === 1) return plan;
+  return {
+    ...plan,
+    opacity: plan.opacity * opacityMul,
+    accent: plan.accent ? { ...plan.accent, opacity: plan.accent.opacity * opacityMul } : undefined,
+    detail: plan.detail ? { ...plan.detail, opacity: plan.detail.opacity * opacityMul } : undefined,
+  };
+}
+
+/** Route to the correct shape generator based on AdornmentSpec container type. */
+function generateAdornmentFromSpec(baseY: number, spec: AdornmentSpec): AdornmentPlan {
+  const colors = extractAdornmentColors({ adornment_spec: spec });
+  const opacityMul = resolveOpacityMul(spec);
+
+  const generators: Record<string, (baseY: number, colors?: { main: number; accent: number }) => AdornmentPlan> = {
+    tie: generateTieAdornment,
+    wrap: generateWrapAdornment,
+    basket: generateBasketAdornment,
+    vase: generateVaseAdornment,
+    urn: generateUrnAdornment,
+  };
+
+  const gen = generators[spec.container.type] ?? generateVaseAdornment;
+  const plan = gen(baseY, colors);
+
+  // Layer on a base if specified
+  if (spec.base && spec.base.type !== "none") {
+    const baseColors = { main: rgbToHex(spec.base.color), accent: lightenColor(rgbToHex(spec.base.color), 0.1) };
+    const basePlan = generatePedestalAdornment(baseY, baseColors);
+    return applyMaterialOpacity({
+      cmds: basePlan.cmds,
+      color: basePlan.color,
+      opacity: basePlan.opacity,
+      accent: { cmds: plan.cmds, color: plan.color, opacity: plan.opacity },
+      detail: plan.accent,
+    }, opacityMul);
+  }
+
+  return applyMaterialOpacity(plan, opacityMul);
+}
+
 /** Pick the right adornment for an arrangement level. */
-function adornmentForLevel(level: number, baseY: number): AdornmentPlan | null {
-  if (level <= 1) return null;                         // single stem — no adornment
-  if (level <= 2) return generateTieAdornment(baseY);  // group (2-3)
-  if (level <= 3) return generateWrapAdornment(baseY); // bunch (4-6)
-  if (level <= 5) return generateVaseAdornment(baseY); // arrangement/bouquet (7-19)
+function adornmentForLevel(level: number, baseY: number, colors?: { main: number; accent: number }): AdornmentPlan | null {
+  if (level <= 1) return null;                                      // single stem — no adornment
+  if (level <= 2) return generateTieAdornment(baseY, colors);       // group (2-3)
+  if (level <= 3) return generateWrapAdornment(baseY, colors);      // bunch (4-6)
+  if (level <= 5) return generateVaseAdornment(baseY, colors);      // arrangement/bouquet (7-19)
   // centerpiece/installation (20+) — vase on a pedestal
-  // Use pedestal as the base adornment, vase drawn as accent/detail layers
-  const vase = generateVaseAdornment(baseY);
-  const pedestal = generatePedestalAdornment(baseY);
+  const vase = generateVaseAdornment(baseY, colors);
+  const pedestal = generatePedestalAdornment(baseY, colors);
   return {
     cmds: pedestal.cmds,
     color: pedestal.color,
     opacity: pedestal.opacity,
-    // Vase body as accent layer (drawn on top of pedestal)
     accent: { cmds: vase.cmds, color: vase.color, opacity: vase.opacity },
-    // Vase rim as detail layer
     detail: vase.accent,
   };
 }
@@ -1327,6 +1626,7 @@ function adornmentForLevel(level: number, baseY: number): AdornmentPlan | null {
 export function createArrangementPlan(
   constituents: ReadonlyArray<{ specJson: string; sid: number }>,
   level: number,
+  meta?: ArrangementMeta,
 ): ArrangementPlan {
   const count = constituents.length;
   const slots = layoutForLevel(count, level);
@@ -1388,7 +1688,11 @@ export function createArrangementPlan(
     };
   });
 
-  const adornment = adornmentForLevel(level, baseY);
+  // Phase 2: if AI provided a structured spec, use it directly
+  // Phase 1: extract colors from meta and pass to level-gated generator
+  const adornment = meta?.adornment_spec
+    ? generateAdornmentFromSpec(baseY, meta.adornment_spec)
+    : adornmentForLevel(level, baseY, extractAdornmentColors(meta));
 
   return { members, baseY, adornment };
 }
