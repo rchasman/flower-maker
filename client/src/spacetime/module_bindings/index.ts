@@ -38,12 +38,14 @@ import ClaimAnonymousIdentityReducer from "./claim_anonymous_identity_reducer";
 import CompleteSessionReducer from "./complete_session_reducer";
 import CreateSessionReducer from "./create_session_reducer";
 import DeletePartOverrideReducer from "./delete_part_override_reducer";
+import DeleteSessionReducer from "./delete_session_reducer";
 import ForkPartReducer from "./fork_part_reducer";
 import MergeSessionsReducer from "./merge_sessions_reducer";
 import PlaceOrderReducer from "./place_order_reducer";
 import RemoveConstituentReducer from "./remove_constituent_reducer";
 import SendChatReducer from "./send_chat_reducer";
 import SetNameReducer from "./set_name_reducer";
+import SplitConstituentReducer from "./split_constituent_reducer";
 import UpdateFlowerSpecReducer from "./update_flower_spec_reducer";
 import UpdatePartOverrideReducer from "./update_part_override_reducer";
 import UpdatePositionReducer from "./update_position_reducer";
@@ -142,12 +144,14 @@ const reducersSchema = __reducers(
   __reducerSchema("complete_session", CompleteSessionReducer),
   __reducerSchema("create_session", CreateSessionReducer),
   __reducerSchema("delete_part_override", DeletePartOverrideReducer),
+  __reducerSchema("delete_session", DeleteSessionReducer),
   __reducerSchema("fork_part", ForkPartReducer),
   __reducerSchema("merge_sessions", MergeSessionsReducer),
   __reducerSchema("place_order", PlaceOrderReducer),
   __reducerSchema("remove_constituent", RemoveConstituentReducer),
   __reducerSchema("send_chat", SendChatReducer),
   __reducerSchema("set_name", SetNameReducer),
+  __reducerSchema("split_constituent", SplitConstituentReducer),
   __reducerSchema("update_flower_spec", UpdateFlowerSpecReducer),
   __reducerSchema("update_part_override", UpdatePartOverrideReducer),
   __reducerSchema("update_position", UpdatePositionReducer),
