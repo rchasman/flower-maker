@@ -89,6 +89,8 @@ ENUM VALUES (use exact strings):
 - receptacle shape: Flat, Convex, Concave, Conical, Urceolate
 - leaf_shape: Ovate, Lanceolate, Cordate, Palmate, Pinnate, Linear, Reniform, Sagittate, Peltate, Acicular, Hastate
 - serration: None, Fine, Coarse, Double, Crenate, Lobed
+- stigma_shape: Capitate, Plumose, Fimbriate, Clavate, Discoid, Lobed
+- pistil style: Simple, Compound, Split, Gynobasic, Capitate
 
 RULES:
 - Colors use flow syntax: { r: 0.0-1.0, g: 0.0-1.0, b: 0.0-1.0, a: 1.0 }
