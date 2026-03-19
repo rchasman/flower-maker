@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { flowerRoutes } from "./src/routes/flower.ts";
+import { flowerRoutes } from "./src/routes/flower";
 
 const app = new Hono();
 
