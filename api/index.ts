@@ -14,22 +14,24 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
   "/flower/order": handleOrder,
 };
 
-export default async function handler(request: Request) {
-  if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders });
-  }
+export default {
+  async fetch(request: Request) {
+    if (request.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: corsHeaders });
+    }
 
-  const url = new URL(request.url);
-  const path = url.pathname.replace(/^\/api/, "");
-  const route = routes[path];
+    const url = new URL(request.url);
+    const path = url.pathname.replace(/^\/api/, "");
+    const route = routes[path];
 
-  if (!route) {
-    return Response.json({ error: "Not found" }, { status: 404, headers: corsHeaders });
-  }
+    if (!route) {
+      return Response.json({ error: "Not found" }, { status: 404, headers: corsHeaders });
+    }
 
-  const response = await route(request);
-  for (const [key, value] of Object.entries(corsHeaders)) {
-    response.headers.set(key, value);
-  }
-  return response;
-}
+    const response = await route(request);
+    for (const [key, value] of Object.entries(corsHeaders)) {
+      response.headers.set(key, value);
+    }
+    return response;
+  },
+};
