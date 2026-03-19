@@ -108,7 +108,7 @@ RULES:
 - Lilies: 3-5 Linear leaves distributed along stem, starting at 0.25
 - Be botanically accurate but creatively expressive`;
 
-export async function POST(request: Request) {
+export async function handleGenerate(request: Request) {
   const body = await request.json() as { prompt: string; template_name?: string };
 
   const result = streamText({

@@ -1,4 +1,4 @@
-export async function POST(request: Request) {
+export async function handleOrder(request: Request) {
   const body = await request.json() as {
     session_id: number;
     spec: unknown;

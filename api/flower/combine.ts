@@ -63,7 +63,7 @@ const ArrangementSchema = z.object({
   harmony_note: z.string().describe("One sentence on why these flowers work together"),
 });
 
-export async function POST(request: Request) {
+export async function handleCombine(request: Request) {
   const body = await request.json() as {
     spec_a: unknown;
     spec_b: unknown;
