@@ -1,5 +1,6 @@
 import { useSession } from "../session/SessionProvider.tsx";
 import { useUsers } from "../spacetime/hooks.ts";
+import { identityToColor } from "./Chat.tsx";
 
 export function ConnectedUsers() {
   const { conn } = useSession();
@@ -33,10 +34,11 @@ export function ConnectedUsers() {
           />
           <span
             style={{
-              color: "#a3a3a3",
+              color: identityToColor(String(user.identity)),
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
+              fontWeight: 500,
             }}
           >
             {user.name ?? String(user.identity).slice(0, 12)}
