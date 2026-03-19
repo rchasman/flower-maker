@@ -71,6 +71,7 @@ pub fn cross(parent_a: &FlowerSpec, parent_b: &FlowerSpec, seed: u64) -> FlowerS
                 internode_length: pick_f64(parent_a.structure.stem.internode_length, parent_b.structure.stem.internode_length),
                 surface: if next() > 0.5 { parent_a.structure.stem.surface.clone() } else { parent_b.structure.stem.surface.clone() },
                 branching: if next() > 0.5 { parent_a.structure.stem.branching.clone() } else { parent_b.structure.stem.branching.clone() },
+                style: if next() > 0.5 { parent_a.structure.stem.style.clone() } else { parent_b.structure.stem.style.clone() },
             },
             sepals: if next() > 0.5 { parent_a.structure.sepals.clone() } else { parent_b.structure.sepals.clone() },
             receptacle: if next() > 0.5 { parent_a.structure.receptacle.clone() } else { parent_b.structure.receptacle.clone() },

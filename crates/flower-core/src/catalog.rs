@@ -99,12 +99,26 @@ pub enum PetalShape {
     Ovate, Lanceolate, Spatulate, Oblong, Orbicular,
     Cordate, Deltoid, Falcate, Ligulate, Tubular,
     Fimbriate, Laciniate, Runcinate,
+    // v2 additions
+    Cuneate,       // wedge-shaped, widest at tip
+    Acuminate,     // long-tapered pointed tip
+    Panduriform,   // fiddle/violin shaped, pinched middle
+    Unguiculate,   // narrow claw base, wide blade
+    Flabellate,    // fan-shaped, very wide outer edge
+    Obovate,       // reverse egg, widest at 65%
+    Rhomboid,      // diamond-shaped
+    Filiform,      // thread-like, extremely narrow
+    Reniform,      // kidney-shaped, wider than tall
+    Sagittate,     // arrow-shaped with backward barbs
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum PetalArrangement {
     #[default]
     Radial, Spiral, Bilateral, Imbricate, Valvate, Contorted, Whorled,
+    Papilionaceous, // butterfly-like (pea family)
+    Cruciform,      // cross-shaped (4 petals at 90°)
+    Zygomorphic,    // irregular, one plane of symmetry
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -160,12 +174,14 @@ impl Default for Pistil {
 pub enum PistilStyle {
     #[default]
     Simple, Compound, Split, Gynobasic, Capitate,
+    Branched, Plumose,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum StigmaShape {
     #[default]
     Capitate, Plumose, Fimbriate, Clavate, Discoid, Lobed,
+    Stellate, Bifid, Trifid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -198,6 +214,7 @@ impl Default for Stamen {
 pub enum AntherShape {
     #[default]
     Versatile, Basifixed, Sagittate, Didynamous, Syngenesious,
+    Dorsifixed, Poricidal, Apiculate,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -228,6 +245,7 @@ impl Default for PollenSystem {
 pub enum DispersalPattern {
     #[default]
     Gravity, Wind, Burst, Spiral, Chaotic,
+    Fountain, Vortex, Radiate,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -254,6 +272,7 @@ impl Default for Nectary {
 pub enum NectaryPosition {
     #[default]
     Basal, Petaline, Sepaline, Receptacular,
+    Spurred, Annular, Discoid,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -280,6 +299,7 @@ pub struct Stem {
     pub internode_length: f64,
     pub surface: SurfaceTexture,
     pub branching: BranchPattern,
+    pub style: StemStyle,
 }
 
 impl Default for Stem {
@@ -293,6 +313,7 @@ impl Default for Stem {
             internode_length: 0.5,
             surface: SurfaceTexture::default(),
             branching: BranchPattern::default(),
+            style: StemStyle::default(),
         }
     }
 }
@@ -323,12 +344,27 @@ impl Default for ThornSystem {
 pub enum ThornShape {
     #[default]
     Straight, Hooked, Recurved, Bulbous, Barbed,
+    Acicular, Stellate,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum BranchPattern {
     #[default]
     None, Alternate, Opposite, Whorled, Dichotomous,
+    Sympodial, Monopodial,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum StemStyle {
+    #[default]
+    Straight,    // no curvature override
+    Arching,     // graceful single arc
+    Sinuous,     // S-curve, two inflection points
+    Zigzag,      // angular bends (sympodial growth)
+    Twining,     // helical spiral suggestion
+    Succulent,   // thick, fleshy, minimal taper
+    Woody,       // dark, thick at base, rough
+    Trailing,    // droops downward
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -359,6 +395,7 @@ impl Default for Sepal {
 pub enum SepalShape {
     #[default]
     Lanceolate, Ovate, Triangular, Leaflike, Petaloid,
+    Aristate, Spatulate, Tubular,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -383,6 +420,7 @@ impl Default for Receptacle {
 pub enum ReceptacleShape {
     #[default]
     Flat, Convex, Concave, Conical, Urceolate,
+    Elongated, Hemispheric,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -454,18 +492,31 @@ pub enum LeafShape {
     #[default]
     Ovate, Lanceolate, Cordate, Palmate, Pinnate, Linear,
     Reniform, Hastate, Sagittate, Peltate, Acicular,
+    // v2 additions
+    Obovate,       // reverse egg, widest near tip
+    Elliptic,      // evenly oval
+    Oblanceolate,  // reverse lance
+    Deltoid,       // triangular
+    Spatulate,     // spoon-shaped
+    Orbicular,     // round
+    Lyrate,        // lyre-shaped, large terminal lobe
+    Cuneate,       // wedge-shaped
+    Falcate,       // sickle-shaped
+    Bipinnate,     // doubly feathered, fern-like
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum LeafArrangement {
     #[default]
     Alternate, Opposite, Whorled, Rosette, Basal,
+    Distichous, Decussate,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum Serration {
     #[default]
     None, Fine, Coarse, Lobed, Crenate, Dentate, Doubly,
+    Spinose, Ciliate,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -530,6 +581,7 @@ impl Default for Dewdrop {
 pub enum DewdropPlacement {
     #[default]
     Random, PetalTip, VeinJunction, Edge, Center,
+    Leaf, Stem,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -574,6 +626,7 @@ impl Default for PulsePattern {
 pub enum PulseType {
     #[default]
     Sine, Heartbeat, Flicker, Breathe, Morse,
+    Wave, Cascade, Stochastic,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -606,12 +659,14 @@ impl Default for ParticleEffect {
 pub enum ParticleKind {
     #[default]
     Pollen, Firefly, Stardust, FallingPetals, Spores, Motes, Embers,
+    Butterflies, Snowflakes, Sparkle, Seeds, Bubbles, Lightning, Raindrops,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum EmissionZone {
     #[default]
     Center, PetalEdge, Whole, Above, Roots,
+    Stem, Leaves, Spiral,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -656,12 +711,14 @@ impl Default for Bioluminescence {
 pub enum BioPattern {
     #[default]
     Veins, Spots, Edges, Whole, Pulse,
+    Fractal, Rings, Stripes, Constellation,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum BioTrigger {
     #[default]
     Always, Night, Touch, Proximity, Wind,
+    Rain, Music, Moonlight,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -698,6 +755,7 @@ impl Default for RootSystem {
 pub enum RootPattern {
     #[default]
     Taproot, Fibrous, Aerial, Rhizome, Tuberous, Adventitious,
+    Pneumatophore, Haustorial, Prop,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -736,12 +794,14 @@ impl Default for FlowerPersonality {
 pub enum LightPreference {
     #[default]
     FullSun, PartialShade, FullShade, Nocturnal,
+    Dappled, Dawn, Twilight,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum WindResponse {
     #[default]
     Rigid, Gentle, Dramatic, Dancing,
+    Swirling, Trembling,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -766,6 +826,7 @@ impl Default for Fragrance {
 pub enum FragranceProfile {
     #[default]
     Sweet, Spicy, Earthy, Citrus, Floral, Musky, Ethereal,
+    Woody, Aquatic, Green, Powdery, Medicinal,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -798,6 +859,7 @@ impl Default for Aura {
 pub enum AuraKind {
     #[default]
     Mist, Sparkle, Ethereal, Prismatic, Shadow, Flame, Frost, Electric,
+    Aurora, Nebula, Crystal, Moonlight, Solar, Void, Rainbow, Storm,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -869,16 +931,19 @@ impl Default for ColorStop {
 pub enum SurfaceTexture {
     #[default]
     Smooth, Velvet, Silk, Papery, Waxy, Rough, Hairy, Glassy, Crystalline, Scaled,
+    Metallic, Pearlescent, Fuzzy, Frosted, Leathery, Powdery,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum VeinPattern {
     #[default]
     None, Parallel, Branching, Palmate, Reticulate, Dichotomous, Arcuate,
+    Pinnate, Anastomosing,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum EdgeStyle {
     #[default]
     Smooth, Ruffled, Fringed, Serrated, Rolled, Undulate, Crisped, Lacerate,
+    Lobed, Plicate, Revolute, Dentate, Erose,
 }

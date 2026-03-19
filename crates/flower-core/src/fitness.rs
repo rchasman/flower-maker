@@ -16,6 +16,12 @@ pub fn evaluate(spec: &FlowerSpec, env: &Environment) -> f64 {
         LightPreference::FullShade => 20.0 * (1.0 - env.light),
         LightPreference::Nocturnal if env.light < 0.15 => 20.0,
         LightPreference::Nocturnal => 5.0,
+        LightPreference::Dappled if (0.3..=0.6).contains(&env.light) => 20.0,
+        LightPreference::Dappled => 12.0,
+        LightPreference::Dawn if env.light < 0.5 => 18.0,
+        LightPreference::Dawn => 10.0,
+        LightPreference::Twilight if (0.15..=0.4).contains(&env.light) => 20.0,
+        LightPreference::Twilight => 8.0,
     };
 
     // ── Wind response (15 pts max) ─────────────────────────────────────
@@ -29,6 +35,9 @@ pub fn evaluate(spec: &FlowerSpec, env: &Environment) -> f64 {
         WindResponse::Dancing if env.wind > 0.3 => 15.0,
         WindResponse::Dancing if env.wind < 0.1 => 5.0,
         WindResponse::Dancing => 10.0,
+        WindResponse::Swirling if env.wind > 0.4 => 14.0,
+        WindResponse::Swirling => 9.0,
+        WindResponse::Trembling => 11.0,
     };
 
     // ── Hardiness vs temperature extremes (15 pts max) ─────────────────
@@ -116,6 +125,7 @@ mod tests {
                     internode_length: 0.3,
                     surface: SurfaceTexture::Smooth,
                     branching: BranchPattern::None,
+                    style: StemStyle::Straight,
                 },
                 sepals: vec![],
                 receptacle: Receptacle {

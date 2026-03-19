@@ -143,6 +143,7 @@ pub fn rose() -> FlowerTemplate {
                     }),
                     internode_length: 0.15, surface: SurfaceTexture::Smooth,
                     branching: BranchPattern::Alternate,
+                    style: StemStyle::default(),
                 },
                 sepals: vec![Sepal {
                     shape: SepalShape::Lanceolate, color: Color::hex("#166534"),
@@ -246,6 +247,7 @@ pub fn sunflower() -> FlowerTemplate {
                     color: Color::hex("#166534"), thorns: None,
                     internode_length: 0.25, surface: SurfaceTexture::Hairy,
                     branching: BranchPattern::Alternate,
+                    style: StemStyle::default(),
                 },
                 sepals: vec![],
                 receptacle: Receptacle {
@@ -339,6 +341,7 @@ pub fn daisy() -> FlowerTemplate {
                     color: Color::hex("#22c55e"), thorns: None,
                     internode_length: 0.1, surface: SurfaceTexture::Smooth,
                     branching: BranchPattern::None,
+                    style: StemStyle::default(),
                 },
                 sepals: vec![], receptacle: Receptacle {
                     shape: ReceptacleShape::Convex, size: 0.3,
@@ -433,6 +436,7 @@ pub fn orchid() -> FlowerTemplate {
                     color: Color::hex("#166534"), thorns: None,
                     internode_length: 0.1, surface: SurfaceTexture::Smooth,
                     branching: BranchPattern::Alternate,
+                    style: StemStyle::default(),
                 },
                 sepals: vec![Sepal {
                     shape: SepalShape::Petaloid, color: Color::rgb(0.95, 0.95, 0.95),
@@ -537,6 +541,7 @@ pub fn tulip() -> FlowerTemplate {
                     color: Color::hex("#166534"), thorns: None,
                     internode_length: 0.5, surface: SurfaceTexture::Smooth,
                     branching: BranchPattern::None,
+                    style: StemStyle::default(),
                 },
                 sepals: vec![], receptacle: Receptacle {
                     shape: ReceptacleShape::Flat, size: 0.15,
@@ -654,6 +659,7 @@ fn base_spec(
                 color: Color::hex("#166534"), thorns: None,
                 internode_length: 0.2, surface: SurfaceTexture::Smooth,
                 branching: BranchPattern::None,
+                style: StemStyle::default(),
             },
             sepals: vec![], receptacle: Receptacle {
                 shape: ReceptacleShape::Flat, size: 0.2,
