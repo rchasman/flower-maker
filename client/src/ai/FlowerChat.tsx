@@ -7,6 +7,7 @@ interface FlowerChatProps {
   onGenerationStart?: (prompt: string) => string;
   onSpecProgress?: (genId: string, specJson: string) => void;
   onFlowerGenerated?: (genId: string, specJson: string) => void;
+  onGenerationFailed?: (genId: string) => void;
 }
 
 function yamlToJson(raw: string): { specJson: string; name: string } {
@@ -32,7 +33,7 @@ function tryParseYamlToJson(raw: string): string | null {
   }
 }
 
-export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerGenerated }: FlowerChatProps) {
+export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerGenerated, onGenerationFailed }: FlowerChatProps) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [activeCount, setActiveCount] = useState(0);
@@ -55,6 +56,7 @@ export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerG
     // Capture the message index for this generation's status line
     const msgIdx = { current: -1 };
 
+    let genId = "";
     try {
       const res = await fetch("/api/flower/generate", {
         method: "POST",
@@ -74,7 +76,7 @@ export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerG
         msgIdx.current = prev.length;
         return [...prev, { role: "assistant", content: "Generating..." }];
       });
-      const genId = onGenerationStart?.(text) ?? "";
+      genId = onGenerationStart?.(text) ?? "";
 
       const raw = await readStreamWithProgress(res, accumulated => {
         const specJson = tryParseYamlToJson(accumulated);
@@ -89,6 +91,7 @@ export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerG
 
       onFlowerGenerated?.(genId, specJson);
     } catch (err) {
+      if (genId) onGenerationFailed?.(genId);
       setMessages(prev => [
         ...prev,
         { role: "assistant", content: `Error: ${String(err)}` },

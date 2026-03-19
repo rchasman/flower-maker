@@ -10,6 +10,7 @@ interface TemplatePickerProps {
   onGenerationStart: (prompt: string) => string;
   onSpecProgress: (genId: string, specJson: string) => void;
   onFlowerGenerated: (genId: string, specJson: string) => void;
+  onGenerationFailed: (genId: string) => void;
 }
 
 function tryParseYamlToJson(raw: string): string | null {
@@ -21,7 +22,7 @@ function tryParseYamlToJson(raw: string): string | null {
   }
 }
 
-export function TemplatePicker({ conn, model, onGenerationStart, onSpecProgress, onFlowerGenerated }: TemplatePickerProps) {
+export function TemplatePicker({ conn, model, onGenerationStart, onSpecProgress, onFlowerGenerated, onGenerationFailed }: TemplatePickerProps) {
   const [search, setSearch] = useState("");
   const [generatingSet, setGeneratingSet] = useState<Set<string>>(new Set());
   const groups = templatesByCategory();
@@ -50,13 +51,18 @@ export function TemplatePicker({ conn, model, onGenerationStart, onSpecProgress,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: t.name, template_name: t.name, model }),
       });
-      if (!res.ok || !res.body) return;
+      if (!res.ok || !res.body) {
+        onGenerationFailed(genId);
+        return;
+      }
       const raw = await readStreamWithProgress(res, accumulated => {
         const specJson = tryParseYamlToJson(accumulated);
         if (specJson) onSpecProgress(genId, specJson);
       });
       const specJson = tryParseYamlToJson(raw) ?? "{}";
       onFlowerGenerated(genId, specJson);
+    } catch {
+      onGenerationFailed(genId);
     } finally {
       setGeneratingSet(prev => {
         const next = new Set(prev);
