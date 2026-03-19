@@ -235,7 +235,7 @@ function drawArrangementFromPlan(
   });
 }
 
-const FLOWER_BASE_RADIUS = 90;
+const FLOWER_BASE_RADIUS = 70;
 const SELECTION_RING_PAD = 6;
 const MERGE_RANGE = FLOWER_BASE_RADIUS * 3;
 

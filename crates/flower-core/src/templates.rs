@@ -44,13 +44,13 @@ impl PhysicsArchetype {
 
     pub fn collider_radius(&self) -> f64 {
         // Radii in pixel space — bodies are positioned at canvas pixel coords.
-        // Slightly smaller than visual FLOWER_BASE_RADIUS (90px) so flowers
+        // Slightly smaller than visual FLOWER_BASE_RADIUS (70px) so flowers
         // visually overlap before physics registers contact.
         match self {
-            Self::Upright => 35.0,
-            Self::Bushy => 55.0,
-            Self::Delicate => 25.0,
-            Self::Sturdy => 50.0,
+            Self::Upright => 27.0,
+            Self::Bushy => 43.0,
+            Self::Delicate => 20.0,
+            Self::Sturdy => 39.0,
         }
     }
 }
