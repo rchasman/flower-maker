@@ -3,6 +3,7 @@ import { readStreamWithProgress } from "../lib/utils.ts";
 import { parse as parseYaml } from "yaml";
 
 interface FlowerChatProps {
+  model: string;
   onGenerationStart?: (prompt: string) => string;
   onSpecProgress?: (genId: string, specJson: string) => void;
   onFlowerGenerated?: (genId: string, specJson: string) => void;
@@ -31,7 +32,7 @@ function tryParseYamlToJson(raw: string): string | null {
   }
 }
 
-export function FlowerChat({ onGenerationStart, onSpecProgress, onFlowerGenerated }: FlowerChatProps) {
+export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerGenerated }: FlowerChatProps) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [activeCount, setActiveCount] = useState(0);
@@ -58,7 +59,7 @@ export function FlowerChat({ onGenerationStart, onSpecProgress, onFlowerGenerate
       const res = await fetch("/api/flower/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text }),
+        body: JSON.stringify({ prompt: text, model }),
       });
 
       if (!res.ok || !res.body) {

@@ -70,6 +70,7 @@ export async function handleCombine(request: Request) {
     total_count: number;
     level: string;
     parent_adornments?: unknown[];
+    model?: string;
   };
 
   const inheritanceContext = body.parent_adornments && body.parent_adornments.length > 0
@@ -77,7 +78,7 @@ export async function handleCombine(request: Request) {
     : "";
 
   const result = streamText({
-    model: gateway(DEFAULT_MODEL),
+    model: gateway(body.model ?? DEFAULT_MODEL),
     system: COMBINE_SYSTEM_PROMPT,
     prompt: `Combine these flowers into a ${body.level} arrangement (${body.total_count} total flowers):
 

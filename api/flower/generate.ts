@@ -109,10 +109,10 @@ RULES:
 - Be botanically accurate but creatively expressive`;
 
 export async function handleGenerate(request: Request) {
-  const body = await request.json() as { prompt: string; template_name?: string };
+  const body = await request.json() as { prompt: string; template_name?: string; model?: string };
 
   const result = streamText({
-    model: gateway(DEFAULT_MODEL),
+    model: gateway(body.model ?? DEFAULT_MODEL),
     system: FLORIST_SYSTEM_PROMPT,
     prompt: body.template_name
       ? `Create a ${body.template_name} flower based on this description: ${body.prompt}. Use the real botanical properties of ${body.template_name} as a starting point but make it unique.`

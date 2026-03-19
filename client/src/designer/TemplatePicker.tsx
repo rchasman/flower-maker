@@ -6,6 +6,7 @@ import { parse as parseYaml } from "yaml";
 
 interface TemplatePickerProps {
   conn: DbConnection | null;
+  model: string;
   onGenerationStart: (prompt: string) => string;
   onSpecProgress: (genId: string, specJson: string) => void;
   onFlowerGenerated: (genId: string, specJson: string) => void;
@@ -20,7 +21,7 @@ function tryParseYamlToJson(raw: string): string | null {
   }
 }
 
-export function TemplatePicker({ conn, onGenerationStart, onSpecProgress, onFlowerGenerated }: TemplatePickerProps) {
+export function TemplatePicker({ conn, model, onGenerationStart, onSpecProgress, onFlowerGenerated }: TemplatePickerProps) {
   const [search, setSearch] = useState("");
   const [generatingSet, setGeneratingSet] = useState<Set<string>>(new Set());
   const groups = templatesByCategory();
@@ -47,7 +48,7 @@ export function TemplatePicker({ conn, onGenerationStart, onSpecProgress, onFlow
       const res = await fetch("/api/flower/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: t.name, template_name: t.name }),
+        body: JSON.stringify({ prompt: t.name, template_name: t.name, model }),
       });
       if (!res.ok || !res.body) return;
       const raw = await readStreamWithProgress(res, accumulated => {
