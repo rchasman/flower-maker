@@ -1,4 +1,4 @@
-import { streamText, gateway } from "ai";
+import { streamText, Output, gateway } from "ai";
 import { DEFAULT_MODEL } from "../config/models";
 import { z } from "zod";
 
@@ -80,12 +80,11 @@ export async function handleCombine(request: Request) {
   const result = streamText({
     model: gateway(body.model ?? DEFAULT_MODEL),
     system: COMBINE_SYSTEM_PROMPT,
+    output: Output.object({ schema: ArrangementSchema }),
     prompt: `Combine these flowers into a ${body.level} arrangement (${body.total_count} total flowers):
 
 Flower A: ${JSON.stringify(body.spec_a)}
-Flower B: ${JSON.stringify(body.spec_b)}${inheritanceContext}
-
-Respond with a JSON object matching this structure: ${JSON.stringify(ArrangementSchema.shape)}`,
+Flower B: ${JSON.stringify(body.spec_b)}${inheritanceContext}`,
   });
 
   return result.toTextStreamResponse();
