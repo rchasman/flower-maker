@@ -1,5 +1,5 @@
-import { streamText } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
+import { streamText, gateway } from "ai";
+import { DEFAULT_MODEL } from "../config/models";
 
 const FLORIST_SYSTEM_PROMPT = `You are an expert botanical florist. Generate a FlowerSpec as YAML (no markdown fences, no explanation — ONLY the YAML).
 
@@ -112,7 +112,7 @@ export async function handleGenerate(request: Request) {
   const body = await request.json() as { prompt: string; template_name?: string };
 
   const result = streamText({
-    model: anthropic("claude-haiku-4-5-20251001"),
+    model: gateway(DEFAULT_MODEL),
     system: FLORIST_SYSTEM_PROMPT,
     prompt: body.template_name
       ? `Create a ${body.template_name} flower based on this description: ${body.prompt}. Use the real botanical properties of ${body.template_name} as a starting point but make it unique.`

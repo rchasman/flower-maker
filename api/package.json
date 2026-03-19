@@ -12,7 +12,6 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.58",
     "ai": "catalog:",
     "zod": "catalog:"
   }
