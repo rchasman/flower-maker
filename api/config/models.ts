@@ -13,6 +13,7 @@ export const MODELS = [
   { id: "claude-opus-4.6", fullName: "anthropic/claude-opus-4.6", provider: "anthropic" },
 
   // OpenAI
+  { id: "gpt-oss-20b", fullName: "openai/gpt-oss-20b", provider: "openai" },
   { id: "gpt-5.4-nano", fullName: "openai/gpt-5.4-nano", provider: "openai" },
   { id: "gpt-5.4-mini", fullName: "openai/gpt-5.4-mini", provider: "openai" },
   { id: "gpt-5.4", fullName: "openai/gpt-5.4", provider: "openai" },
