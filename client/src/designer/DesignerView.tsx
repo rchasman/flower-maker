@@ -17,32 +17,20 @@ import { wireToWasm, handleMerge, getCanvasViewport } from "../spacetime/bridge.
 import type { FlowerSession, FlowerPartOverride } from "../spacetime/types.ts";
 import { isVariant } from "../spacetime/types.ts";
 import { parseArrangementMeta } from "../flower/render.ts";
+import { groupBy, setNestedValue } from "../lib/utils.ts";
 
 /** Merge field-level part overrides (e.g. "structure.stem.height") into a spec JSON string. */
 function applyFieldOverrides(specJson: string, overrides: FlowerPartOverride[]): string {
-  // Filter to field overrides only (skip constituent:* and arrangement)
   const fieldOverrides = overrides.filter(
     o => !o.partPath.startsWith("constituent:") && o.partPath !== "arrangement",
   );
   if (fieldOverrides.length === 0) return specJson;
 
   const spec = JSON.parse(specJson) as Record<string, unknown>;
-
   for (const o of fieldOverrides) {
-    const keys = o.partPath.split(".");
-    let target: Record<string, unknown> = spec;
-    for (let i = 0; i < keys.length - 1; i++) {
-      const k = keys[i]!;
-      if (target[k] == null || typeof target[k] !== "object") {
-        target[k] = {};
-      }
-      target = target[k] as Record<string, unknown>;
-    }
-    // Parse as number if possible, otherwise use raw string
     const num = Number(o.overrideJson);
-    target[keys[keys.length - 1]!] = Number.isNaN(num) ? o.overrideJson : num;
+    setNestedValue(spec, o.partPath, Number.isNaN(num) ? o.overrideJson : num);
   }
-
   return JSON.stringify(spec);
 }
 
@@ -120,17 +108,10 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
       }
     }
     // Merge field-level part overrides into each spec
-    const overridesBySid = partOverrides.reduce<Map<number, FlowerPartOverride[]>>(
-      (acc, o) => {
-        const sid = Number(o.sessionId);
-        acc.set(sid, [...(acc.get(sid) ?? []), o]);
-        return acc;
-      },
-      new Map(),
-    );
-    for (const [sid, specJson] of specMap) {
-      const sidOverrides = overridesBySid.get(sid);
-      if (sidOverrides) {
+    const overridesBySid = groupBy(partOverrides, o => Number(o.sessionId));
+    for (const [sid, sidOverrides] of overridesBySid) {
+      const specJson = specMap.get(sid);
+      if (specJson) {
         specMap.set(sid, applyFieldOverrides(specJson, sidOverrides));
       }
     }

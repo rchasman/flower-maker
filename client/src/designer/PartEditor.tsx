@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useSession } from "../session/SessionProvider.tsx";
-import { run } from "../lib/utils.ts";
+import { run, getNestedValue } from "../lib/utils.ts";
 
 interface ConstituentInfo {
   index: number;
@@ -57,17 +57,6 @@ export function PartEditor({ sessionId, specJson, constituents = [] }: PartEdito
       return {};
     }
   });
-
-  const getNestedValue = (
-    obj: Record<string, unknown>,
-    path: string,
-  ): unknown =>
-    path.split(".").reduce<unknown>((o, k) => {
-      if (o && typeof o === "object" && k in (o as Record<string, unknown>)) {
-        return (o as Record<string, unknown>)[k];
-      }
-      return null;
-    }, obj);
 
   const handleChange = (path: string, value: string) => {
     setOverrides(prev => ({ ...prev, [path]: value }));

@@ -1,12 +1,32 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useSession } from "../session/SessionProvider.tsx";
-import { useChatMessages } from "../spacetime/hooks.ts";
+import { useChatMessages, useUsers } from "../spacetime/hooks.ts";
+
+const CHATTER_COLORS = [
+  "#f87171", "#fb923c", "#fbbf24", "#a3e635",
+  "#34d399", "#22d3ee", "#60a5fa", "#a78bfa",
+  "#e879f9", "#fb7185", "#4ade80", "#2dd4bf",
+];
+
+export function identityToColor(identity: string): string {
+  let hash = 0;
+  for (let i = 0; i < identity.length; i++) {
+    hash = hash * 31 + identity.charCodeAt(i);
+  }
+  return CHATTER_COLORS[Math.abs(hash) % CHATTER_COLORS.length]!;
+}
 
 export function Chat() {
   const { conn } = useSession();
   const messages = useChatMessages(conn);
+  const users = useUsers(conn);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const userNameMap = useMemo(
+    () => new Map(users.map(u => [String(u.identity), u.name])),
+    [users],
+  );
 
   const sorted = [...messages]
     .sort((a, b) => Number(a.sentAt) - Number(b.sentAt))
@@ -51,8 +71,8 @@ export function Chat() {
             key={Number(msg.id)}
             style={{ fontSize: "0.6875rem", lineHeight: 1.4 }}
           >
-            <span style={{ color: "#525252" }}>
-              {String(msg.sender).slice(0, 8)}:
+            <span style={{ color: identityToColor(String(msg.sender)), fontWeight: 500 }}>
+              {userNameMap.get(String(msg.sender)) ?? String(msg.sender).slice(0, 8)}:
             </span>{" "}
             <span style={{ color: "#a3a3a3" }}>{msg.text}</span>
           </div>
