@@ -6,6 +6,7 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
+import ClaimAnonymousIdentityReducer from "../claim_anonymous_identity_reducer";
 import CompleteSessionReducer from "../complete_session_reducer";
 import CreateSessionReducer from "../create_session_reducer";
 import DeletePartOverrideReducer from "../delete_part_override_reducer";
@@ -19,6 +20,7 @@ import UpdateFlowerSpecReducer from "../update_flower_spec_reducer";
 import UpdatePartOverrideReducer from "../update_part_override_reducer";
 import UpdatePositionReducer from "../update_position_reducer";
 
+export type ClaimAnonymousIdentityParams = __Infer<typeof ClaimAnonymousIdentityReducer>;
 export type CompleteSessionParams = __Infer<typeof CompleteSessionReducer>;
 export type CreateSessionParams = __Infer<typeof CreateSessionReducer>;
 export type DeletePartOverrideParams = __Infer<typeof DeletePartOverrideReducer>;
