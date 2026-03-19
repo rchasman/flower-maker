@@ -1537,7 +1537,7 @@ function extractAdornmentColors(
     const spec = meta.adornment_spec;
     if (spec.container?.color && spec.accent?.color) {
       const rawMain = rgbToNumber(spec.container.color);
-      const materialMod = MATERIAL_MODIFIERS[spec.container.material];
+      const materialMod = spec.container.material ? MATERIAL_MODIFIERS[spec.container.material] : undefined;
       const main = materialMod ? materialMod.colorAdjust(rawMain) : rawMain;
       const accent = rgbToNumber(spec.accent.color);
       return { main, accent };
@@ -1560,7 +1560,7 @@ function extractAdornmentColors(
 /** Resolve material opacity multiplier from an AdornmentSpec. */
 function resolveOpacityMul(spec: AdornmentSpec | undefined): number {
   if (!spec) return 1;
-  return MATERIAL_MODIFIERS[spec.container.material]?.opacityMul ?? 1;
+  return (spec.container?.material ? MATERIAL_MODIFIERS[spec.container.material]?.opacityMul : undefined) ?? 1;
 }
 
 /** Apply material opacity to an adornment plan. */
