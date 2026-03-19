@@ -391,6 +391,91 @@ pub fn send_chat(ctx: &ReducerContext, text: String) -> Result<(), String> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Identity Linking (anonymous → authenticated)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Transfer all data from an anonymous identity to the caller's authenticated identity.
+/// The caller must provide the anonymous token as proof of ownership.
+#[spacetimedb::reducer]
+pub fn claim_anonymous_identity(ctx: &ReducerContext, anon_token: String) -> Result<(), String> {
+    // Decode the anonymous identity from the token
+    // SpacetimeDB tokens are opaque, but the anonymous identity hex is passed by the client
+    let anon_identity = Identity::from_hex(&anon_token)
+        .map_err(|_| "Invalid identity hex".to_string())?;
+
+    let caller = ctx.sender();
+    if anon_identity == caller {
+        return Err("Already using this identity".to_string());
+    }
+
+    // The anonymous user must exist
+    let anon_user = ctx.db.user().identity().find(anon_identity)
+        .ok_or_else(|| "Anonymous identity not found".to_string())?;
+
+    // Transfer flower sessions
+    let sessions_to_transfer: Vec<FlowerSession> = ctx.db.flower_session().iter()
+        .filter(|s| s.owner == anon_identity)
+        .collect();
+    for session in sessions_to_transfer {
+        ctx.db.flower_session().id().update(FlowerSession {
+            owner: caller,
+            ..session
+        });
+    }
+
+    // Transfer flower orders
+    let orders_to_transfer: Vec<FlowerOrder> = ctx.db.flower_order().iter()
+        .filter(|o| o.orderer == anon_identity)
+        .collect();
+    for order in orders_to_transfer {
+        ctx.db.flower_order().id().update(FlowerOrder {
+            orderer: caller,
+            ..order
+        });
+    }
+
+    // Transfer chat messages
+    let messages_to_transfer: Vec<ChatMessage> = ctx.db.chat_message().iter()
+        .filter(|m| m.sender == anon_identity)
+        .collect();
+    for msg in messages_to_transfer {
+        ctx.db.chat_message().id().update(ChatMessage {
+            sender: caller,
+            ..msg
+        });
+    }
+
+    // Merge user record: carry over name, stats, and current session
+    let auth_user = ctx.db.user().identity().find(caller);
+    match auth_user {
+        Some(existing) => {
+            ctx.db.user().identity().update(User {
+                name: existing.name.or(anon_user.name),
+                total_orders: existing.total_orders + anon_user.total_orders,
+                current_session_id: anon_user.current_session_id.or(existing.current_session_id),
+                ..existing
+            });
+        }
+        None => {
+            ctx.db.user().insert(User {
+                identity: caller,
+                name: anon_user.name,
+                online: true,
+                current_session_id: anon_user.current_session_id,
+                total_orders: anon_user.total_orders,
+                joined_at: anon_user.joined_at,
+            });
+        }
+    }
+
+    // Delete the anonymous user row
+    ctx.db.user().identity().delete(anon_identity);
+
+    log::info!("Claimed anonymous identity {:?} → {:?}", anon_identity, caller);
+    Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Profile
 // ═══════════════════════════════════════════════════════════════════════════
 
