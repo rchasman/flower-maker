@@ -4,7 +4,7 @@ import { useSession } from "../session/SessionProvider.tsx";
 import { useFlowerSessions, useFlowerSpecs, useUsers, usePartOverrides } from "../spacetime/hooks.ts";
 import type { FlowerSession, FlowerSpec, User } from "../spacetime/types.ts";
 import { isVariant } from "../spacetime/types.ts";
-import { createFlowerPlan, createArrangementPlan, cmdsToSvgD, hexString, darkenColor, type ArrangementMeta } from "../flower/render.ts";
+import { createFlowerPlan, createArrangementPlan, cmdsToSvgD, hexString, darkenColor, parseArrangementMeta, type ArrangementMeta } from "../flower/render.ts";
 
 interface FlowerGridProps {
   onEnterDesigner: () => void;
@@ -40,9 +40,8 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
   const arrangementMetaMap = useMemo(() => partOverrides
     .filter(o => o.partPath === "arrangement")
     .reduce<Map<string, ArrangementMeta>>((acc, o) => {
-      try {
-        acc.set(String(o.sessionId), JSON.parse(o.overrideJson));
-      } catch { /* skip */ }
+      const meta = parseArrangementMeta(o.overrideJson);
+      if (meta) acc.set(String(o.sessionId), meta);
       return acc;
     }, new Map()), [partOverrides]);
 

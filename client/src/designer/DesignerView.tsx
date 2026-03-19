@@ -16,6 +16,7 @@ import { startLoop, stopLoop } from "../wasm/loop.ts";
 import { wireToWasm, handleMerge, getCanvasViewport } from "../spacetime/bridge.ts";
 import type { FlowerSession } from "../spacetime/types.ts";
 import { isVariant } from "../spacetime/types.ts";
+import { parseArrangementMeta } from "../flower/render.ts";
 
 interface DesignerViewProps {
   onBackToGrid: () => void;
@@ -111,9 +112,8 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     const arrangementMetaMap = partOverrides
       .filter(o => o.partPath === "arrangement")
       .reduce<Map<number, import("../flower/render.ts").ArrangementMeta>>((acc, o) => {
-        try {
-          acc.set(Number(o.sessionId), JSON.parse(o.overrideJson));
-        } catch { /* skip unparseable */ }
+        const meta = parseArrangementMeta(o.overrideJson);
+        if (meta) acc.set(Number(o.sessionId), meta);
         return acc;
       }, new Map());
     canvasRef.current?.setArrangementMetaMap(arrangementMetaMap);
@@ -186,29 +186,34 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     return genId;
   }, [conn]);
 
+  // Resolve SID for a streaming entry from the sessions list
+  const resolveStreamingSid = useCallback((entry: { sid: number | null; preCount: number }) => {
+    if (entry.sid !== null) return entry.sid;
+    const claimedSids = new Set(
+      [...streamingRef.current.values()]
+        .filter(e => e.sid !== null)
+        .map(e => e.sid!),
+    );
+    const unclaimed = sessionsRef.current.filter(
+      s => !claimedSids.has(Number(s.id)),
+    );
+    if (unclaimed.length > 0 && sessionsRef.current.length > entry.preCount) {
+      const sid = Number(unclaimed[unclaimed.length - 1]!.id);
+      entry.sid = sid;
+      return sid;
+    }
+    return null;
+  }, []);
+
   // Phase 2: Push partial spec to canvas as YAML streams in
   const handleSpecProgress = useCallback((genId: string, specJson: string) => {
     const entry = streamingRef.current.get(genId);
     if (!entry) return;
 
     entry.spec = specJson;
+    resolveStreamingSid(entry);
 
-    // Try to resolve SID if not yet matched
-    if (entry.sid === null) {
-      const claimedSids = new Set(
-        [...streamingRef.current.values()]
-          .filter(e => e.sid !== null)
-          .map(e => e.sid!),
-      );
-      const unclaimed = sessionsRef.current.filter(
-        s => !claimedSids.has(Number(s.id)),
-      );
-      if (unclaimed.length > 0 && sessionsRef.current.length > entry.preCount) {
-        entry.sid = Number(unclaimed[unclaimed.length - 1]!.id);
-      } else {
-        return; // SID not yet available, spec is buffered
-      }
-    }
+    if (entry.sid === null) return; // SID not yet available, spec is buffered
 
     // Push directly to canvas for immediate visual feedback
     const specMap = specsRef.current.reduce<Map<number, string>>(
@@ -219,7 +224,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
       if (e.sid !== null && e.spec) specMap.set(e.sid, e.spec);
     }
     canvasRef.current?.setSpecMap(specMap);
-  }, []);
+  }, [resolveStreamingSid]);
 
   // Phase 3: Persist final spec to SpacetimeDB
   const handleFlowerGenerated = useCallback((genId: string, specJson: string) => {
@@ -229,6 +234,26 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     }
     streamingRef.current.delete(genId);
   }, [conn]);
+
+  // Cleanup: delete the orphaned session when streaming fails
+  const handleGenerationFailed = useCallback((genId: string) => {
+    const entry = streamingRef.current.get(genId);
+    if (!entry) return;
+    resolveStreamingSid(entry);
+    if (entry.sid !== null) {
+      conn?.reducers.deleteSession({ sessionId: BigInt(entry.sid) });
+      streamingRef.current.delete(genId);
+    } else {
+      // Session hasn't arrived from SpacetimeDB yet — retry shortly
+      setTimeout(() => {
+        resolveStreamingSid(entry);
+        if (entry.sid !== null) {
+          conn?.reducers.deleteSession({ sessionId: BigInt(entry.sid) });
+        }
+        streamingRef.current.delete(genId);
+      }, 2000);
+    }
+  }, [conn, resolveStreamingSid]);
 
   return (
     <div style={{ width: "100%", height: "100%", display: "flex" }}>
@@ -275,12 +300,12 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
 
         {/* Templates section */}
         <div style={{ flex: "0 0 auto", maxHeight: "40%", overflow: "auto" }}>
-          <TemplatePicker conn={conn} model={model} onGenerationStart={handleGenerationStart} onSpecProgress={handleSpecProgress} onFlowerGenerated={handleFlowerGenerated} />
+          <TemplatePicker conn={conn} model={model} onGenerationStart={handleGenerationStart} onSpecProgress={handleSpecProgress} onFlowerGenerated={handleFlowerGenerated} onGenerationFailed={handleGenerationFailed} />
         </div>
 
         {/* AI chat section */}
         <div style={{ flex: 1, minHeight: 0, borderTop: "1px solid #262626" }}>
-          <FlowerChat model={model} onGenerationStart={handleGenerationStart} onSpecProgress={handleSpecProgress} onFlowerGenerated={handleFlowerGenerated} />
+          <FlowerChat model={model} onGenerationStart={handleGenerationStart} onSpecProgress={handleSpecProgress} onFlowerGenerated={handleFlowerGenerated} onGenerationFailed={handleGenerationFailed} />
         </div>
       </aside>
 
