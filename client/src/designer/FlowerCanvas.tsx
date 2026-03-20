@@ -76,6 +76,86 @@ function drawCmds(g: Graphics, cmds: readonly DrawCmd[], scale: number, ox = 0, 
   }
 }
 
+/** Draw aura on a SEPARATE Graphics to avoid rectangular bounding-box artifacts. */
+function drawAura(g: Graphics, plan: FlowerPlan, r: number, alpha: number) {
+  if (!plan.aura) return;
+  const scale = r;
+  const now = performance.now();
+  const auraR = plan.aura.radius * scale * 2.5;
+  const pulse = 0.85 + 0.15 * Math.sin(now / 800);
+  const auraAlpha = alpha * plan.aura.opacity * pulse;
+
+  switch (plan.aura.kind) {
+    case "Prismatic":
+    case "Rainbow": {
+      [0.6, 0.8, 1.0].map((f, i) => {
+        const hueShift = [0xff6b9d, 0x67e8f9, 0xc084fc][i]!;
+        g.circle(0, 0, auraR * f);
+        g.fill({ color: hueShift, alpha: auraAlpha * 0.3 });
+        return null;
+      });
+      break;
+    }
+    case "Crystal": {
+      const sides = 6;
+      Array.from({ length: sides }, (_, i) => {
+        const a1 = (i / sides) * Math.PI * 2 + now / 3000;
+        const a2 = ((i + 1) / sides) * Math.PI * 2 + now / 3000;
+        g.moveTo(0, 0);
+        g.lineTo(Math.cos(a1) * auraR, Math.sin(a1) * auraR);
+        g.lineTo(Math.cos(a2) * auraR, Math.sin(a2) * auraR);
+        g.fill({ color: plan.aura!.color, alpha: auraAlpha * (0.3 + 0.1 * Math.sin(now / 400 + i)) });
+        return null;
+      });
+      break;
+    }
+    case "Flame":
+    case "Solar": {
+      const flicker = 0.7 + 0.3 * Math.sin(now / 150);
+      g.circle(0, 0, auraR * flicker);
+      g.fill({ color: plan.aura.color, alpha: auraAlpha * 0.5 });
+      g.circle(0, 0, auraR * 0.6 * flicker);
+      g.fill({ color: 0xfbbf24, alpha: auraAlpha * 0.3 });
+      break;
+    }
+    case "Frost": {
+      g.circle(0, 0, auraR);
+      g.fill({ color: 0xbfdbfe, alpha: auraAlpha * 0.4 });
+      g.circle(0, 0, auraR * 0.7);
+      g.fill({ color: plan.aura.color, alpha: auraAlpha * 0.25 });
+      break;
+    }
+    case "Aurora":
+    case "Nebula": {
+      const shift = Math.sin(now / 1200) * 0.3;
+      g.circle(shift * scale * 0.3, 0, auraR * 1.1);
+      g.fill({ color: plan.aura.color, alpha: auraAlpha * 0.25 });
+      g.circle(-shift * scale * 0.3, 0, auraR * 0.8);
+      g.fill({ color: 0x67e8f9, alpha: auraAlpha * 0.2 });
+      break;
+    }
+    case "Shadow":
+    case "Void": {
+      g.circle(0, 0, auraR * 0.9);
+      g.fill({ color: 0x1a1a2e, alpha: auraAlpha * 0.5 });
+      break;
+    }
+    case "Electric":
+    case "Storm": {
+      const jitter = Math.sin(now / 80) * scale * 0.05;
+      g.circle(jitter, -jitter, auraR * 0.85);
+      g.fill({ color: plan.aura.color, alpha: auraAlpha * 0.35 });
+      break;
+    }
+    default: {
+      g.circle(0, 0, auraR);
+      g.fill({ color: plan.aura.color, alpha: auraAlpha * 0.35 });
+      g.circle(0, 0, auraR * 0.6);
+      g.fill({ color: plan.aura.color, alpha: auraAlpha * 0.2 });
+    }
+  }
+}
+
 /** Draw a flower from its pre-computed plan (stem, leaves, then head). */
 function drawFlowerFromPlan(
   g: Graphics,
@@ -85,91 +165,6 @@ function drawFlowerFromPlan(
 ) {
   const scale = r;
   const now = performance.now();
-
-  // Aura (behind everything, style-dependent)
-  if (plan.aura) {
-    const auraR = plan.aura.radius * scale * 2.5;
-    const pulse = 0.85 + 0.15 * Math.sin(now / 800);
-    const auraAlpha = alpha * plan.aura.opacity * pulse;
-
-    switch (plan.aura.kind) {
-      case "Prismatic":
-      case "Rainbow": {
-        // Multiple concentric rings with hue variation
-        [0.6, 0.8, 1.0].map((f, i) => {
-          const hueShift = [0xff6b9d, 0x67e8f9, 0xc084fc][i]!;
-          g.circle(0, 0, auraR * f);
-          g.fill({ color: hueShift, alpha: auraAlpha * 0.3 });
-          return null;
-        });
-        break;
-      }
-      case "Crystal": {
-        // Hexagonal shimmer
-        const sides = 6;
-        Array.from({ length: sides }, (_, i) => {
-          const a1 = (i / sides) * Math.PI * 2 + now / 3000;
-          const a2 = ((i + 1) / sides) * Math.PI * 2 + now / 3000;
-          g.moveTo(0, 0);
-          g.lineTo(Math.cos(a1) * auraR, Math.sin(a1) * auraR);
-          g.lineTo(Math.cos(a2) * auraR, Math.sin(a2) * auraR);
-          g.fill({ color: plan.aura!.color, alpha: auraAlpha * (0.3 + 0.1 * Math.sin(now / 400 + i)) });
-          return null;
-        });
-        break;
-      }
-      case "Flame":
-      case "Solar": {
-        // Flickering warm glow with rays
-        const flicker = 0.7 + 0.3 * Math.sin(now / 150);
-        g.circle(0, 0, auraR * flicker);
-        g.fill({ color: plan.aura.color, alpha: auraAlpha * 0.5 });
-        g.circle(0, 0, auraR * 0.6 * flicker);
-        g.fill({ color: 0xfbbf24, alpha: auraAlpha * 0.3 });
-        break;
-      }
-      case "Frost": {
-        // Crisp, steady cool glow
-        g.circle(0, 0, auraR);
-        g.fill({ color: 0xbfdbfe, alpha: auraAlpha * 0.4 });
-        g.circle(0, 0, auraR * 0.7);
-        g.fill({ color: plan.aura.color, alpha: auraAlpha * 0.25 });
-        break;
-      }
-      case "Aurora":
-      case "Nebula": {
-        // Shifting multi-layer glow
-        const shift = Math.sin(now / 1200) * 0.3;
-        g.circle(shift * scale * 0.3, 0, auraR * 1.1);
-        g.fill({ color: plan.aura.color, alpha: auraAlpha * 0.25 });
-        g.circle(-shift * scale * 0.3, 0, auraR * 0.8);
-        g.fill({ color: 0x67e8f9, alpha: auraAlpha * 0.2 });
-        break;
-      }
-      case "Shadow":
-      case "Void": {
-        // Dark inward glow
-        g.circle(0, 0, auraR * 0.9);
-        g.fill({ color: 0x1a1a2e, alpha: auraAlpha * 0.5 });
-        break;
-      }
-      case "Electric":
-      case "Storm": {
-        // Jittering bright arcs
-        const jitter = Math.sin(now / 80) * scale * 0.05;
-        g.circle(jitter, -jitter, auraR * 0.85);
-        g.fill({ color: plan.aura.color, alpha: auraAlpha * 0.35 });
-        break;
-      }
-      default: {
-        // Ethereal, Mist, Sparkle, Moonlight — soft radial glow
-        g.circle(0, 0, auraR);
-        g.fill({ color: plan.aura.color, alpha: auraAlpha * 0.35 });
-        g.circle(0, 0, auraR * 0.6);
-        g.fill({ color: plan.aura.color, alpha: auraAlpha * 0.2 });
-      }
-    }
-  }
 
   // Stem (behind everything else)
   if (plan.stem) {
@@ -602,6 +597,9 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const mergeTargetRef = useRef<{ dragSid: number; targetSid: number; distance: number } | null>(null);
     const mergeOverlayRef = useRef<Graphics | null>(null);
 
+    // Aura graphics — separate from flower graphics to avoid bounding-box artifacts
+    const auraGraphicsRef = useRef<Map<number, Graphics>>(new Map());
+
     // Shader filter refs
     const petalFilterRef = useRef<Filter | null>(null);
     const mergeGlowFiltersRef = useRef<Map<number, { filter: Filter; startTime: number }>>(new Map());
@@ -675,6 +673,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         const activeSids = new Set(data.map((d) => d.sid));
 
         // Remove flowers no longer present
+        const auras = auraGraphicsRef.current;
         [...graphics.entries()]
           .filter(([sid]) => !activeSids.has(sid))
           .map(([sid, g]) => {
@@ -682,6 +681,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             g.destroy();
             graphics.delete(sid);
             planCacheRef.current.delete(sid);
+            const ag = auras.get(sid);
+            if (ag) { stage.removeChild(ag); ag.destroy(); auras.delete(sid); }
             return sid;
           });
 
@@ -733,11 +734,30 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             g.stroke({ color: 0xffffff, width: 2, alpha: 0.7 });
           }
 
-          // Aura glow — fallback for flowers without plan-based aura
+          // Aura — drawn on a separate Graphics to avoid rectangular bounding-box clipping
           const flowerPlan = !isArrangement ? (plan as FlowerPlan) : null;
-          if ((flower.has_glow || flower.has_aura) && !flowerPlan?.aura) {
-            g.circle(0, 0, r + 4);
-            g.fill({ color: liveColor, alpha: 0.15 * flower.alpha });
+          const hasAura = flowerPlan?.aura || flower.has_glow || flower.has_aura;
+          let ag = auras.get(flower.sid);
+          if (hasAura) {
+            if (!ag) {
+              ag = new Graphics();
+              auras.set(flower.sid, ag);
+              // Insert aura BEHIND the flower in the stage
+              const flowerIdx = stage.getChildIndex(g);
+              stage.addChildAt(ag, flowerIdx);
+            }
+            ag.clear();
+            if (flowerPlan?.aura) {
+              drawAura(ag, flowerPlan, r, flower.alpha);
+            } else {
+              // Fallback glow
+              ag.circle(0, 0, r + 4);
+              ag.fill({ color: liveColor, alpha: 0.15 * flower.alpha });
+            }
+            ag.position.set(flower.x, flower.y);
+            ag.rotation = flower.rotation;
+          } else if (ag) {
+            ag.clear();
           }
 
           // Draw the flower or arrangement from its spec-driven plan
@@ -940,6 +960,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         destroyed = true;
         stageContainerRef.current = null;
         flowerGraphicsRef.current.clear();
+        auraGraphicsRef.current.clear();
         planCacheRef.current.clear();
         mergeOverlayRef.current = null;
         mergeParticleGfxRef.current = null;
