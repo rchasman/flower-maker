@@ -1,10 +1,26 @@
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "react-oidc-context";
 import { useSession } from "./SessionProvider.tsx";
 
 interface NameGateProps {
   children: ReactNode;
 }
+
+const ASCII_LOGO = `
+ ┌─────────────────────────────────────────┐
+ │  ╔═╗╦  ╔═╗╦ ╦╔═╗╦═╗  ╔╦╗╔═╗╦╔═╔═╗╦═╗ │
+ │  ╠╣ ║  ║ ║║║║║╣ ╠╦╝  ║║║╠═╣╠╩╗║╣ ╠╦╝ │
+ │  ╚  ╩═╝╚═╝╚╩╝╚═╝╩╚═  ╩ ╩╩ ╩╩ ╩╚═╝╩╚═ │
+ └─────────────────────────────────────────┘`;
+
+const BOOT_LINES = [
+  "[sys] initializing flower-maker kernel...",
+  "[net] establishing spacetimedb link...",
+  "[gpu] pixi.js renderer online",
+  "[ai ] gemini gateway connected",
+  "[ok ] all systems nominal",
+];
 
 /**
  * Gates the app behind a name prompt.
@@ -16,16 +32,50 @@ export function NameGate({ children }: NameGateProps) {
   const [draft, setDraft] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [bootStep, setBootStep] = useState(0);
+  const [booted, setBooted] = useState(false);
+
+  // Boot sequence animation
+  useEffect(() => {
+    if (state !== "connected") return;
+    if (booted) return;
+
+    const timer = setInterval(() => {
+      setBootStep(prev => {
+        if (prev >= BOOT_LINES.length) {
+          clearInterval(timer);
+          setBooted(true);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, 180);
+
+    return () => clearInterval(timer);
+  }, [state, booted]);
 
   // Show connection status while waiting
   if (state !== "connected" || !conn) {
     return (
       <div style={centerStyle}>
-        <span style={{ color: "#525252", fontSize: "0.8125rem" }}>
-          {state === "connecting"
-            ? "Connecting to SpacetimeDB..."
-            : "Not connected — start SpacetimeDB and refresh"}
-        </span>
+        <div style={{ textAlign: "center" }}>
+          <pre className="tui-ascii-art" style={{ marginBottom: "1.5rem" }}>
+            {ASCII_LOGO}
+          </pre>
+          <div style={{ color: "var(--tui-fg-3)", fontSize: "var(--tui-font-size-sm)" }}>
+            {state === "connecting" ? (
+              <span>
+                <span style={{ color: "var(--tui-amber)" }}>[sync]</span>{" "}
+                establishing connection<span className="tui-generating" />
+              </span>
+            ) : (
+              <span>
+                <span style={{ color: "var(--tui-red)" }}>[err]</span>{" "}
+                spacetimedb offline — restart and refresh
+              </span>
+            )}
+          </div>
+        </div>
       </div>
     );
   }
@@ -37,7 +87,7 @@ export function NameGate({ children }: NameGateProps) {
     const trimmed = draft.trim();
     if (!trimmed) return;
     if (trimmed.length > 32) {
-      setError("Name too long (max 32 chars)");
+      setError("ERR: callsign exceeds 32 char limit");
       return;
     }
     setSubmitting(true);
@@ -48,105 +98,139 @@ export function NameGate({ children }: NameGateProps) {
 
   return (
     <div style={centerStyle}>
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: "1.5rem",
-          maxWidth: 320,
-          padding: "2rem",
-        }}
-      >
-        <h1
+      <div style={{ maxWidth: 420, width: "100%", padding: "2rem" }}>
+        {/* ASCII Logo */}
+        <motion.pre
+          className="tui-ascii-art tui-glow-green"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.6 }}
+          style={{ marginBottom: "1.5rem" }}
+        >
+          {ASCII_LOGO}
+        </motion.pre>
+
+        {/* Boot sequence log */}
+        <div
           style={{
-            fontSize: "1.25rem",
-            fontWeight: 400,
-            letterSpacing: "-0.02em",
-            color: "#e5e5e5",
+            marginBottom: "1.5rem",
+            padding: "0.75rem 1ch",
+            border: "1px solid var(--tui-border)",
+            background: "var(--tui-bg-0)",
+            minHeight: "7.5rem",
           }}
         >
-          flower-maker
-        </h1>
+          <AnimatePresence>
+            {BOOT_LINES.slice(0, bootStep).map((line, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, x: -4 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.15 }}
+                style={{
+                  fontSize: "var(--tui-font-size-xs)",
+                  lineHeight: 1.6,
+                  color: line.includes("[ok") ? "var(--tui-green)" : "var(--tui-fg-3)",
+                }}
+              >
+                {line}
+              </motion.div>
+            ))}
+          </AnimatePresence>
+          {!booted && (
+            <span className="tui-cursor" style={{ marginTop: "0.25rem" }} />
+          )}
+        </div>
 
-        <p style={{ fontSize: "0.8125rem", color: "#737373", textAlign: "center" }}>
-          Choose a name for your spot on the grid.
-          <br />
-          Everyone will see your latest design live.
-        </p>
-
-        <form
-          onSubmit={e => {
-            e.preventDefault();
-            handleSubmit();
-          }}
-          style={{ display: "flex", gap: "0.5rem", width: "100%" }}
-        >
-          <input
-            type="text"
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            placeholder="Your name"
-            maxLength={32}
-            autoFocus
-            disabled={submitting}
-            style={{
-              flex: 1,
-              padding: "0.5rem 0.75rem",
-              background: "#1a1a1a",
-              border: "1px solid #333",
-              borderRadius: "0.25rem",
-              color: "#e5e5e5",
-              fontSize: "0.875rem",
-              outline: "none",
-            }}
-          />
-          <button
-            type="submit"
-            disabled={submitting || !draft.trim()}
-            style={{
-              padding: "0.5rem 1rem",
-              background: draft.trim() ? "#3b3b6d" : "#1a1a2e",
-              border: "1px solid #3b3b6d",
-              borderRadius: "0.25rem",
-              color: "#e5e5e5",
-              fontSize: "0.875rem",
-              cursor: draft.trim() ? "pointer" : "default",
-              opacity: submitting ? 0.5 : 1,
-            }}
-          >
-            Enter
-          </button>
-        </form>
-
-        {error && (
-          <p style={{ fontSize: "0.75rem", color: "#f87171" }}>{error}</p>
-        )}
-
-        {!auth.isAuthenticated && (
-          <>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", width: "100%" }}>
-              <div style={{ flex: 1, height: 1, background: "#333" }} />
-              <span style={{ fontSize: "0.6875rem", color: "#525252" }}>or</span>
-              <div style={{ flex: 1, height: 1, background: "#333" }} />
-            </div>
-            <button
-              onClick={() => auth.signinRedirect()}
-              style={{
-                width: "100%",
-                padding: "0.5rem 1rem",
-                background: "transparent",
-                border: "1px solid #333",
-                borderRadius: "0.25rem",
-                color: "#737373",
-                fontSize: "0.8125rem",
-                cursor: "pointer",
-              }}
+        {/* Name prompt — only shows after boot */}
+        <AnimatePresence>
+          {booted && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
             >
-              Sign in with SpacetimeAuth
-            </button>
-          </>
-        )}
+              <div
+                style={{
+                  fontSize: "var(--tui-font-size-sm)",
+                  color: "var(--tui-fg-2)",
+                  marginBottom: "0.75rem",
+                }}
+              >
+                enter your callsign to claim a zone on the grid.
+                <br />
+                all connected operators will see your work live.
+              </div>
+
+              <form
+                onSubmit={e => {
+                  e.preventDefault();
+                  handleSubmit();
+                }}
+                style={{ display: "flex", gap: "0.5rem" }}
+              >
+                <div className="tui-input-wrap" style={{ flex: 1 }}>
+                  <input
+                    type="text"
+                    value={draft}
+                    onChange={e => setDraft(e.target.value)}
+                    placeholder="callsign"
+                    maxLength={32}
+                    autoFocus
+                    disabled={submitting}
+                    className="tui-input"
+                    style={{ opacity: submitting ? 0.5 : 1 }}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={submitting || !draft.trim()}
+                  className={`tui-btn ${draft.trim() ? "tui-btn-primary" : ""}`}
+                >
+                  ENTER
+                </button>
+              </form>
+
+              {error && (
+                <div
+                  style={{
+                    marginTop: "0.5rem",
+                    fontSize: "var(--tui-font-size-sm)",
+                    color: "var(--tui-red)",
+                  }}
+                >
+                  {error}
+                </div>
+              )}
+
+              {!auth.isAuthenticated && (
+                <>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "1ch",
+                      margin: "1rem 0",
+                    }}
+                  >
+                    <div style={{ flex: 1, height: 1, background: "var(--tui-border)" }} />
+                    <span style={{ fontSize: "var(--tui-font-size-xs)", color: "var(--tui-fg-4)" }}>
+                      OR
+                    </span>
+                    <div style={{ flex: 1, height: 1, background: "var(--tui-border)" }} />
+                  </div>
+                  <button
+                    onClick={() => auth.signinRedirect()}
+                    className="tui-btn"
+                    style={{ width: "100%" }}
+                  >
+                    AUTH VIA SPACETIME
+                  </button>
+                </>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
@@ -158,5 +242,5 @@ const centerStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  background: "#0a0a0a",
+  background: "var(--tui-bg-1)",
 };
