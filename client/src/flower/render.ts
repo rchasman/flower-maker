@@ -134,7 +134,7 @@ export function darkenColor(color: number, factor: number): number {
   return (r << 16) | (g << 8) | b;
 }
 
-function lightenColor(color: number, amount: number): number {
+export function lightenColor(color: number, amount: number): number {
   const r = Math.min(255, Math.floor(((color >> 16) & 0xff) + 255 * amount));
   const g = Math.min(255, Math.floor(((color >> 8) & 0xff) + 255 * amount));
   const b = Math.min(255, Math.floor((color & 0xff) + 255 * amount));
