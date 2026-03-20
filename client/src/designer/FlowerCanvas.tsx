@@ -173,21 +173,32 @@ function drawFlowerFromPlan(
   if (plan.stem) {
     drawCmds(g, plan.stem.cmds, scale);
     g.fill({ color: plan.stem.color, alpha: alpha * 0.9 });
+    // Outline for crisp definition against dark background
+    drawCmds(g, plan.stem.cmds, scale);
+    g.stroke({ color: darkenColor(plan.stem.color, 0.5), width: Math.max(0.4, scale * 0.008), alpha: alpha * 0.45 });
 
     // Thorns
     plan.stem.thorns.map((thorn) => {
       drawCmds(g, thorn.cmds, scale);
       g.fill({ color: thorn.color, alpha: alpha * 0.85 });
+      // Crisp outline for thorn definition
+      drawCmds(g, thorn.cmds, scale);
+      g.stroke({ color: darkenColor(thorn.color, 0.4), width: Math.max(0.3, scale * 0.005), alpha: alpha * 0.5 });
       return null;
     });
   }
 
   // Leaves
   plan.leaves.map((leaf) => {
+    // Leaf fill
     drawCmds(g, leaf.cmds, scale);
     g.fill({ color: leaf.color, alpha: alpha * 0.9 });
+    // Outline for definition
+    drawCmds(g, leaf.cmds, scale);
+    g.stroke({ color: darkenColor(leaf.color, 0.45), width: Math.max(0.3, scale * 0.006), alpha: alpha * 0.4 });
+    // Veins — slightly more visible
     drawCmds(g, leaf.veins, scale);
-    g.stroke({ color: darkenColor(leaf.color, 0.55), width: Math.max(0.4, scale * 0.012), alpha: alpha * 0.6 });
+    g.stroke({ color: darkenColor(leaf.color, 0.5), width: Math.max(0.4, scale * 0.012), alpha: alpha * 0.65 });
     return null;
   });
 
@@ -195,6 +206,9 @@ function drawFlowerFromPlan(
   plan.sepals.map((sepal) => {
     drawCmds(g, sepal.cmds, scale);
     g.fill({ color: sepal.color, alpha: alpha * 0.85 });
+    // Outline for definition
+    drawCmds(g, sepal.cmds, scale);
+    g.stroke({ color: darkenColor(sepal.color, 0.5), width: Math.max(0.3, scale * 0.005), alpha: alpha * 0.35 });
     return null;
   });
 
@@ -337,6 +351,9 @@ function drawArrangementFromPlan(
   plan.members.map((member) => {
     drawCmds(g, member.stem.cmds, scale);
     g.fill({ color: member.stem.color, alpha: alpha * 0.9 });
+    // Outline for crisp definition
+    drawCmds(g, member.stem.cmds, scale);
+    g.stroke({ color: darkenColor(member.stem.color, 0.5), width: Math.max(0.4, scale * 0.008), alpha: alpha * 0.45 });
     return null;
   });
 
@@ -363,6 +380,9 @@ function drawArrangementFromPlan(
     member.leaves.map((leaf) => {
       drawCmds(g, leaf.cmds, scale);
       g.fill({ color: leaf.color, alpha: alpha * 0.85 });
+      // Outline for definition
+      drawCmds(g, leaf.cmds, scale);
+      g.stroke({ color: darkenColor(leaf.color, 0.45), width: Math.max(0.3, scale * 0.006), alpha: alpha * 0.4 });
       return null;
     });
     return null;
@@ -380,6 +400,9 @@ function drawArrangementFromPlan(
     member.flowerPlan.sepals.map((sepal) => {
       drawCmds(g, sepal.cmds, flowerScale, ox, oy);
       g.fill({ color: sepal.color, alpha: alpha * 0.85 });
+      // Outline for definition
+      drawCmds(g, sepal.cmds, flowerScale, ox, oy);
+      g.stroke({ color: darkenColor(sepal.color, 0.5), width: Math.max(0.3, flowerScale * 0.005), alpha: alpha * 0.35 });
       return null;
     });
 
