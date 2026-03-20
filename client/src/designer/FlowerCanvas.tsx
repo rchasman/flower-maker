@@ -703,10 +703,11 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
               g!.cursor = "grab";
             });
             // Apply petal translucency filter (lazy-init shared instance)
-            if (!petalFilterRef.current) {
-              petalFilterRef.current = createPetalTranslucencyFilter();
-            }
-            g.filters = [petalFilterRef.current];
+            // Disabled: Filter.from() API needs validation against PixiJS v8
+            // if (!petalFilterRef.current) {
+            //   petalFilterRef.current = createPetalTranslucencyFilter();
+            // }
+            // g.filters = [petalFilterRef.current];
             graphics.set(flower.sid, g);
             stage.addChild(g);
           }
