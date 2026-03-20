@@ -15,8 +15,8 @@ export function OrderFlow({ session, onOrder }: OrderFlowProps) {
 
   if (!session) {
     return (
-      <div style={{ padding: "1rem", color: "#404040", fontSize: "0.75rem" }}>
-        Select a flower to place an order.
+      <div style={{ color: "var(--tui-fg-4)", fontSize: "var(--tui-font-size-sm)" }}>
+        select a flower to place an order.
       </div>
     );
   }
@@ -50,21 +50,24 @@ export function OrderFlow({ session, onOrder }: OrderFlowProps) {
     <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
       {/* Session info */}
       <div
-        style={{
-          padding: "0.75rem",
-          background: "#141414",
-          borderRadius: "0.375rem",
-          border: "1px solid #1a1a1a",
-          fontSize: "0.75rem",
-        }}
+        className="tui-panel"
+        data-label="SESSION"
+        style={{ padding: "1rem 1ch 0.75rem" }}
       >
-        <div style={{ color: "#a3a3a3", marginBottom: "0.5rem" }}>
+        <div style={{ color: "var(--tui-fg-1)", marginBottom: "0.5rem", fontSize: "var(--tui-font-size-sm)" }}>
           {session.prompt}
         </div>
-        <div style={{ display: "flex", gap: "1rem", color: "#525252" }}>
-          <span>Level: {levelName(Number(session.arrangementLevel))}</span>
+        <div
+          style={{
+            display: "flex",
+            gap: "1.5ch",
+            fontSize: "var(--tui-font-size-xs)",
+            color: "var(--tui-fg-3)",
+          }}
+        >
+          <span>lvl: {levelName(Number(session.arrangementLevel))}</span>
           <span>{Number(session.flowerCount)} flowers</span>
-          <span>Gen {Number(session.generation)}</span>
+          <span>gen {Number(session.generation)}</span>
         </div>
       </div>
 
@@ -72,51 +75,32 @@ export function OrderFlow({ session, onOrder }: OrderFlowProps) {
       <button
         onClick={handleOrder}
         disabled={isOrdering}
-        style={{
-          padding: "0.625rem",
-          background: "#166534",
-          color: "#e5e5e5",
-          border: "none",
-          borderRadius: "0.375rem",
-          cursor: isOrdering ? "wait" : "pointer",
-          fontSize: "0.8125rem",
-          fontWeight: 500,
-        }}
+        className="tui-btn tui-btn-primary"
+        style={{ width: "100%", padding: "0.5rem" }}
       >
-        {isOrdering ? "Placing order..." : "Place Order →"}
+        {isOrdering ? (
+          <span>PLACING ORDER<span className="tui-generating" /></span>
+        ) : (
+          "PLACE ORDER →"
+        )}
       </button>
 
       {/* JSON payload preview */}
       {orderPayload && (
         <div
-          style={{
-            background: "#0a0a0a",
-            border: "1px solid #262626",
-            borderRadius: "0.375rem",
-            overflow: "hidden",
-          }}
+          className="tui-panel accent-cyan"
+          data-label="ORDER PAYLOAD"
+          style={{ padding: "1rem 0 0" }}
         >
-          <div
-            style={{
-              padding: "0.5rem 0.75rem",
-              borderBottom: "1px solid #262626",
-              fontSize: "0.6875rem",
-              color: "#737373",
-              fontWeight: 500,
-            }}
-          >
-            JSON Order Payload
-          </div>
           <pre
             style={{
-              padding: "0.75rem",
+              padding: "0.5rem 1ch",
               margin: 0,
-              fontSize: "0.625rem",
+              fontSize: "var(--tui-font-size-xs)",
               lineHeight: 1.6,
-              color: "#22c55e",
+              color: "var(--tui-green)",
               overflow: "auto",
               maxHeight: "300px",
-              fontFamily: "'Geist Mono', monospace",
             }}
           >
             {JSON.stringify(orderPayload, null, 2)}

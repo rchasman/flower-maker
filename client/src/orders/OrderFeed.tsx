@@ -14,13 +14,12 @@ export function OrderFeed() {
     return (
       <div
         style={{
-          padding: "0.75rem",
-          color: "#404040",
-          fontSize: "0.6875rem",
-          textAlign: "center",
+          padding: "0.5rem 1ch",
+          color: "var(--tui-fg-4)",
+          fontSize: "var(--tui-font-size-sm)",
         }}
       >
-        No orders yet. Be the first.
+        no orders yet.
       </div>
     );
   }
@@ -30,33 +29,29 @@ export function OrderFeed() {
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: "0.25rem",
         overflow: "auto",
       }}
     >
       {recentOrders.map(order => (
         <div
           key={Number(order.id)}
+          className="tui-log-entry"
           style={{
-            padding: "0.5rem 0.75rem",
-            background: "#141414",
-            borderRadius: "0.25rem",
-            fontSize: "0.6875rem",
+            padding: "0.25rem 1ch",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            color: "#737373",
           }}
         >
-          <span>
+          <span style={{ color: "var(--tui-fg-3)" }}>
             #{Number(order.sessionId)}
             {isVariant(order.source, "Agent") && (
-              <span style={{ color: "#8b5cf6", marginLeft: "0.25rem" }}>
+              <span className="tui-badge tui-badge-purple" style={{ marginLeft: "0.5ch" }}>
                 AI
               </span>
             )}
           </span>
-          <span style={{ color: "#404040" }}>{order.note ?? "ordered"}</span>
+          <span style={{ color: "var(--tui-fg-4)" }}>{order.note ?? "ordered"}</span>
         </div>
       ))}
     </div>

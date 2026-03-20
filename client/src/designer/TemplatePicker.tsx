@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { motion } from "motion/react";
 import type { DbConnection } from "../spacetime/types.ts";
 import { templatesByCategory, type TemplateInfo } from "../data/templates.ts";
 import { readStreamWithProgress } from "../lib/utils.ts";
@@ -81,23 +82,28 @@ export function TemplatePicker({ conn, model, onGenerationStart, onSpecProgress,
         overflow: "hidden",
       }}
     >
+      {/* Header */}
+      <div
+        style={{
+          padding: "0.375rem 1ch",
+          borderBottom: "1px solid var(--tui-border)",
+          fontSize: "var(--tui-font-size-xs)",
+          color: "var(--tui-green)",
+        }}
+      >
+        ── TEMPLATES
+      </div>
+
       {/* Search */}
-      <div style={{ padding: "0.5rem", borderBottom: "1px solid #1a1a1a" }}>
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search 46 templates..."
-          style={{
-            width: "100%",
-            padding: "0.375rem 0.5rem",
-            background: "#0d0d0d",
-            border: "1px solid #1a1a1a",
-            borderRadius: "0.25rem",
-            color: "#e5e5e5",
-            fontSize: "0.6875rem",
-            outline: "none",
-          }}
-        />
+      <div style={{ padding: "0.375rem 0.5ch", borderBottom: "1px solid var(--tui-border-dim)" }}>
+        <div className="tui-input-wrap">
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="search 46 templates..."
+            className="tui-input"
+          />
+        </div>
       </div>
 
       {/* Template list */}
@@ -105,33 +111,27 @@ export function TemplatePicker({ conn, model, onGenerationStart, onSpecProgress,
         style={{
           flex: 1,
           overflow: "auto",
-          padding: "0.25rem 0.5rem",
+          padding: "0.25rem 0.5ch",
           display: "flex",
           flexDirection: "column",
-          gap: "0.5rem",
+          gap: "0.375rem",
         }}
       >
         {filteredGroups.map(group => (
           <div key={group.category}>
             <div
               style={{
-                fontSize: "0.5625rem",
+                fontSize: "var(--tui-font-size-2xs)",
                 fontWeight: 600,
-                color: "#525252",
+                color: "var(--tui-fg-3)",
                 textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                padding: "0.375rem 0 0.25rem",
+                letterSpacing: "0.06em",
+                padding: "0.375rem 0 0.125rem",
               }}
             >
               {group.label} ({group.templates.length})
             </div>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.125rem",
-              }}
-            >
+            <div style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
               {group.templates.map(t => (
                 <TemplateRow
                   key={t.name}
@@ -148,13 +148,13 @@ export function TemplatePicker({ conn, model, onGenerationStart, onSpecProgress,
         {filteredGroups.length === 0 && (
           <div
             style={{
-              padding: "1rem",
-              color: "#404040",
-              fontSize: "0.6875rem",
+              padding: "1rem 0",
+              color: "var(--tui-fg-4)",
+              fontSize: "var(--tui-font-size-sm)",
               textAlign: "center",
             }}
           >
-            No templates match "{search}"
+            no templates match "{search}"
           </div>
         )}
       </div>
@@ -174,45 +174,35 @@ function TemplateRow({
   onClick: () => void;
 }) {
   return (
-    <button
+    <motion.button
       onClick={onClick}
       disabled={disabled}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "0.5rem",
-        padding: "0.375rem 0.5rem",
-        background: generating ? "#1a1a2e" : "#141414",
-        border: `1px solid ${generating ? "#2d2d5e" : "#1a1a1a"}`,
-        borderRadius: "0.25rem",
-        cursor: disabled ? "not-allowed" : "pointer",
-        textAlign: "left",
-        color: "#e5e5e5",
-        opacity: disabled && !generating ? 0.5 : 1,
-        transition: "border-color 0.15s, background 0.15s",
-      }}
+      className="tui-template-row"
+      data-generating={generating ? "true" : undefined}
+      whileHover={{ x: 2 }}
+      transition={{ duration: 0.1 }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: "0.6875rem", fontWeight: 500 }}>
-          {generating ? `Generating ${t.name}...` : t.name}
+        <div style={{ fontSize: "var(--tui-font-size-sm)", fontWeight: 500 }}>
+          {generating ? (
+            <span style={{ color: "var(--tui-purple)" }}>
+              generating {t.name}<span className="tui-generating" />
+            </span>
+          ) : (
+            t.name
+          )}
         </div>
         <div
           style={{
-            fontSize: "0.5625rem",
-            color: "#525252",
+            fontSize: "var(--tui-font-size-2xs)",
+            color: "var(--tui-fg-4)",
             fontStyle: "italic",
           }}
         >
           {t.scientific}
         </div>
       </div>
-      <div
-        style={{
-          display: "flex",
-          gap: "2px",
-          flexShrink: 0,
-        }}
-      >
+      <div style={{ display: "flex", gap: "2px", flexShrink: 0 }}>
         {t.colors.slice(0, 4).map(c => (
           <span
             key={c}
@@ -221,19 +211,18 @@ function TemplateRow({
               height: 6,
               borderRadius: "50%",
               background: colorToHex(c),
-              border: "1px solid #262626",
+              border: "1px solid var(--tui-border)",
+              display: "inline-block",
             }}
           />
         ))}
         {t.colors.length > 4 && (
-          <span
-            style={{ fontSize: "0.5rem", color: "#404040", lineHeight: "6px" }}
-          >
+          <span style={{ fontSize: "0.5rem", color: "var(--tui-fg-4)", lineHeight: "6px" }}>
             +{t.colors.length - 4}
           </span>
         )}
       </div>
-    </button>
+    </motion.button>
   );
 }
 

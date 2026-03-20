@@ -69,66 +69,34 @@ export function ModelPicker({ value, onChange }: ModelPickerProps) {
   const current = MODELS.find(m => m.fullName === value);
 
   return (
-    <div style={{ position: "relative" }}>
+    <div className="tui-select">
       <button
         onClick={() => setOpen(!open)}
-        style={{
-          width: "100%",
-          padding: "0.375rem 0.5rem",
-          background: "#141414",
-          border: "1px solid #262626",
-          borderRadius: "0.25rem",
-          color: "#a3a3a3",
-          cursor: "pointer",
-          fontSize: "0.6875rem",
-          textAlign: "left",
-          display: "flex",
-          alignItems: "center",
-          gap: "0.375rem",
-        }}
+        className="tui-select-trigger"
       >
         <span
           style={{
             width: 6,
             height: 6,
             borderRadius: "50%",
-            background: current ? PROVIDER_COLORS[current.provider] ?? "#525252" : "#525252",
+            background: current ? PROVIDER_COLORS[current.provider] ?? "var(--tui-fg-3)" : "var(--tui-fg-3)",
             flexShrink: 0,
+            display: "inline-block",
           }}
         />
         <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {current?.fullName ?? value}
+          {current?.id ?? value}
         </span>
-        <span style={{ color: "#525252", fontSize: "0.625rem" }}>{open ? "▲" : "▼"}</span>
+        <span style={{ color: "var(--tui-fg-4)" }}>{open ? "▲" : "▼"}</span>
       </button>
 
       {open && (
-        <div
-          style={{
-            position: "absolute",
-            top: "100%",
-            left: 0,
-            right: 0,
-            marginTop: 2,
-            background: "#0d0d0d",
-            border: "1px solid #262626",
-            borderRadius: "0.375rem",
-            maxHeight: "280px",
-            overflow: "auto",
-            zIndex: 100,
-          }}
-        >
+        <div className="tui-select-menu">
           {groups.map(g => (
             <div key={g.provider}>
               <div
-                style={{
-                  padding: "0.375rem 0.5rem 0.25rem",
-                  fontSize: "0.5625rem",
-                  fontWeight: 600,
-                  color: PROVIDER_COLORS[g.provider] ?? "#525252",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                }}
+                className="tui-select-group-label"
+                style={{ color: PROVIDER_COLORS[g.provider] ?? "var(--tui-fg-3)" }}
               >
                 {g.provider}
               </div>
@@ -139,19 +107,8 @@ export function ModelPicker({ value, onChange }: ModelPickerProps) {
                     onChange(m.fullName);
                     setOpen(false);
                   }}
-                  style={{
-                    width: "100%",
-                    padding: "0.375rem 0.5rem 0.375rem 1rem",
-                    background: m.fullName === value ? "#1a1a1a" : "transparent",
-                    border: "none",
-                    color: m.fullName === value ? "#e5e5e5" : "#737373",
-                    cursor: "pointer",
-                    fontSize: "0.6875rem",
-                    textAlign: "left",
-                    display: "block",
-                  }}
-                  onMouseEnter={e => { (e.target as HTMLElement).style.background = "#1a1a1a"; }}
-                  onMouseLeave={e => { (e.target as HTMLElement).style.background = m.fullName === value ? "#1a1a1a" : "transparent"; }}
+                  className="tui-select-option"
+                  data-selected={m.fullName === value ? "true" : undefined}
                 >
                   {m.id}
                 </button>
