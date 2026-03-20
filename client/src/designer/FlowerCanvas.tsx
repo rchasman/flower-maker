@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from "react";
-import { Application, Graphics, Container, Circle, Filter } from "pixi.js";
+import { Application, Graphics, Container, Circle, Filter, GraphicsContextSystem } from "pixi.js";
 import type { FlowerRenderData } from "../wasm/loop.ts";
 import {
   sidHash,
@@ -852,6 +852,10 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     useEffect(() => {
       const el = containerRef.current;
       if (!el) return;
+
+      // Increase bezier tessellation quality — default 0.5 produces jagged
+      // curves at the 70px base radius with dense botanical detail
+      GraphicsContextSystem.defaultOptions.bezierSmoothness = 0.85;
 
       const app = new Application();
       let destroyed = false;
