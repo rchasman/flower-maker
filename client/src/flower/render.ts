@@ -43,15 +43,43 @@ export type CenterPlan = {
   stamens: readonly StamenPlan[];
 };
 
+export type ThornPlan = {
+  cmds: DrawCmd[];
+  color: number;
+};
+
 export type StemPlan = {
   cmds: DrawCmd[];
   color: number;
+  thorns: readonly ThornPlan[];
 };
 
 export type LeafPlan = {
   cmds: DrawCmd[];
   veins: DrawCmd[];
   color: number;
+};
+
+export type DewdropPlan = {
+  x: number;
+  y: number;
+  radius: number;
+};
+
+export type AuraPlan = {
+  kind: string;
+  color: number;
+  opacity: number;
+  radius: number;
+};
+
+export type ParticleSeed = {
+  kind: string;
+  color: number;
+  x: number;
+  y: number;
+  size: number;
+  speed: number;
 };
 
 /** Pre-computed rendering plan for a flower — cached per spec, scale-independent. */
@@ -65,6 +93,9 @@ export type FlowerPlan = {
   center: CenterPlan;
   stem: StemPlan | null;
   leaves: readonly LeafPlan[];
+  dewdrops: readonly DewdropPlan[];
+  aura: AuraPlan | null;
+  particles: readonly ParticleSeed[];
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -571,6 +602,192 @@ function parseSpec(specJson: string | undefined): ParsedSpec | null {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Effect parsing — thorns, dewdrops, aura, particles
+// ═══════════════════════════════════════════════════════════════════════════
+
+type ParsedThorns = {
+  density: number;
+  size: number;
+  color: number;
+};
+
+type ParsedDewdrops = {
+  size: number;
+  count: number;
+  placement: string;
+};
+
+type ParsedAura = {
+  kind: string;
+  color: number;
+  opacity: number;
+  radius: number;
+};
+
+type ParsedParticles = {
+  kind: string;
+  density: number;
+  color: number;
+  driftSpeed: number;
+  gravity: number;
+};
+
+function parseEffects(specJson: string | undefined): {
+  thorns: ParsedThorns | null;
+  dewdrops: ParsedDewdrops[];
+  aura: ParsedAura | null;
+  particles: ParsedParticles[];
+} {
+  const empty = { thorns: null, dewdrops: [], aura: null, particles: [] };
+  if (!specJson) return empty;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const spec = JSON.parse(specJson) as any;
+
+    // Thorns
+    const rawThorns = spec.structure?.stem?.thorns;
+    const thorns: ParsedThorns | null = rawThorns
+      ? {
+          density: rawThorns.density ?? 0.3,
+          size: rawThorns.size ?? 0.15,
+          color: colorToHex(rawThorns.color) ?? 0x3a5a27,
+        }
+      : null;
+
+    // Dewdrops
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dewdrops: ParsedDewdrops[] = (spec.ornamentation?.dewdrops ?? []).map((d: any) => ({
+      size: d.size ?? 0.05,
+      count: d.count ?? 3,
+      placement: d.placement ?? "Random",
+    }));
+
+    // Aura
+    const rawAura = spec.aura;
+    const aura: ParsedAura | null = rawAura
+      ? {
+          kind: rawAura.kind ?? "Ethereal",
+          color: colorToHex(rawAura.color) ?? 0xc4b5fd,
+          opacity: rawAura.opacity ?? 0.15,
+          radius: rawAura.radius ?? 0.4,
+        }
+      : null;
+
+    // Particles
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const particles: ParsedParticles[] = (spec.ornamentation?.particles ?? []).map((p: any) => ({
+      kind: p.kind ?? "Pollen",
+      density: p.density ?? 5,
+      color: colorToHex(p.color) ?? 0xfbbf24,
+      driftSpeed: p.drift_speed ?? 0.3,
+      gravity: p.gravity ?? 0,
+    }));
+
+    return { thorns, dewdrops, aura, particles };
+  } catch {
+    return empty;
+  }
+}
+
+/** Generate thorn shapes along a stem path. */
+function generateThorns(
+  fromX: number, fromY: number,
+  toX: number, toY: number,
+  curvature: number,
+  thorns: ParsedThorns,
+): ThornPlan[] {
+  const count = Math.max(1, Math.min(8, Math.round(thorns.density * 8)));
+  const thornSize = thorns.size * 0.06;
+
+  return Array.from({ length: count }, (_, i) => {
+    const t = 0.2 + (i / (count + 1)) * 0.55; // 20-75% along stem
+    const pt = stemPointAt(fromX, fromY, toX, toY, curvature, t);
+    const side = i % 2 === 0 ? 1 : -1;
+    const perpAngle = pt.angle + side * Math.PI * 0.5;
+    const baseOffset = 0.015; // start slightly outside stem edge
+
+    const bx = pt.x + Math.cos(perpAngle) * baseOffset;
+    const by = pt.y + Math.sin(perpAngle) * baseOffset;
+    const tx = pt.x + Math.cos(perpAngle - side * 0.4) * (baseOffset + thornSize);
+    const ty = pt.y + Math.sin(perpAngle - side * 0.4) * (baseOffset + thornSize);
+    const bx2 = pt.x + Math.cos(perpAngle + side * 0.3) * (baseOffset * 0.5);
+    const by2 = pt.y + Math.sin(perpAngle + side * 0.3) * (baseOffset * 0.5);
+
+    return {
+      cmds: [
+        { op: "M" as const, x: bx, y: by },
+        { op: "L" as const, x: tx, y: ty },
+        { op: "L" as const, x: bx2, y: by2 },
+        { op: "Z" as const },
+      ],
+      color: thorns.color,
+    };
+  });
+}
+
+/** Generate dewdrop positions on the flower head. */
+function generateDewdrops(
+  dewdrops: ParsedDewdrops[],
+  layers: ReadonlyArray<{ petals: ReadonlyArray<{ cmds: DrawCmd[] }> }>,
+  sid: number,
+): DewdropPlan[] {
+  const plans: DewdropPlan[] = [];
+  dewdrops.map((dd, di) => {
+    const count = Math.min(dd.count, 8);
+    Array.from({ length: count }, (_, i) => {
+      const seed = sidHash(sid, 100 + di * 20 + i);
+      const radius = dd.size * 0.04 + seed * 0.015;
+
+      // Place based on placement type
+      const angle = seed * Math.PI * 2;
+      const dist = dd.placement === "PetalTip"
+        ? 0.35 + seed * 0.15  // near petal tips
+        : dd.placement === "Center"
+        ? seed * 0.15          // near center
+        : dd.placement === "Edge"
+        ? 0.3 + seed * 0.2     // around edges
+        : 0.1 + seed * 0.35;   // random spread
+
+      plans.push({
+        x: Math.cos(angle) * dist,
+        y: Math.sin(angle) * dist,
+        radius,
+      });
+      return null;
+    });
+    return null;
+  });
+  return plans;
+}
+
+/** Generate particle seed positions for animated rendering. */
+function generateParticleSeeds(
+  particles: ParsedParticles[],
+  sid: number,
+): ParticleSeed[] {
+  const seeds: ParticleSeed[] = [];
+  particles.map((p, pi) => {
+    const count = Math.min(p.density, 12);
+    Array.from({ length: count }, (_, i) => {
+      const seed = sidHash(sid, 200 + pi * 30 + i);
+      const angle = seed * Math.PI * 2;
+      const dist = 0.15 + sidHash(sid, 300 + i) * 0.5;
+      seeds.push({
+        kind: p.kind,
+        color: p.color,
+        x: Math.cos(angle) * dist,
+        y: Math.sin(angle) * dist,
+        size: 0.008 + seed * 0.012,
+        speed: p.driftSpeed,
+      });
+      return null;
+    });
+    return null;
+  });
+  return seeds;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Flower plan creation
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -616,7 +833,7 @@ export function createFlowerPlan(
 
   if (!parsed) {
     // Unparseable spec — return empty plan.
-    return { sepals: [], layers: [], center: EMPTY_CENTER, stem: null, leaves: [] };
+    return { sepals: [], layers: [], center: EMPTY_CENTER, stem: null, leaves: [], dewdrops: [], aura: null, particles: [] };
   }
 
   const baseColor =
@@ -680,8 +897,20 @@ export function createFlowerPlan(
   const foliage = parseFoliage(specJson);
   const stemLen = stemData ? Math.max(0.6, Math.min(1.8, stemData.height * 1.4)) : 0;
 
+  // ── Effects ──
+  const effects = parseEffects(specJson);
+
+  // ── Stem + thorns ──
+  const thornPlans: ThornPlan[] = stemData && effects.thorns
+    ? generateThorns(0, stemLen, 0, 0, stemData.curvature, effects.thorns)
+    : [];
+
   const stem: StemPlan | null = stemData
-    ? { cmds: generateStem(0, stemLen, 0, 0, stemData.curvature ?? 0.1, Math.max(0.03, Math.min(0.08, (stemData.thickness ?? 0.3) * 0.08)), stemData.color ?? 0x2d5a27, stemData.style), color: stemData.color ?? 0x2d5a27 }
+    ? {
+        cmds: generateStem(0, stemLen, 0, 0, stemData.curvature ?? 0.1, Math.max(0.03, Math.min(0.08, (stemData.thickness ?? 0.3) * 0.08)), stemData.color ?? 0x2d5a27, stemData.style),
+        color: stemData.color ?? 0x2d5a27,
+        thorns: thornPlans,
+      }
     : null;
 
   // Place leaves only when both stem and foliage data exist
@@ -696,7 +925,14 @@ export function createFlowerPlan(
       })
     : [];
 
-  return { sepals, layers, center, stem, leaves };
+  // ── Dewdrops, aura, particles ──
+  const dewdrops = generateDewdrops(effects.dewdrops, layers, sid);
+  const aura: AuraPlan | null = effects.aura
+    ? { kind: effects.aura.kind, color: effects.aura.color, opacity: effects.aura.opacity, radius: effects.aura.radius }
+    : null;
+  const particles = generateParticleSeeds(effects.particles, sid);
+
+  return { sepals, layers, center, stem, leaves, dewdrops, aura, particles };
 }
 
 
@@ -1897,7 +2133,7 @@ export function createArrangementPlan(
       stemStyle,
     );
 
-    const stem: StemPlan = { cmds: stemCmds, color: stemColor };
+    const stem: StemPlan = { cmds: stemCmds, color: stemColor, thorns: [] };
 
     // One leaf per arrangement stem, placed mid-stem, smaller to avoid overlap
     const leaves: LeafPlan[] = foliage && foliage.leaves.length > 0
