@@ -1042,14 +1042,14 @@ export function createFlowerPlan(
       count, cumulativeOffset, layer.arrangement, parsed.symmetry, sid, layerIdx,
     );
 
-    const petals = petalAngles.map((angle, i) => {
-      const cmds = generatePetal(
+    const petals = petalAngles.map((angle, i) => ({
+      cmds: generatePetal(
         angle,
         layer.shape,
         layer.edgeStyle,
         layer.length,
         layer.width,
-        layer.curvature + layer.droop * 0.3, // droop increases curvature (petals cup outward)
+        layer.curvature + layer.droop * 0.3,
         layer.curl,
         sidHash(sid, 10 + layerIdx * 100 + i),
       ),
