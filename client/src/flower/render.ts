@@ -134,10 +134,32 @@ export function darkenColor(color: number, factor: number): number {
   return (r << 16) | (g << 8) | b;
 }
 
-function lightenColor(color: number, amount: number): number {
+export function lightenColor(color: number, amount: number): number {
   const r = Math.min(255, Math.floor(((color >> 16) & 0xff) + 255 * amount));
   const g = Math.min(255, Math.floor(((color >> 8) & 0xff) + 255 * amount));
   const b = Math.min(255, Math.floor((color & 0xff) + 255 * amount));
+  return (r << 16) | (g << 8) | b;
+}
+
+/** Per-petal color scatter — deterministic hue/brightness jitter for organic variation. */
+export function scatterColor(color: number, amount: number, seed: number): number {
+  const hash = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
+  const jitter = (hash - Math.floor(hash)) * 2 - 1; // [-1, 1]
+  const shift = Math.floor(255 * amount * jitter);
+  const r = Math.min(255, Math.max(0, ((color >> 16) & 0xff) + shift));
+  const g = Math.min(255, Math.max(0, ((color >> 8) & 0xff) + shift));
+  const b = Math.min(255, Math.max(0, (color & 0xff) + shift));
+  return (r << 16) | (g << 8) | b;
+}
+
+/** Directional light tint — petals facing the light source appear brighter. */
+export function lightTint(color: number, petalAngle: number, lightAngle = -Math.PI / 4): number {
+  // Cosine falloff: petals facing the light get up to 10% brightness boost
+  const dot = Math.cos(petalAngle - lightAngle);
+  const boost = dot * 0.1; // [-0.1, 0.1]
+  const r = Math.min(255, Math.max(0, Math.floor(((color >> 16) & 0xff) * (1 + boost))));
+  const g = Math.min(255, Math.max(0, Math.floor(((color >> 8) & 0xff) * (1 + boost))));
+  const b = Math.min(255, Math.max(0, Math.floor((color & 0xff) * (1 + boost))));
   return (r << 16) | (g << 8) | b;
 }
 
@@ -166,28 +188,6 @@ function coolShift(color: number): number {
   const r = Math.max(0, ((color >> 16) & 0xff) - 10);
   const g = (color >> 8) & 0xff;
   const b = Math.min(255, (color & 0xff) + 15);
-  return (r << 16) | (g << 8) | b;
-}
-
-/** Scatter a color by a small random amount for natural variation. */
-export function scatterColor(color: number, amount: number, seed: number): number {
-  const hash = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
-  const jitter = (hash - Math.floor(hash)) * 2 - 1; // -1..1
-  const r = Math.max(0, Math.min(255, ((color >> 16) & 0xff) + Math.round(jitter * amount * 255)));
-  const g = Math.max(0, Math.min(255, ((color >> 8) & 0xff) + Math.round(jitter * amount * 0.7 * 255)));
-  const b = Math.max(0, Math.min(255, (color & 0xff) + Math.round(jitter * amount * 0.5 * 255)));
-  return (r << 16) | (g << 8) | b;
-}
-
-/** Apply directional lighting based on petal angle vs light source. */
-export function lightTint(color: number, petalAngle: number, lightAngle: number = -Math.PI * 0.75): number {
-  // How much this petal faces the light (1 = directly facing, -1 = away)
-  const facing = Math.cos(petalAngle - lightAngle);
-  // Subtle adjustment: +10% brightness when facing light, -8% when away
-  const factor = facing > 0 ? 1 + facing * 0.10 : 1 + facing * 0.08;
-  const r = Math.max(0, Math.min(255, Math.round(((color >> 16) & 0xff) * factor)));
-  const g = Math.max(0, Math.min(255, Math.round(((color >> 8) & 0xff) * factor)));
-  const b = Math.max(0, Math.min(255, Math.round((color & 0xff) * factor)));
   return (r << 16) | (g << 8) | b;
 }
 
@@ -1042,8 +1042,8 @@ export function createFlowerPlan(
       count, cumulativeOffset, layer.arrangement, parsed.symmetry, sid, layerIdx,
     );
 
-    const petals = petalAngles.map((angle, i) => ({
-      cmds: generatePetal(
+    const petals = petalAngles.map((angle, i) => {
+      const cmds = generatePetal(
         angle,
         layer.shape,
         layer.edgeStyle,
