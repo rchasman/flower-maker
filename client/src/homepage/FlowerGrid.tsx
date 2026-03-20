@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { motion } from "motion/react";
 import { run, scoreColor } from "../lib/utils.ts";
 import { useSession } from "../session/SessionProvider.tsx";
 import { useFlowerSessions, useFlowerSpecs, useUsers, usePartOverrides } from "../spacetime/hooks.ts";
@@ -69,84 +70,87 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
     }))
     .filter(z => z.allSessions.length > 0 || z.isYours)
     .sort((a, b) => {
-      // "Your Zone" always first
       if (a.isYours) return -1;
       if (b.isYours) return 1;
-      // Online users before offline
       if (a.user.online && !b.user.online) return -1;
       if (!a.user.online && b.user.online) return 1;
-      // Online: sort by joinedAt ascending
       if (a.user.online && b.user.online) {
         return Number(a.user.joinedAt) - Number(b.user.joinedAt);
       }
-      // Offline: sort by totalOrders descending
       return Number(b.user.totalOrders) - Number(a.user.totalOrders);
     });
 
+  const userNameMap = useMemo(
+    () => new Map(users.map(u => [String(u.identity), u.name])),
+    [users],
+  );
+
   return (
-    <div
-      style={{
-        width: "100%",
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      {/* Header */}
+    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
+      {/* ── TUI Header / Status Bar ── */}
       <header
         style={{
-          padding: "1rem 1.5rem",
+          padding: "0.375rem 1.5ch",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          borderBottom: "1px solid #262626",
+          borderBottom: "1px solid var(--tui-border)",
+          background: "var(--tui-bg-0)",
         }}
       >
-        <h1
-          style={{
-            fontSize: "1.25rem",
-            fontWeight: 400,
-            letterSpacing: "-0.02em",
-          }}
-        >
-          flower-maker
-        </h1>
+        <div style={{ display: "flex", alignItems: "center", gap: "1ch" }}>
+          <span className="tui-glow-green" style={{ color: "var(--tui-green)", fontWeight: 600 }}>
+            FLOWER-MAKER
+          </span>
+          <span style={{ color: "var(--tui-border)" }}>│</span>
+          <span style={{ color: "var(--tui-fg-3)", fontSize: "var(--tui-font-size-xs)" }}>
+            collaborative botanical AI
+          </span>
+        </div>
+
         <div
           style={{
             display: "flex",
-            gap: "1rem",
+            gap: "1.5ch",
             alignItems: "center",
-            fontSize: "0.8125rem",
-            color: "#737373",
+            fontSize: "var(--tui-font-size-xs)",
           }}
         >
-          <span>{onlineCount} online</span>
-          <span>{zones.length} zones</span>
-          <ConnectionDot state={state} />
+          <span style={{ color: "var(--tui-fg-3)" }}>
+            <span style={{ color: "var(--tui-cyan)" }}>{onlineCount}</span> online
+          </span>
+          <span style={{ color: "var(--tui-border)" }}>│</span>
+          <span style={{ color: "var(--tui-fg-3)" }}>
+            <span style={{ color: "var(--tui-fg-1)" }}>{zones.length}</span> zones
+          </span>
+          <span style={{ color: "var(--tui-border)" }}>│</span>
+          <ConnectionStatus state={state} />
         </div>
       </header>
 
-      {/* Grid — cells expand to fill the screen, shrink as more zones appear */}
+      {/* ── Zone Grid ── */}
       <div
+        className="tui-zone-grid"
         style={{
-          flex: 1,
-          display: "grid",
           gridTemplateColumns: `repeat(${Math.ceil(Math.sqrt(zones.length || 1))}, 1fr)`,
-          gap: "0px",
-          padding: "0px",
-          overflow: "auto",
-          background: "#000",
         }}
       >
-        {zones.map(zone => (
-          <ZoneCard
+        {zones.map((zone, i) => (
+          <motion.div
             key={String(zone.user.identity)}
-            zone={zone}
-            specBySessionId={specBySessionId}
-            constituentMap={constituentMap}
-            arrangementMetaMap={arrangementMetaMap}
-            onClick={zone.isYours ? onEnterDesigner : undefined}
-          />
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.2, delay: Math.min(i * 0.03, 0.3) }}
+          >
+            <ZoneCard
+              zone={zone}
+              specBySessionId={specBySessionId}
+              constituentMap={constituentMap}
+              arrangementMetaMap={arrangementMetaMap}
+              userName={userNameMap.get(String(zone.user.identity))}
+              onClick={zone.isYours ? onEnterDesigner : undefined}
+            />
+          </motion.div>
         ))}
 
         {/* Empty state */}
@@ -157,12 +161,12 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "#404040",
-              fontSize: "0.8125rem",
+              color: "var(--tui-fg-4)",
+              fontSize: "var(--tui-font-size-sm)",
               padding: "3rem",
             }}
           >
-            No zones yet. Click your zone to start designing.
+            no zones active. click your zone to begin designing.
           </div>
         )}
 
@@ -173,23 +177,42 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "#404040",
-              fontSize: "0.8125rem",
+              color: "var(--tui-fg-4)",
+              fontSize: "var(--tui-font-size-sm)",
               padding: "3rem",
             }}
           >
-            {state === "connecting"
-              ? "Connecting to SpacetimeDB..."
-              : "Not connected -- start SpacetimeDB and refresh"}
+            {state === "connecting" ? (
+              <span>
+                <span style={{ color: "var(--tui-amber)" }}>[sync]</span>{" "}
+                establishing connection<span className="tui-generating" />
+              </span>
+            ) : (
+              <span>
+                <span style={{ color: "var(--tui-red)" }}>[err]</span>{" "}
+                spacetimedb offline — restart and refresh
+              </span>
+            )}
           </div>
         )}
+      </div>
+
+      {/* ── Bottom status bar ── */}
+      <div className="tui-status-bar">
+        <span>flower-maker v0.1</span>
+        <span className="sep">│</span>
+        <span>{sessions.filter(s => isVariant(s.status, "Designing")).length} active sessions</span>
+        <span className="sep">│</span>
+        <span>{specs.length} specs loaded</span>
+        <span style={{ marginLeft: "auto" }}>
+          spacetimedb
+        </span>
       </div>
     </div>
   );
 }
 
 // ── Mini canvas — live SVG replica of a user's designer canvas ───────────
-// Uses the exact same math as FlowerCanvas (PixiJS) via shared render module.
 
 /** Render a single flower from its spec-driven plan. */
 function SvgFlower({ sid, x, y, r, specJson, plan: precomputedPlan }: { sid: number; x: number; y: number; r: number; specJson?: string; plan?: ReturnType<typeof createFlowerPlan> }) {
@@ -363,7 +386,6 @@ function SvgArrangement({ x, y, r, constituents, level, meta }: {
 function MiniCanvas({ sessions, specBySessionId, constituentMap, arrangementMetaMap }: { sessions: readonly FlowerSession[]; specBySessionId: Map<string, FlowerSpec>; constituentMap: Map<string, Array<{ specJson: string; sid: number }>>; arrangementMetaMap: Map<string, ArrangementMeta> }) {
   if (sessions.length === 0) return null;
 
-  // Compute bounding box of all flower positions
   const positions = sessions.map(s => ({
     sid: Number(s.id),
     sessionKey: String(s.id),
@@ -371,7 +393,6 @@ function MiniCanvas({ sessions, specBySessionId, constituentMap, arrangementMeta
     y: Number(s.canvasY) || 0,
   }));
 
-  // If all at (0,0), spread them in a grid
   const allZero = positions.every(p => p.x === 0 && p.y === 0);
   const resolved = allZero
     ? positions.map((p, i) => {
@@ -392,11 +413,7 @@ function MiniCanvas({ sessions, specBySessionId, constituentMap, arrangementMeta
 
   const rawW = Math.max(maxX - minX, 1);
   const rawH = Math.max(maxY - minY, 1);
-
-  // Flower radius scales with how many there are (smaller when crowded)
   const flowerR = Math.max(6, Math.min(14, rawW / (sessions.length + 1)));
-
-  // Pad by flower radius so edge flowers aren't clipped
   const pad = flowerR * 1.5;
   const bboxW = rawW + pad * 2;
   const bboxH = rawH + pad * 2;
@@ -405,7 +422,7 @@ function MiniCanvas({ sessions, specBySessionId, constituentMap, arrangementMeta
 
   return (
     <svg
-      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", background: "#000" }}
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", background: "var(--tui-bg-0)" }}
       viewBox={`${vbX} ${vbY} ${bboxW} ${bboxH}`}
       preserveAspectRatio="xMidYMid meet"
     >
@@ -423,13 +440,24 @@ function MiniCanvas({ sessions, specBySessionId, constituentMap, arrangementMeta
 
 /** Empty zone placeholder — subtle crosshair. */
 function EmptyZoneIcon({ isYours }: { isYours: boolean }) {
-  const color = isYours ? "#6b6bb4" : "#333";
+  const color = isYours ? "var(--tui-purple-dim)" : "var(--tui-border)";
   return (
     <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} viewBox="0 0 40 40">
       <line x1="20" y1="10" x2="20" y2="30" stroke={color} strokeWidth="1" />
       <line x1="10" y1="20" x2="30" y2="20" stroke={color} strokeWidth="1" />
       <line x1="13" y1="13" x2="27" y2="27" stroke={color} strokeWidth="0.5" />
       <line x1="27" y1="13" x2="13" y2="27" stroke={color} strokeWidth="0.5" />
+      {isYours && (
+        <text
+          x="20" y="36"
+          textAnchor="middle"
+          fill="var(--tui-purple-dim)"
+          fontSize="3"
+          fontFamily="var(--tui-font)"
+        >
+          YOUR ZONE
+        </text>
+      )}
     </svg>
   );
 }
@@ -441,12 +469,14 @@ function ZoneCard({
   specBySessionId,
   constituentMap,
   arrangementMetaMap,
+  userName,
   onClick,
 }: {
   zone: ZoneData;
   specBySessionId: Map<string, FlowerSpec>;
   constituentMap: Map<string, Array<{ specJson: string; sid: number }>>;
   arrangementMetaMap: Map<string, ArrangementMeta>;
+  userName?: string;
   onClick?: () => void;
 }) {
   const { user, allSessions, isYours } = zone;
@@ -454,45 +484,47 @@ function ZoneCard({
   return (
     <div
       onClick={onClick}
-      style={{
-        aspectRatio: "1",
-        background: "#000",
-        border: run(() => {
-          if (isYours) return "1px solid #3b3b6d";
-          if (user.online) return "1px solid #1f1f1f";
-          return "1px solid #1a1a1a";
-        }),
-        overflow: "hidden",
-        position: "relative",
-        cursor: onClick ? "pointer" : "default",
-        transition: "border-color 0.15s",
-        opacity: user.online ? 1 : 0.6,
-      }}
+      className="tui-zone-card"
+      data-yours={isYours ? "true" : undefined}
+      data-offline={!user.online ? "true" : undefined}
     >
       {allSessions.length > 0 ? (
         <MiniCanvas sessions={allSessions} specBySessionId={specBySessionId} constituentMap={constituentMap} arrangementMetaMap={arrangementMetaMap} />
       ) : (
         <EmptyZoneIcon isYours={isYours} />
       )}
+
+      {/* Zone label overlay */}
+      <div className="tui-zone-label">
+        <span className="name">
+          {isYours && <span style={{ color: "var(--tui-purple)", marginRight: "0.5ch" }}>▸</span>}
+          {userName ?? String(user.identity).slice(0, 8)}
+        </span>
+        <span>
+          {allSessions.length > 0 && (
+            <span style={{ color: "var(--tui-fg-4)" }}>
+              {allSessions.length}
+            </span>
+          )}
+          {user.online && (
+            <span style={{ color: "var(--tui-green)", marginLeft: "0.5ch", fontSize: "0.5rem" }}>●</span>
+          )}
+        </span>
+      </div>
     </div>
   );
 }
 
-function ConnectionDot({ state }: { state: string }) {
-  const stateScores: Record<string, number> = {
-    connected: 100,
-    connecting: 50,
+function ConnectionStatus({ state }: { state: string }) {
+  const stateConfig: Record<string, { label: string; cls: string }> = {
+    connected: { label: "CONNECTED", cls: "tui-badge-green" },
+    connecting: { label: "SYNCING", cls: "tui-badge-amber" },
   };
-  const color = scoreColor(stateScores[state] ?? 0);
+  const config = stateConfig[state] ?? { label: "OFFLINE", cls: "tui-badge-red" };
+
   return (
-    <span
-      style={{
-        width: 8,
-        height: 8,
-        borderRadius: "50%",
-        background: color,
-        display: "inline-block",
-      }}
-    />
+    <span className={`tui-badge ${config.cls}`}>
+      {config.label}
+    </span>
   );
 }
