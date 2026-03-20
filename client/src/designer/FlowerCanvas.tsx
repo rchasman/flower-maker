@@ -767,8 +767,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           app.stage.addChild(flowerContainer);
           stageContainerRef.current = flowerContainer;
 
-          // Full-screen dark fantasy: color grading + ordered dithering in one pass
-          app.stage.filters = [createDarkFantasyDitherFilter()];
+          // Dark fantasy dither on flower layer only — keeps background clean black
+          flowerContainer.filters = [createDarkFantasyDitherFilter()];
 
           // Stage-level drag handlers
           app.stage.eventMode = "static";
