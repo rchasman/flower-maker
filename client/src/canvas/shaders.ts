@@ -9,7 +9,7 @@
  *   sprite.filters = [createMergeGlowFilter()]
  */
 
-import { Filter, GlProgram } from "pixi.js";
+import { Filter } from "pixi.js";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 1. MERGE GLOW — soft radial glow on newly merged arrangements

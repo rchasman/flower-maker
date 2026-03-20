@@ -86,8 +86,15 @@ export type ParticleSeed = {
 export type FlowerPlan = {
   sepals: ReadonlyArray<{ cmds: DrawCmd[]; color: number }>;
   layers: ReadonlyArray<{
-    petals: ReadonlyArray<{ cmds: DrawCmd[]; angle: number; veinCmds: DrawCmd[] }>;
-    color: number;
+    petals: ReadonlyArray<{
+      cmds: DrawCmd[];
+      angle: number;
+      veinCmds: DrawCmd[];
+      color: number;
+      highlightColor: number;
+      outlineColor: number;
+      veinColor: number;
+    }>;
     opacity: number;
   }>;
   center: CenterPlan;
@@ -142,9 +149,8 @@ export function lightenColor(color: number, amount: number): number {
 }
 
 /** Per-petal color scatter — deterministic hue/brightness jitter for organic variation. */
-export function scatterColor(color: number, amount: number, seed: number): number {
-  const hash = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
-  const jitter = (hash - Math.floor(hash)) * 2 - 1; // [-1, 1]
+function scatterColor(color: number, amount: number, seed: number): number {
+  const jitter = sidHash(Math.floor(seed * 127), 311) * 2 - 1; // [-1, 1]
   const shift = Math.floor(255 * amount * jitter);
   const r = Math.min(255, Math.max(0, ((color >> 16) & 0xff) + shift));
   const g = Math.min(255, Math.max(0, ((color >> 8) & 0xff) + shift));
@@ -153,7 +159,7 @@ export function scatterColor(color: number, amount: number, seed: number): numbe
 }
 
 /** Directional light tint — petals facing the light source appear brighter. */
-export function lightTint(color: number, petalAngle: number, lightAngle = -Math.PI / 4): number {
+function lightTint(color: number, petalAngle: number, lightAngle = -Math.PI / 4): number {
   // Cosine falloff: petals facing the light get up to 10% brightness boost
   const dot = Math.cos(petalAngle - lightAngle);
   const boost = dot * 0.1; // [-0.1, 0.1]
@@ -607,6 +613,15 @@ type ParsedSpec = {
   symmetry: ParsedSymmetry;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseSymmetry(raw: any): ParsedSymmetry {
+  if (!raw) return { type: "Radial" };
+  if (typeof raw === "string") return { type: raw };
+  if (raw.Spiral) return { type: "Spiral", divergenceAngle: raw.Spiral.divergence_angle ?? 137.5 };
+  if (raw.Radial) return { type: "Radial", order: raw.Radial.order };
+  return { type: raw.type ?? "Radial" };
+}
+
 function parseSpec(specJson: string | undefined): ParsedSpec | null {
   if (!specJson) return null;
   try {
@@ -631,17 +646,9 @@ function parseSpec(specJson: string | undefined): ParsedSpec | null {
       }),
     );
 
-    // Parse symmetry
+    // Parse symmetry — handles serde externally-tagged enum format
     const rawSym = spec.petals?.symmetry;
-    const symmetry: ParsedSymmetry = rawSym
-      ? typeof rawSym === "string"
-        ? { type: rawSym }
-        : rawSym.Spiral
-        ? { type: "Spiral", divergenceAngle: rawSym.Spiral.divergence_angle ?? 137.5 }
-        : rawSym.Radial
-        ? { type: "Radial", order: rawSym.Radial.order }
-        : { type: rawSym.type ?? "Radial" }
-      : { type: "Radial" };
+    const symmetry: ParsedSymmetry = parseSymmetry(rawSym);
 
     const reproductive = spec.reproductive ?? {};
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -811,13 +818,12 @@ function generateDewdrops(
 
       // Place based on placement type
       const angle = seed * Math.PI * 2;
-      const dist = dd.placement === "PetalTip"
-        ? 0.35 + seed * 0.15  // near petal tips
-        : dd.placement === "Center"
-        ? seed * 0.15          // near center
-        : dd.placement === "Edge"
-        ? 0.3 + seed * 0.2     // around edges
-        : 0.1 + seed * 0.35;   // random spread
+      const PLACEMENT_DIST: Record<string, (s: number) => number> = {
+        PetalTip: s => 0.35 + s * 0.15,
+        Center: s => s * 0.15,
+        Edge: s => 0.3 + s * 0.2,
+      };
+      const dist = (PLACEMENT_DIST[dd.placement] ?? (s => 0.1 + s * 0.35))(seed);
 
       plans.push({
         x: Math.cos(angle) * dist,
@@ -1042,22 +1048,30 @@ export function createFlowerPlan(
       count, cumulativeOffset, layer.arrangement, parsed.symmetry, sid, layerIdx,
     );
 
-    const petals = petalAngles.map((angle, i) => ({
-      cmds: generatePetal(
+    const petals = petalAngles.map((angle, i) => {
+      const scattered = scatterColor(layerColor, 0.06, i * 7.3 + layerIdx * 13.1);
+      const lit = lightTint(scattered, angle);
+      return {
+        cmds: generatePetal(
+          angle,
+          layer.shape,
+          layer.edgeStyle,
+          layer.length,
+          layer.width,
+          layer.curvature + layer.droop * 0.3,
+          layer.curl,
+          sidHash(sid, 10 + layerIdx * 100 + i),
+        ),
         angle,
-        layer.shape,
-        layer.edgeStyle,
-        layer.length,
-        layer.width,
-        layer.curvature + layer.droop * 0.3,
-        layer.curl,
-        sidHash(sid, 10 + layerIdx * 100 + i),
-      ),
-      angle,
-      veinCmds: generatePetalVein(angle, layer.length, layer.curvature + layer.droop * 0.3, layer.curl),
-    }));
+        veinCmds: generatePetalVein(angle, layer.length, layer.curvature + layer.droop * 0.3, layer.curl),
+        color: lit,
+        highlightColor: lightenColor(lit, 0.18),
+        outlineColor: darkenColor(lit, 0.55),
+        veinColor: darkenColor(lit, 0.6),
+      };
+    });
 
-    return { petals, color: layerColor, opacity: layer.opacity };
+    return { petals, opacity: layer.opacity };
   });
 
   // ── Center (pistil + stamens) ──

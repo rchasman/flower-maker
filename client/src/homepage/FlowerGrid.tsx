@@ -241,7 +241,7 @@ function SvgFlower({ sid, x, y, r, specJson, plan: precomputedPlan }: { sid: num
           <path
             key={`l${li}-p${pi}`}
             d={cmdsToSvgD(petal.cmds, x, y, scale)}
-            fill={hexString(layer.color)}
+            fill={hexString(petal.color)}
             opacity={layer.opacity}
           />
         )),

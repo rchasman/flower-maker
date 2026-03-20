@@ -7,8 +7,6 @@ import {
   colorFromSpec,
   darkenColor,
   lightenColor,
-  scatterColor,
-  lightTint,
   createFlowerPlan,
   createArrangementPlan,
   type FlowerPlan,
@@ -18,7 +16,7 @@ import {
   type DrawCmd,
 } from "../flower/render.ts";
 import { setCanvasViewport, getCanvasViewport } from "../spacetime/bridge.ts";
-import { createPetalTranslucencyFilter, createMergeGlowFilter } from "../canvas/shaders.ts";
+import { createMergeGlowFilter } from "../canvas/shaders.ts";
 import { createMergeEffect, tickMergeEffect, type MergeEffectState } from "../canvas/MergeEffect.ts";
 
 export type ConstituentEntry = { specJson: string; sid: number };
@@ -74,6 +72,108 @@ function drawCmds(g: Graphics, cmds: readonly DrawCmd[], scale: number, ox = 0, 
         break;
     }
   }
+}
+
+// ── Module-scope constants (hoisted from hot loops) ──
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+const MERGE_GLOW_DURATION = 2000;
+
+// ── Shared drawing helpers (used by both single-flower and arrangement paths) ──
+
+/** Draw petal layers with 4-pass rendering: fill, highlight, outline, vein. */
+function drawPetals(
+  g: Graphics, layers: FlowerPlan["layers"],
+  scale: number, alpha: number, ox = 0, oy = 0,
+) {
+  layers.map((layer) => {
+    layer.petals.map((petal) => {
+      drawCmds(g, petal.cmds, scale, ox, oy);
+      g.fill({ color: petal.color, alpha: alpha * layer.opacity });
+
+      drawCmds(g, petal.cmds, scale, ox, oy);
+      g.fill({ color: petal.highlightColor, alpha: alpha * 0.15 });
+
+      drawCmds(g, petal.cmds, scale, ox, oy);
+      g.stroke({ color: petal.outlineColor, width: Math.max(0.3, scale * 0.006), alpha: alpha * layer.opacity * 0.4 });
+
+      if (petal.veinCmds.length > 0) {
+        drawCmds(g, petal.veinCmds, scale, ox, oy);
+        g.stroke({ color: petal.veinColor, width: Math.max(0.3, scale * 0.008), alpha: alpha * 0.25 });
+      }
+      return null;
+    });
+    return null;
+  });
+}
+
+/** Draw stamens with curved filaments and anther highlights. */
+function drawStamens(
+  g: Graphics, stamens: FlowerPlan["center"]["stamens"],
+  scale: number, alpha: number, ox = 0, oy = 0,
+) {
+  stamens.map((s, i) => {
+    const sx = ox + Math.cos(s.angle) * s.length * scale;
+    const sy = oy + Math.sin(s.angle) * s.length * scale;
+    const midX = ox + (sx - ox) * 0.5;
+    const midY = oy + (sy - oy) * 0.5;
+    const perpX = -(sy - oy) * 0.12;
+    const perpY = (sx - ox) * 0.12;
+    const bendDir = i % 2 === 0 ? 1 : -1;
+
+    g.moveTo(ox, oy);
+    g.bezierCurveTo(
+      midX + perpX * bendDir, midY + perpY * bendDir,
+      midX + perpX * bendDir * 0.5, midY + perpY * bendDir * 0.5,
+      sx, sy,
+    );
+    g.stroke({ color: s.filamentColor, width: Math.max(0.4, scale * 0.022), alpha: alpha * 0.75 });
+
+    const ar = s.antherRadius * scale;
+    g.circle(sx, sy, ar);
+    g.fill({ color: s.antherColor, alpha });
+    g.circle(sx, sy, ar);
+    g.stroke({ color: darkenColor(s.antherColor, 0.5), width: Math.max(0.2, scale * 0.004), alpha: alpha * 0.4 });
+    g.circle(sx - ar * 0.25, sy - ar * 0.25, ar * 0.35);
+    g.fill({ color: 0xffffff, alpha: alpha * 0.25 });
+    return null;
+  });
+}
+
+/** Draw center disc with outline, radial depth, stippling, and pistil highlight. */
+function drawCenterDisc(
+  g: Graphics, center: FlowerPlan["center"],
+  scale: number, alpha: number, ox = 0, oy = 0,
+) {
+  const discR = center.discRadius * scale;
+  const discColor = center.discColor;
+
+  g.circle(ox, oy, discR);
+  g.fill({ color: discColor, alpha });
+  g.circle(ox, oy, discR);
+  g.stroke({ color: darkenColor(discColor, 0.45), width: Math.max(0.3, scale * 0.006), alpha: alpha * 0.4 });
+
+  g.circle(ox, oy, discR * 0.75);
+  g.fill({ color: lightenColor(discColor, 0.08), alpha: alpha * 0.3 });
+  g.circle(ox, oy, discR * 0.5);
+  g.fill({ color: lightenColor(discColor, 0.15), alpha: alpha * 0.25 });
+
+  const stippleCount = Math.max(5, Math.min(16, Math.round(discR * 4)));
+  Array.from({ length: stippleCount }, (_, i) => {
+    const t = (i + 1) / (stippleCount + 1);
+    const r2 = discR * t * 0.85;
+    const theta = i * GOLDEN_ANGLE;
+    const dotX = ox + Math.cos(theta) * r2;
+    const dotY = oy + Math.sin(theta) * r2;
+    const dotR = Math.max(0.3, scale * 0.008 * (1 - t * 0.4));
+    const dotColor = i % 2 === 0 ? darkenColor(discColor, 0.6) : lightenColor(discColor, 0.1);
+    g.circle(dotX, dotY, dotR);
+    g.fill({ color: dotColor, alpha: alpha * (0.35 + t * 0.2) });
+    return null;
+  });
+
+  const hlR = center.highlightRadius * scale;
+  g.circle(ox + discR * 0.08, oy - discR * 0.12, hlR);
+  g.fill({ color: center.highlightColor, alpha: alpha * 0.55 });
 }
 
 /** Draw aura on a SEPARATE Graphics to avoid rectangular bounding-box artifacts. */
@@ -209,134 +309,22 @@ function drawFlowerFromPlan(
     return null;
   });
 
-  // Petal layers (outer first = behind, inner last = on top)
-  plan.layers.map((layer, layerIdx) => {
-    layer.petals.map((petal, petalIdx) => {
-      // Per-petal color variation: scatter + directional lighting
-      const scattered = scatterColor(layer.color, 0.06, petalIdx * 7.3 + layerIdx * 13.1);
-      const lit = lightTint(scattered, petal.angle);
+  // Petal layers, dewdrops, stamens, center disc
+  drawPetals(g, plan.layers, scale, alpha);
 
-      // Pass 1: Base fill
-      drawCmds(g, petal.cmds, scale);
-      g.fill({ color: lit, alpha: alpha * layer.opacity });
-
-      // Pass 2: Inner highlight — simulates translucency/inner glow
-      drawCmds(g, petal.cmds, scale);
-      g.fill({ color: lightenColor(lit, 0.18), alpha: alpha * 0.15 });
-
-      // Pass 3: Stroke outline — crisp edge definition against dark background
-      drawCmds(g, petal.cmds, scale);
-      g.stroke({
-        color: darkenColor(lit, 0.55),
-        width: Math.max(0.3, scale * 0.006),
-        alpha: alpha * layer.opacity * 0.4,
-      });
-
-      // Pass 4: Midrib vein — thin centerline for botanical detail
-      if (petal.veinCmds.length > 0) {
-        drawCmds(g, petal.veinCmds, scale);
-        g.stroke({
-          color: darkenColor(lit, 0.6),
-          width: Math.max(0.3, scale * 0.008),
-          alpha: alpha * 0.25,
-        });
-      }
-
-      return null;
-    });
-    return null;
-  });
-
-  // Dewdrops (on top of petals)
   plan.dewdrops.map((dd) => {
     const dx = dd.x * scale;
     const dy = dd.y * scale;
     const dr = dd.radius * scale;
-    // Main drop — translucent white
     g.circle(dx, dy, dr);
     g.fill({ color: 0xffffff, alpha: alpha * 0.45 });
-    // Specular highlight — smaller, brighter
     g.circle(dx - dr * 0.3, dy - dr * 0.3, dr * 0.4);
     g.fill({ color: 0xffffff, alpha: alpha * 0.7 });
     return null;
   });
 
-  // Stamens
-  plan.center.stamens.map((s, i) => {
-    const sx = Math.cos(s.angle) * s.length * scale;
-    const sy = Math.sin(s.angle) * s.length * scale;
-
-    // Curved filament — slight perpendicular bend at midpoint for organic feel
-    const midX = sx * 0.5;
-    const midY = sy * 0.5;
-    const perpX = -sy * 0.12; // perpendicular offset
-    const perpY = sx * 0.12;
-    const bendDir = i % 2 === 0 ? 1 : -1;
-
-    g.moveTo(0, 0);
-    g.bezierCurveTo(
-      midX + perpX * bendDir, midY + perpY * bendDir,
-      midX + perpX * bendDir * 0.5, midY + perpY * bendDir * 0.5,
-      sx, sy,
-    );
-    g.stroke({
-      color: s.filamentColor,
-      width: Math.max(0.4, scale * 0.022),
-      alpha: alpha * 0.75,
-    });
-
-    // Anther — main body
-    const ar = s.antherRadius * scale;
-    g.circle(sx, sy, ar);
-    g.fill({ color: s.antherColor, alpha });
-    // Anther outline
-    g.circle(sx, sy, ar);
-    g.stroke({ color: darkenColor(s.antherColor, 0.5), width: Math.max(0.2, scale * 0.004), alpha: alpha * 0.4 });
-    // Specular highlight on anther
-    g.circle(sx - ar * 0.25, sy - ar * 0.25, ar * 0.35);
-    g.fill({ color: 0xffffff, alpha: alpha * 0.25 });
-
-    return null;
-  });
-
-  // Center disc (pistil) — multi-layer for depth
-  const discR = plan.center.discRadius * scale;
-  const discColor = plan.center.discColor;
-
-  // Outer disc with outline
-  g.circle(0, 0, discR);
-  g.fill({ color: discColor, alpha });
-  g.circle(0, 0, discR);
-  g.stroke({ color: darkenColor(discColor, 0.45), width: Math.max(0.3, scale * 0.006), alpha: alpha * 0.4 });
-
-  // Radial depth — concentric rings fading inward (lighter center)
-  g.circle(0, 0, discR * 0.75);
-  g.fill({ color: lightenColor(discColor, 0.08), alpha: alpha * 0.3 });
-  g.circle(0, 0, discR * 0.5);
-  g.fill({ color: lightenColor(discColor, 0.15), alpha: alpha * 0.25 });
-
-  // Stippling — tiny dots in golden spiral for texture
-  const GOLDEN = Math.PI * (3 - Math.sqrt(5));
-  const stippleCount = Math.max(5, Math.min(16, Math.round(discR * 4)));
-  Array.from({ length: stippleCount }, (_, i) => {
-    const t = (i + 1) / (stippleCount + 1);
-    const r2 = discR * t * 0.85;
-    const theta = i * GOLDEN;
-    const dotX = Math.cos(theta) * r2;
-    const dotY = Math.sin(theta) * r2;
-    const dotR = Math.max(0.3, scale * 0.008 * (1 - t * 0.4));
-    const dotColor = i % 2 === 0 ? darkenColor(discColor, 0.6) : lightenColor(discColor, 0.1);
-    g.circle(dotX, dotY, dotR);
-    g.fill({ color: dotColor, alpha: alpha * (0.35 + t * 0.2) });
-    return null;
-  });
-
-  // Pistil highlight — slightly offset for natural look
-  const hlR = plan.center.highlightRadius * scale;
-  const hlOx = discR * 0.08;
-  const hlOy = -discR * 0.12;
-  g.circle(hlOx, hlOy, hlR);
-  g.fill({ color: plan.center.highlightColor, alpha: alpha * 0.55 });
+  drawStamens(g, plan.center.stamens, scale, alpha);
+  drawCenterDisc(g, plan.center, scale, alpha);
 
   // Particles (on top of everything, time-animated)
   plan.particles.map((p) => {
@@ -438,10 +426,8 @@ function drawArrangementFromPlan(
     return null;
   });
 
-  // Pass 3: Flower heads (back to front — hero last so it's on top)
-  // Each head is drawn at scale * member.scale, offset to its pixel position.
-  // offset = member.offset * scale (pixel space), applied AFTER scaling coords.
-  [...plan.members].reverse().map((member) => {
+  // Pass 4: Flower heads (back to front — hero last so it's on top)
+  plan.members.toReversed().map((member) => {
     const flowerScale = scale * member.scale;
     const ox = member.offsetX * scale;
     const oy = member.offsetY * scale;
@@ -450,127 +436,14 @@ function drawArrangementFromPlan(
     member.flowerPlan.sepals.map((sepal) => {
       drawCmds(g, sepal.cmds, flowerScale, ox, oy);
       g.fill({ color: sepal.color, alpha: alpha * 0.85 });
-      // Outline for definition
       drawCmds(g, sepal.cmds, flowerScale, ox, oy);
       g.stroke({ color: darkenColor(sepal.color, 0.5), width: Math.max(0.3, flowerScale * 0.005), alpha: alpha * 0.35 });
       return null;
     });
 
-    // Petal layers
-    member.flowerPlan.layers.map((layer, layerIdx) => {
-      layer.petals.map((petal, petalIdx) => {
-        const scattered = scatterColor(layer.color, 0.06, petalIdx * 7.3 + layerIdx * 13.1);
-        const lit = lightTint(scattered, petal.angle);
-
-        // Base fill
-        drawCmds(g, petal.cmds, flowerScale, ox, oy);
-        g.fill({ color: lit, alpha: alpha * layer.opacity });
-
-        // Inner highlight
-        drawCmds(g, petal.cmds, flowerScale, ox, oy);
-        g.fill({ color: lightenColor(lit, 0.18), alpha: alpha * 0.15 });
-
-        // Stroke outline
-        drawCmds(g, petal.cmds, flowerScale, ox, oy);
-        g.stroke({
-          color: darkenColor(lit, 0.55),
-          width: Math.max(0.3, flowerScale * 0.006),
-          alpha: alpha * layer.opacity * 0.4,
-        });
-
-        // Midrib vein
-        if (petal.veinCmds.length > 0) {
-          drawCmds(g, petal.veinCmds, flowerScale, ox, oy);
-          g.stroke({
-            color: darkenColor(lit, 0.6),
-            width: Math.max(0.3, flowerScale * 0.008),
-            alpha: alpha * 0.25,
-          });
-        }
-
-        return null;
-      });
-      return null;
-    });
-
-    // Stamens
-    member.flowerPlan.center.stamens.map((s, i) => {
-      const sx = ox + Math.cos(s.angle) * s.length * flowerScale;
-      const sy = oy + Math.sin(s.angle) * s.length * flowerScale;
-
-      // Curved filament — slight perpendicular bend at midpoint for organic feel
-      const rawX = Math.cos(s.angle) * s.length * flowerScale;
-      const rawY = Math.sin(s.angle) * s.length * flowerScale;
-      const midX = ox + rawX * 0.5;
-      const midY = oy + rawY * 0.5;
-      const perpX = -rawY * 0.12;
-      const perpY = rawX * 0.12;
-      const bendDir = i % 2 === 0 ? 1 : -1;
-
-      g.moveTo(ox, oy);
-      g.bezierCurveTo(
-        midX + perpX * bendDir, midY + perpY * bendDir,
-        midX + perpX * bendDir * 0.5, midY + perpY * bendDir * 0.5,
-        sx, sy,
-      );
-      g.stroke({
-        color: s.filamentColor,
-        width: Math.max(0.4, flowerScale * 0.022),
-        alpha: alpha * 0.75,
-      });
-
-      // Anther — main body
-      const ar = s.antherRadius * flowerScale;
-      g.circle(sx, sy, ar);
-      g.fill({ color: s.antherColor, alpha });
-      // Anther outline
-      g.circle(sx, sy, ar);
-      g.stroke({ color: darkenColor(s.antherColor, 0.5), width: Math.max(0.2, flowerScale * 0.004), alpha: alpha * 0.4 });
-      // Specular highlight on anther
-      g.circle(sx - ar * 0.25, sy - ar * 0.25, ar * 0.35);
-      g.fill({ color: 0xffffff, alpha: alpha * 0.25 });
-
-      return null;
-    });
-
-    // Center disc — multi-layer for depth
-    const mDiscR = member.flowerPlan.center.discRadius * flowerScale;
-    const mDiscColor = member.flowerPlan.center.discColor;
-
-    // Outer disc with outline
-    g.circle(ox, oy, mDiscR);
-    g.fill({ color: mDiscColor, alpha });
-    g.circle(ox, oy, mDiscR);
-    g.stroke({ color: darkenColor(mDiscColor, 0.45), width: Math.max(0.3, flowerScale * 0.006), alpha: alpha * 0.4 });
-
-    // Radial depth — concentric rings fading inward
-    g.circle(ox, oy, mDiscR * 0.75);
-    g.fill({ color: lightenColor(mDiscColor, 0.08), alpha: alpha * 0.3 });
-    g.circle(ox, oy, mDiscR * 0.5);
-    g.fill({ color: lightenColor(mDiscColor, 0.15), alpha: alpha * 0.25 });
-
-    // Stippling — tiny dots in golden spiral for texture
-    const GOLDEN_A = Math.PI * (3 - Math.sqrt(5));
-    const mStippleCount = Math.max(5, Math.min(16, Math.round(mDiscR * 4)));
-    Array.from({ length: mStippleCount }, (_, si) => {
-      const t = (si + 1) / (mStippleCount + 1);
-      const sr = mDiscR * t * 0.85;
-      const theta = si * GOLDEN_A;
-      const dotX = ox + Math.cos(theta) * sr;
-      const dotY = oy + Math.sin(theta) * sr;
-      const dotR = Math.max(0.3, flowerScale * 0.008 * (1 - t * 0.4));
-      const dotColor = si % 2 === 0 ? darkenColor(mDiscColor, 0.6) : lightenColor(mDiscColor, 0.1);
-      g.circle(dotX, dotY, dotR);
-      g.fill({ color: dotColor, alpha: alpha * (0.35 + t * 0.2) });
-      return null;
-    });
-
-    // Pistil highlight — slightly offset for natural look
-    const mHlR = member.flowerPlan.center.highlightRadius * flowerScale;
-    const mHlOx = ox + mDiscR * 0.08;
-    const mHlOy = oy - mDiscR * 0.12;
-    g.circle(mHlOx, mHlOy, mHlR);
-    g.fill({ color: member.flowerPlan.center.highlightColor, alpha: alpha * 0.55 });
+    drawPetals(g, member.flowerPlan.layers, flowerScale, alpha, ox, oy);
+    drawStamens(g, member.flowerPlan.center.stamens, flowerScale, alpha, ox, oy);
+    drawCenterDisc(g, member.flowerPlan.center, flowerScale, alpha, ox, oy);
 
     return null;
   });
@@ -601,7 +474,6 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const auraGraphicsRef = useRef<Map<number, Graphics>>(new Map());
 
     // Shader filter refs
-    const petalFilterRef = useRef<Filter | null>(null);
     const mergeGlowFiltersRef = useRef<Map<number, { filter: Filter; startTime: number }>>(new Map());
     const mergeEffectsRef = useRef<MergeEffectState[]>([]);
     const mergeParticleGfxRef = useRef<Graphics | null>(null);
@@ -703,12 +575,6 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             g.on("pointerup", () => {
               g!.cursor = "grab";
             });
-            // Apply petal translucency filter (lazy-init shared instance)
-            // Disabled: Filter.from() API needs validation against PixiJS v8
-            // if (!petalFilterRef.current) {
-            //   petalFilterRef.current = createPetalTranslucencyFilter();
-            // }
-            // g.filters = [petalFilterRef.current];
             graphics.set(flower.sid, g);
             stage.addChild(g);
           }
@@ -816,8 +682,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           }
         }
 
-        // ── Merge glow filter animation (fade intensity 1.0 → 0.0 over 2s) ──
-        const MERGE_GLOW_DURATION = 2000;
+        // ── Merge glow filter animation (fade intensity 1.0 → 0.0) ──
         const now = performance.now();
         [...mergeGlowFiltersRef.current.entries()].map(([sid, { filter, startTime }]) => {
           const elapsed = now - startTime;
@@ -964,7 +829,6 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         planCacheRef.current.clear();
         mergeOverlayRef.current = null;
         mergeParticleGfxRef.current = null;
-        petalFilterRef.current = null;
         mergeGlowFiltersRef.current.clear();
         mergeEffectsRef.current = [];
         if (appRef.current) {
