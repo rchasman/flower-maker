@@ -719,7 +719,33 @@ fn tpl(
     }
 }
 
-/// Returns all 46 flower templates.
+/// Override stem style on a base_spec.
+fn styled(mut spec: FlowerSpec, style: StemStyle) -> FlowerSpec {
+    spec.structure.stem.style = style;
+    spec
+}
+
+/// Override petal texture on all layers.
+fn textured(mut spec: FlowerSpec, tex: SurfaceTexture) -> FlowerSpec {
+    spec.petals.layers.iter_mut().for_each(|l| l.texture = tex.clone());
+    spec
+}
+
+/// Override petal edge style on all layers.
+fn edged(mut spec: FlowerSpec, edge: EdgeStyle) -> FlowerSpec {
+    spec.petals.layers.iter_mut().for_each(|l| l.edge_style = edge.clone());
+    spec
+}
+
+/// Add an aura to a spec.
+fn with_aura(mut spec: FlowerSpec, kind: AuraKind, color: &str, opacity: f64) -> FlowerSpec {
+    spec.aura = Some(Aura {
+        kind, color: Color::hex(color), opacity, radius: 0.4, animation_speed: 0.5,
+    });
+    spec
+}
+
+/// Returns all flower templates.
 pub fn all_templates() -> Vec<FlowerTemplate> {
     vec![
         rose(), sunflower(), daisy(), orchid(), tulip(),
@@ -1009,5 +1035,148 @@ pub fn all_templates() -> Vec<FlowerTemplate> {
             base_spec("Solidaster", "x Solidaster luteus", PhysicsArchetype::Delicate,
                 "#fde047", 30, PetalShape::Spatulate, Symmetry::Radial{order:5},
                 LightPreference::FullSun, WindResponse::Dancing, 0.8, 0.3, 0.6, 0.1, FragranceProfile::Earthy, 0.4, LeafShape::Lanceolate, false)),
+
+        // ── v2 Showcase: flowers that highlight new shapes & stem styles ──
+
+        tpl("Protea", "Protea cynaroides",
+            &["Pink","Red","White","Cream"], &["Anniversary","Congratulations"], "Winter-Spring",
+            PhysicsArchetype::Sturdy,
+            with_aura(textured(styled(
+                base_spec("Protea", "Protea cynaroides", PhysicsArchetype::Sturdy,
+                    "#be185d", 40, PetalShape::Acuminate, Symmetry::Radial{order:8},
+                    LightPreference::FullSun, WindResponse::Rigid, 0.9, 0.3, 0.6, 0.2, FragranceProfile::Earthy, 0.8, LeafShape::Elliptic, false),
+                StemStyle::Woody), SurfaceTexture::Leathery),
+                AuraKind::Crystal, "#f9a8d4", 0.1)),
+
+        tpl("Bird of Paradise", "Strelitzia reginae",
+            &["Orange","Blue","Yellow"], &["Congratulations","Thank You"], "Year-round",
+            PhysicsArchetype::Sturdy,
+            styled(edged(
+                base_spec("Bird of Paradise", "Strelitzia reginae", PhysicsArchetype::Sturdy,
+                    "#ea580c", 5, PetalShape::Sagittate, Symmetry::Bilateral,
+                    LightPreference::FullSun, WindResponse::Rigid, 0.7, 0.6, 0.8, 0.3, FragranceProfile::Sweet, 1.0, LeafShape::Obovate, false),
+                EdgeStyle::Smooth), StemStyle::Arching)),
+
+        tpl("Wisteria", "Wisteria sinensis",
+            &["Lavender","White","Pink","Blue"], &["Love & Romance","Anniversary"], "Spring",
+            PhysicsArchetype::Delicate,
+            with_aura(styled(
+                base_spec("Wisteria", "Wisteria sinensis", PhysicsArchetype::Delicate,
+                    "#a78bfa", 12, PetalShape::Ovate, Symmetry::Bilateral,
+                    LightPreference::FullSun, WindResponse::Dancing, 0.6, 0.5, 0.7, 0.9, FragranceProfile::Sweet, 0.6, LeafShape::Pinnate, true),
+                StemStyle::Trailing),
+                AuraKind::Ethereal, "#c4b5fd", 0.12)),
+
+        tpl("Lotus", "Nelumbo nucifera",
+            &["Pink","White","Yellow"], &["Anniversary","Sympathy"], "Summer",
+            PhysicsArchetype::Bushy,
+            with_aura(textured(
+                base_spec("Lotus", "Nelumbo nucifera", PhysicsArchetype::Bushy,
+                    "#fda4af", 20, PetalShape::Flabellate, Symmetry::Spiral{divergence_angle:137.5},
+                    LightPreference::FullSun, WindResponse::Gentle, 0.5, 0.9, 0.7, 0.8, FragranceProfile::Aquatic, 0.4, LeafShape::Peltate, true),
+                SurfaceTexture::Waxy),
+                AuraKind::Moonlight, "#fecdd3", 0.15)),
+
+        tpl("Passionflower", "Passiflora incarnata",
+            &["Purple","White","Blue"], &["Love & Romance","Anniversary"], "Summer",
+            PhysicsArchetype::Delicate,
+            with_aura(styled(
+                base_spec("Passionflower", "Passiflora incarnata", PhysicsArchetype::Delicate,
+                    "#7c3aed", 30, PetalShape::Filiform, Symmetry::Radial{order:5},
+                    LightPreference::PartialShade, WindResponse::Dancing, 0.6, 0.7, 0.8, 0.4, FragranceProfile::Sweet, 0.4, LeafShape::Palmate, true),
+                StemStyle::Twining),
+                AuraKind::Prismatic, "#c4b5fd", 0.18)),
+
+        tpl("Heliconia", "Heliconia rostrata",
+            &["Red","Orange","Yellow","Green"], &["Birthday","Thank You"], "Year-round",
+            PhysicsArchetype::Sturdy,
+            styled(textured(
+                base_spec("Heliconia", "Heliconia rostrata", PhysicsArchetype::Sturdy,
+                    "#dc2626", 8, PetalShape::Cuneate, Symmetry::Bilateral,
+                    LightPreference::PartialShade, WindResponse::Rigid, 0.6, 0.8, 0.6, 0.3, FragranceProfile::Green, 1.2, LeafShape::Obovate, false),
+                SurfaceTexture::Waxy), StemStyle::Succulent)),
+
+        tpl("Bleeding Heart", "Lamprocapnos spectabilis",
+            &["Pink","White","Red"], &["Love & Romance","Anniversary"], "Spring",
+            PhysicsArchetype::Delicate,
+            styled(
+                base_spec("Bleeding Heart", "Lamprocapnos spectabilis", PhysicsArchetype::Delicate,
+                    "#f472b6", 6, PetalShape::Panduriform, Symmetry::Bilateral,
+                    LightPreference::PartialShade, WindResponse::Dancing, 0.4, 0.6, 0.5, 0.2, FragranceProfile::Sweet, 0.5, LeafShape::Pinnate, false),
+                StemStyle::Arching)),
+
+        tpl("Plumeria", "Plumeria rubra",
+            &["White","Pink","Yellow","Red"], &["Love & Romance","Anniversary"], "Summer",
+            PhysicsArchetype::Upright,
+            with_aura(textured(styled(
+                base_spec("Plumeria", "Plumeria rubra", PhysicsArchetype::Upright,
+                    "#fef3c7", 5, PetalShape::Obovate, Symmetry::Spiral{divergence_angle:72.0},
+                    LightPreference::FullSun, WindResponse::Gentle, 0.5, 0.5, 0.8, 0.9, FragranceProfile::Sweet, 0.6, LeafShape::Oblanceolate, false),
+                StemStyle::Woody), SurfaceTexture::Pearlescent),
+                AuraKind::Moonlight, "#fef9c3", 0.1)),
+
+        tpl("Thistle", "Cirsium vulgare",
+            &["Purple","Pink","White"], &["Get Well","Thank You"], "Summer-Fall",
+            PhysicsArchetype::Sturdy,
+            edged(styled(
+                base_spec("Thistle", "Cirsium vulgare", PhysicsArchetype::Sturdy,
+                    "#9333ea", 60, PetalShape::Filiform, Symmetry::Radial{order:8},
+                    LightPreference::FullSun, WindResponse::Rigid, 0.9, 0.2, 0.4, 0.1, FragranceProfile::Earthy, 0.7, LeafShape::Lanceolate, false),
+                StemStyle::Straight), EdgeStyle::Dentate)),
+
+        tpl("Clematis", "Clematis montana",
+            &["White","Pink","Purple","Blue"], &["Birthday","Thank You"], "Spring-Summer",
+            PhysicsArchetype::Delicate,
+            styled(
+                base_spec("Clematis", "Clematis montana", PhysicsArchetype::Delicate,
+                    "#e9d5ff", 4, PetalShape::Ovate, Symmetry::Radial{order:4},
+                    LightPreference::PartialShade, WindResponse::Dancing, 0.6, 0.5, 0.6, 0.3, FragranceProfile::Sweet, 0.4, LeafShape::Cordate, true),
+                StemStyle::Twining)),
+
+        tpl("Kangaroo Paw", "Anigozanthos flavidus",
+            &["Red","Yellow","Green","Orange"], &["Birthday","Congratulations"], "Spring-Summer",
+            PhysicsArchetype::Upright,
+            styled(textured(
+                base_spec("Kangaroo Paw", "Anigozanthos flavidus", PhysicsArchetype::Upright,
+                    "#dc2626", 6, PetalShape::Filiform, Symmetry::Bilateral,
+                    LightPreference::FullSun, WindResponse::Gentle, 0.7, 0.3, 0.5, 0.0, FragranceProfile::Earthy, 0.7, LeafShape::Linear, false),
+                SurfaceTexture::Fuzzy), StemStyle::Succulent)),
+
+        tpl("Japanese Anemone", "Anemone hupehensis",
+            &["Pink","White","Magenta"], &["Anniversary","Thank You"], "Fall",
+            PhysicsArchetype::Delicate,
+            styled(
+                base_spec("Japanese Anemone", "Anemone hupehensis", PhysicsArchetype::Delicate,
+                    "#f9a8d4", 8, PetalShape::Orbicular, Symmetry::Radial{order:8},
+                    LightPreference::PartialShade, WindResponse::Dancing, 0.6, 0.5, 0.5, 0.2, FragranceProfile::Sweet, 0.5, LeafShape::Palmate, false),
+                StemStyle::Sinuous)),
+
+        tpl("Foxglove", "Digitalis purpurea",
+            &["Purple","Pink","White","Yellow"], &["Get Well","Thank You"], "Summer",
+            PhysicsArchetype::Upright,
+            styled(
+                base_spec("Foxglove", "Digitalis purpurea", PhysicsArchetype::Upright,
+                    "#a855f7", 20, PetalShape::Unguiculate, Symmetry::Bilateral,
+                    LightPreference::PartialShade, WindResponse::Gentle, 0.5, 0.6, 0.7, 0.3, FragranceProfile::Medicinal, 0.9, LeafShape::Oblanceolate, false),
+                StemStyle::Straight)),
+
+        tpl("Calla Lily", "Zantedeschia aethiopica",
+            &["White","Yellow","Pink","Purple","Black"], &["Anniversary","Sympathy","Love & Romance"], "Spring-Summer",
+            PhysicsArchetype::Upright,
+            with_aura(textured(styled(
+                base_spec("Calla Lily", "Zantedeschia aethiopica", PhysicsArchetype::Upright,
+                    "#fafafa", 1, PetalShape::Unguiculate, Symmetry::Bilateral,
+                    LightPreference::PartialShade, WindResponse::Gentle, 0.5, 0.7, 0.7, 0.6, FragranceProfile::Floral, 0.7, LeafShape::Sagittate, false),
+                StemStyle::Sinuous), SurfaceTexture::Waxy),
+                AuraKind::Ethereal, "#e2e8f0", 0.1)),
+
+        tpl("Bromeliad", "Guzmania lingulata",
+            &["Red","Orange","Yellow","Pink"], &["Birthday","Thank You"], "Year-round",
+            PhysicsArchetype::Bushy,
+            styled(textured(
+                base_spec("Bromeliad", "Guzmania lingulata", PhysicsArchetype::Bushy,
+                    "#ef4444", 12, PetalShape::Rhomboid, Symmetry::Radial{order:6},
+                    LightPreference::PartialShade, WindResponse::Rigid, 0.7, 0.7, 0.4, 0.0, FragranceProfile::Green, 0.3, LeafShape::Linear, false),
+                SurfaceTexture::Metallic), StemStyle::Succulent)),
     ]
 }
