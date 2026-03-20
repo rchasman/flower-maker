@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useMemo } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { useSession } from "../session/SessionProvider.tsx";
 import { useChatMessages, useUsers } from "../spacetime/hooks.ts";
-import type { User } from "../spacetime/module_bindings/user_table.ts";
+import type { User } from "../spacetime/types.ts";
 
 const CHATTER_COLORS = [
   "#f87171", "#fb923c", "#fbbf24", "#a3e635",
@@ -78,66 +79,67 @@ export function Chat() {
         style={{
           flex: 1,
           overflow: "auto",
-          padding: "0.5rem",
+          padding: "0.25rem 0.5ch",
           display: "flex",
           flexDirection: "column",
-          gap: "0.25rem",
+          gap: "0.125rem",
         }}
       >
-        {sorted.map(msg => (
-          <div
-            key={Number(msg.id)}
-            style={{ fontSize: "0.6875rem", lineHeight: 1.4 }}
-          >
-            <span style={{ color: colorForIdentity(colorMap, String(msg.sender)), fontWeight: 500 }}>
-              {userNameMap.get(String(msg.sender)) ?? String(msg.sender).slice(0, 8)}:
-            </span>{" "}
-            <span style={{ color: "#a3a3a3" }}>{msg.text}</span>
-          </div>
-        ))}
+        <AnimatePresence>
+          {sorted.map(msg => (
+            <motion.div
+              key={Number(msg.id)}
+              initial={{ opacity: 0, x: -3 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.1 }}
+              className="tui-log-entry"
+            >
+              <span
+                className="nick"
+                style={{ color: colorForIdentity(colorMap, String(msg.sender)) }}
+              >
+                &lt;{userNameMap.get(String(msg.sender)) ?? String(msg.sender).slice(0, 8)}&gt;
+              </span>{" "}
+              <span className="msg">{msg.text}</span>
+            </motion.div>
+          ))}
+        </AnimatePresence>
         {sorted.length === 0 && (
           <div
             style={{
-              color: "#404040",
-              fontSize: "0.6875rem",
+              color: "var(--tui-fg-4)",
+              fontSize: "var(--tui-font-size-sm)",
               textAlign: "center",
-              padding: "1rem",
+              padding: "1rem 0",
             }}
           >
-            No messages yet.
+            no messages. type to chat.
           </div>
         )}
       </div>
 
       <div
         style={{
-          padding: "0.375rem",
-          borderTop: "1px solid #1a1a1a",
+          padding: "0.25rem 0.5ch",
+          borderTop: "1px solid var(--tui-border-dim)",
           display: "flex",
-          gap: "0.375rem",
+          gap: "0.5ch",
         }}
       >
-        <input
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              sendMessage();
-            }
-          }}
-          placeholder="Say something..."
-          style={{
-            flex: 1,
-            padding: "0.375rem 0.5rem",
-            background: "#0d0d0d",
-            border: "1px solid #1a1a1a",
-            borderRadius: "0.25rem",
-            color: "#e5e5e5",
-            fontSize: "0.6875rem",
-            outline: "none",
-          }}
-        />
+        <div className="tui-input-wrap" style={{ flex: 1 }}>
+          <input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                sendMessage();
+              }
+            }}
+            placeholder="say something..."
+            className="tui-input"
+          />
+        </div>
       </div>
     </div>
   );

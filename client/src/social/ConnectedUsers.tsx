@@ -12,41 +12,35 @@ export function ConnectedUsers() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-      <div style={{ fontSize: "0.6875rem", color: "#737373", fontWeight: 500 }}>
-        {online.length} online
+      <div
+        style={{
+          fontSize: "var(--tui-font-size-xs)",
+          color: "var(--tui-green)",
+          marginBottom: "0.25rem",
+        }}
+      >
+        ── OPERATORS ONLINE ({online.length})
       </div>
       {online.map(user => (
         <div
           key={String(user.identity)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.5rem",
-            fontSize: "0.625rem",
-          }}
+          className="tui-log-entry"
+          style={{ display: "flex", alignItems: "center", gap: "1ch" }}
         >
+          <span style={{ color: "var(--tui-green)", fontSize: "0.5rem" }}>●</span>
           <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: "#22c55e",
-              flexShrink: 0,
-            }}
-          />
-          <span
-            style={{
-              color: colorForIdentity(colorMap, String(user.identity)),
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              fontWeight: 500,
-            }}
+            className="nick"
+            style={{ color: colorForIdentity(colorMap, String(user.identity)) }}
           >
             {user.name ?? String(user.identity).slice(0, 12)}
           </span>
         </div>
       ))}
+      {online.length === 0 && (
+        <div style={{ color: "var(--tui-fg-4)", fontSize: "var(--tui-font-size-sm)" }}>
+          no other operators connected.
+        </div>
+      )}
     </div>
   );
 }
