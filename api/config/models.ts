@@ -55,4 +55,4 @@ export const MODEL_MAP: Record<string, string> = Object.fromEntries(
   MODELS.map(m => [m.id, m.fullName]),
 );
 
-export const DEFAULT_MODEL = "openai/gpt-5.4-nano";
+export const DEFAULT_MODEL = "google/gemini-3.1-flash-lite-preview";

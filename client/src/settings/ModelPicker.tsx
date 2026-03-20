@@ -29,7 +29,7 @@ const MODELS: ModelConfig[] = [
   { id: "qwen-3.5-flash", fullName: "alibaba/qwen3.5-flash", provider: "alibaba" },
 ];
 
-export const DEFAULT_MODEL = "openai/gpt-5.4-nano";
+export const DEFAULT_MODEL = "google/gemini-3.1-flash-lite-preview";
 
 const PROVIDER_COLORS: Record<string, string> = {
   anthropic: "#a78bfa",
