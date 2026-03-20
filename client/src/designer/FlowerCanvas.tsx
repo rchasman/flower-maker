@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from "react";
-import { Application, Graphics, Container, Circle } from "pixi.js";
+import { Application, Graphics, Container, Circle, Filter } from "pixi.js";
 import type { FlowerRenderData } from "../wasm/loop.ts";
 import {
   sidHash,
@@ -18,6 +18,8 @@ import {
   type DrawCmd,
 } from "../flower/render.ts";
 import { setCanvasViewport, getCanvasViewport } from "../spacetime/bridge.ts";
+import { createPetalTranslucencyFilter, createMergeGlowFilter } from "../canvas/shaders.ts";
+import { createMergeEffect, tickMergeEffect, type MergeEffectState } from "../canvas/MergeEffect.ts";
 
 export type ConstituentEntry = { specJson: string; sid: number };
 
@@ -600,6 +602,12 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const mergeTargetRef = useRef<{ dragSid: number; targetSid: number; distance: number } | null>(null);
     const mergeOverlayRef = useRef<Graphics | null>(null);
 
+    // Shader filter refs
+    const petalFilterRef = useRef<Filter | null>(null);
+    const mergeGlowFiltersRef = useRef<Map<number, { filter: Filter; startTime: number }>>(new Map());
+    const mergeEffectsRef = useRef<MergeEffectState[]>([]);
+    const mergeParticleGfxRef = useRef<Graphics | null>(null);
+
     // Spec map, constituent map, arrangement meta, and cached plans
     const specMapRef = useRef<Map<number, string>>(new Map());
     const constituentMapRef = useRef<Map<number, ConstituentEntry[]>>(new Map());
@@ -694,6 +702,11 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             g.on("pointerup", () => {
               g!.cursor = "grab";
             });
+            // Apply petal translucency filter (lazy-init shared instance)
+            if (!petalFilterRef.current) {
+              petalFilterRef.current = createPetalTranslucencyFilter();
+            }
+            g.filters = [petalFilterRef.current];
             graphics.set(flower.sid, g);
             stage.addChild(g);
           }
@@ -781,6 +794,50 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             }
           }
         }
+
+        // ── Merge glow filter animation (fade intensity 1.0 → 0.0 over 2s) ──
+        const MERGE_GLOW_DURATION = 2000;
+        const now = performance.now();
+        [...mergeGlowFiltersRef.current.entries()].map(([sid, { filter, startTime }]) => {
+          const elapsed = now - startTime;
+          if (elapsed >= MERGE_GLOW_DURATION) {
+            // Remove expired glow filter
+            const g = graphics.get(sid);
+            if (g) {
+              g.filters = ((g.filters ?? []) as Filter[]).filter(f => f !== filter);
+            }
+            mergeGlowFiltersRef.current.delete(sid);
+          } else {
+            // Animate intensity down
+            const intensity = 1.0 - elapsed / MERGE_GLOW_DURATION;
+            filter.resources.mergeGlowUniforms.uniforms.uIntensity = intensity;
+          }
+          return null;
+        });
+
+        // ── Merge particle burst rendering ──
+        if (!mergeParticleGfxRef.current && stage) {
+          mergeParticleGfxRef.current = new Graphics();
+          stage.addChild(mergeParticleGfxRef.current);
+        }
+        const particleGfx = mergeParticleGfxRef.current;
+        if (particleGfx) {
+          particleGfx.clear();
+          const dt = 1 / 60; // approximate frame delta
+          mergeEffectsRef.current = mergeEffectsRef.current
+            .filter(effect => effect.active)
+            .map(effect => {
+              tickMergeEffect(effect, dt);
+              effect.particles
+                .filter(p => p.life > 0)
+                .map(p => {
+                  particleGfx.circle(p.x, p.y, 3 * p.scale);
+                  particleGfx.fill({ color: p.color, alpha: p.life * 0.8 });
+                  return null;
+                });
+              return effect;
+            });
+        }
       },
       [onFlowerClick, getPlan],
     );
@@ -839,6 +896,27 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
 
               const mt = mergeTargetRef.current;
               if (mt && mt.dragSid === drag.sid) {
+                // Trigger merge glow on target flower
+                const targetG = flowerGraphicsRef.current.get(mt.targetSid);
+                if (targetG) {
+                  const glowFilter = createMergeGlowFilter();
+                  const existing = (targetG.filters ?? []) as Filter[];
+                  targetG.filters = [...existing, glowFilter];
+                  mergeGlowFiltersRef.current.set(mt.targetSid, {
+                    filter: glowFilter,
+                    startTime: performance.now(),
+                  });
+                }
+                // Spawn merge particle burst at target position
+                const targetPos = targetG?.position;
+                if (targetPos) {
+                  const colorA = fallbackColor(drag.sid);
+                  const colorB = fallbackColor(mt.targetSid);
+                  mergeEffectsRef.current = [
+                    ...mergeEffectsRef.current,
+                    createMergeEffect(targetPos.x, targetPos.y, colorA, colorB),
+                  ];
+                }
                 onMergeDropRef.current?.(drag.sid, mt.targetSid);
               } else if (g) {
                 onFlowerDragEndRef.current?.(drag.sid, g.position.x, g.position.y);
@@ -859,6 +937,10 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         flowerGraphicsRef.current.clear();
         planCacheRef.current.clear();
         mergeOverlayRef.current = null;
+        mergeParticleGfxRef.current = null;
+        petalFilterRef.current = null;
+        mergeGlowFiltersRef.current.clear();
+        mergeEffectsRef.current = [];
         if (appRef.current) {
           appRef.current.destroy(true);
           appRef.current = null;
