@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { readStreamWithProgress } from "../lib/utils.ts";
 import { parse as parseYaml } from "yaml";
 
@@ -53,7 +54,6 @@ export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerG
     setInput("");
     setMessages(prev => [...prev, { role: "user", content: text }]);
     setActiveCount(c => c + 1);
-    // Capture the message index for this generation's status line
     const msgIdx = { current: -1 };
 
     let genId = "";
@@ -67,14 +67,14 @@ export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerG
       if (!res.ok || !res.body) {
         setMessages(prev => [
           ...prev,
-          { role: "assistant", content: `Error: ${res.statusText}` },
+          { role: "assistant", content: `[err] ${res.statusText}` },
         ]);
         return;
       }
 
       setMessages(prev => {
         msgIdx.current = prev.length;
-        return [...prev, { role: "assistant", content: "Generating..." }];
+        return [...prev, { role: "assistant", content: "" }];
       });
       genId = onGenerationStart?.(text) ?? "";
 
@@ -86,7 +86,7 @@ export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerG
       const { specJson, name } = yamlToJson(raw);
 
       setMessages(prev =>
-        prev.map((m, i) => i === msgIdx.current ? { ...m, content: `Created ${name}` } : m),
+        prev.map((m, i) => i === msgIdx.current ? { ...m, content: `[ok] created: ${name}` } : m),
       );
 
       onFlowerGenerated?.(genId, specJson);
@@ -94,7 +94,7 @@ export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerG
       if (genId) onGenerationFailed?.(genId);
       setMessages(prev => [
         ...prev,
-        { role: "assistant", content: `Error: ${String(err)}` },
+        { role: "assistant", content: `[err] ${String(err)}` },
       ]);
     } finally {
       setActiveCount(c => c - 1);
@@ -107,112 +107,130 @@ export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerG
         display: "flex",
         flexDirection: "column",
         height: "100%",
-        background: "#0d0d0d",
-        borderRadius: "0.5rem",
-        border: "1px solid #262626",
         overflow: "hidden",
       }}
     >
+      {/* Header */}
       <div
         style={{
-          padding: "0.75rem 1rem",
-          borderBottom: "1px solid #262626",
-          fontSize: "0.8125rem",
-          fontWeight: 500,
+          padding: "0.375rem 1ch",
+          borderBottom: "1px solid var(--tui-border)",
+          fontSize: "var(--tui-font-size-xs)",
+          color: "var(--tui-green)",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
         }}
       >
-        Describe your flower
+        <span>── AI PROMPT</span>
+        {activeCount > 0 && (
+          <span className="tui-badge tui-badge-amber">
+            GEN×{activeCount}
+          </span>
+        )}
       </div>
 
+      {/* Message log */}
       <div
         ref={scrollRef}
         style={{
           flex: 1,
           overflow: "auto",
-          padding: "0.75rem",
+          padding: "0.5rem 1ch",
           display: "flex",
           flexDirection: "column",
-          gap: "0.5rem",
+          gap: "0.25rem",
         }}
       >
         {messages.length === 0 && (
-          <p
-            style={{
-              color: "#404040",
-              fontSize: "0.75rem",
-              padding: "1rem",
-              textAlign: "center",
-            }}
-          >
-            Describe the flower you want and AI will generate a full botanical
-            spec.
-          </p>
-        )}
-        {messages.map((msg, i) => (
           <div
-            key={i}
             style={{
-              padding: "0.5rem 0.75rem",
-              borderRadius: "0.375rem",
-              background: msg.role === "user" ? "#1a1a2e" : "#141414",
-              border: `1px solid ${msg.role === "user" ? "#2d2d5e" : "#1a1a1a"}`,
-              fontSize: "0.75rem",
-              lineHeight: 1.5,
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-              maxHeight: "200px",
-              overflow: "auto",
-              color: msg.role === "user" ? "#c4c4f0" : "#a3a3a3",
+              color: "var(--tui-fg-4)",
+              fontSize: "var(--tui-font-size-sm)",
+              padding: "1rem 0",
             }}
           >
-            {msg.content || (activeCount > 0 ? "..." : "")}
+            describe the flower you want.
+            <br />
+            the AI will generate a full botanical spec.
+            <br />
+            <br />
+            <span style={{ color: "var(--tui-fg-3)" }}>
+              try: "a bioluminescent orchid with frost aura"
+            </span>
           </div>
-        ))}
+        )}
+        <AnimatePresence>
+          {messages.map((msg, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, x: -4 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.12 }}
+              className="tui-log-entry"
+            >
+              {msg.role === "user" ? (
+                <>
+                  <span style={{ color: "var(--tui-purple)" }}>$ </span>
+                  <span className="msg">{msg.content}</span>
+                </>
+              ) : (
+                <>
+                  <span style={{ color: msg.content.startsWith("[err]") ? "var(--tui-red)" : "var(--tui-green)" }}>
+                    {msg.content.startsWith("[err]") ? "✗ " : msg.content.startsWith("[ok]") ? "✓ " : "⋯ "}
+                  </span>
+                  <span
+                    className="msg"
+                    style={{
+                      color: msg.content.startsWith("[err]")
+                        ? "var(--tui-red)"
+                        : msg.content.startsWith("[ok]")
+                        ? "var(--tui-green)"
+                        : "var(--tui-fg-2)",
+                    }}
+                  >
+                    {msg.content || (
+                      <span>
+                        generating<span className="tui-generating" />
+                      </span>
+                    )}
+                  </span>
+                </>
+              )}
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
 
+      {/* Input */}
       <div
         style={{
-          padding: "0.5rem",
-          borderTop: "1px solid #262626",
+          padding: "0.375rem 0.5ch",
+          borderTop: "1px solid var(--tui-border)",
           display: "flex",
-          gap: "0.5rem",
+          gap: "0.5ch",
         }}
       >
-        <input
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              void handleSubmit();
-            }
-          }}
-          placeholder="A bioluminescent orchid with frost aura..."
-          style={{
-            flex: 1,
-            padding: "0.5rem 0.75rem",
-            background: "#141414",
-            border: "1px solid #262626",
-            borderRadius: "0.25rem",
-            color: "#e5e5e5",
-            fontSize: "0.8125rem",
-            outline: "none",
-          }}
-        />
+        <div className="tui-input-wrap" style={{ flex: 1 }}>
+          <input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void handleSubmit();
+              }
+            }}
+            placeholder="describe a flower..."
+            className="tui-input"
+          />
+        </div>
         <button
           onClick={handleSubmit}
           disabled={!input.trim()}
-          style={{
-            padding: "0.5rem 1rem",
-            background: "#262626",
-            border: "none",
-            borderRadius: "0.25rem",
-            color: "#e5e5e5",
-            cursor: "pointer",
-            fontSize: "0.8125rem",
-          }}
+          className={`tui-btn ${input.trim() ? "tui-btn-primary" : ""}`}
         >
-          {activeCount > 0 ? `Generate (${activeCount})` : "Generate"}
+          {activeCount > 0 ? `GEN(${activeCount})` : "GEN"}
         </button>
       </div>
     </div>
