@@ -218,19 +218,18 @@ uniform vec3 uHighlightTint;
 uniform float uTintStrength;
 uniform float uVignetteStrength;
 
-// 8×8 Bayer threshold via bit-interleave (3 ALU iterations, no LUT)
-float bayer8(ivec2 p) {
-    int x = p.x & 7;
-    int y = p.y & 7;
-    int v = 0;
-    int xc = x ^ y;
-    int yc = y;
-    for (int i = 0; i < 3; i++) {
-        v |= ((yc & 1) << (2 * i + 1)) | ((xc & 1) << (2 * i));
-        xc >>= 1;
-        yc >>= 1;
-    }
-    return (float(v) + 0.5) / 64.0;
+// 4×4 Bayer threshold via mod/floor arithmetic (GLSL ES 1.00 compatible, no bitwise ops)
+float bayer4(vec2 p) {
+    vec2 c = floor(mod(p, 4.0));
+    float x = c.x;
+    float y = c.y;
+    // Encode the 4×4 Bayer matrix: M[x,y] = (bit-reverse interleave of x,y) / 16
+    // Using the closed-form: 8*mod(x+y,2) + 4*mod(floor(y/2),2) + 2*mod(floor(x/2),2) + mod(floor((x+y)/2),2)
+    float v = 8.0 * mod(x + y, 2.0)
+            + 4.0 * mod(floor(y * 0.5), 2.0)
+            + 2.0 * mod(floor(x * 0.5), 2.0)
+            + mod(floor((x + y) * 0.5), 2.0);
+    return (v + 0.5) / 16.0;
 }
 
 void main() {
@@ -254,8 +253,7 @@ void main() {
     c *= vignette;
 
     // ── 4. Ordered dither ──
-    ivec2 pixelCoord = ivec2(gl_FragCoord.xy);
-    float threshold = bayer8(pixelCoord) - 0.5;
+    float threshold = bayer4(gl_FragCoord.xy) - 0.5;
     float levels = uColorLevels;
     vec3 scaled = c * levels;
     vec3 quantized = (floor(scaled) + step(0.0, fract(scaled) + threshold)) / levels;
