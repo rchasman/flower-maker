@@ -519,14 +519,22 @@ function generatePetal(
 type ParsedLayer = {
   count: number;
   shape: string;
+  arrangement: string;
   edgeStyle: string;
   width: number;
   length: number;
   curvature: number;
   curl: number;
+  droop: number;
   opacity: number;
   angularOffset: number;
   color: number | null;
+};
+
+type ParsedSymmetry = {
+  type: string;
+  order?: number;
+  divergenceAngle?: number;
 };
 
 type ParsedCenter = {
@@ -548,6 +556,7 @@ type ParsedSpec = {
   layers: ParsedLayer[];
   center: ParsedCenter;
   sepals: ParsedSepal[];
+  symmetry: ParsedSymmetry;
 };
 
 function parseSpec(specJson: string | undefined): ParsedSpec | null {
@@ -561,16 +570,30 @@ function parseSpec(specJson: string | undefined): ParsedSpec | null {
       (layer: any) => ({
         count: layer.count ?? 5,
         shape: layer.shape ?? "Ovate",
+        arrangement: layer.arrangement ?? "Radial",
         edgeStyle: layer.edge_style ?? "Smooth",
         width: layer.width ?? 0.5,
         length: layer.length ?? 0.5,
         curvature: layer.curvature ?? 0,
         curl: layer.curl ?? 0,
+        droop: layer.droop ?? 0,
         opacity: layer.opacity ?? 1,
         angularOffset: ((layer.angular_offset ?? 0) * Math.PI) / 180,
         color: colorToHex(layer.color?.stops?.[0]?.color),
       }),
     );
+
+    // Parse symmetry
+    const rawSym = spec.petals?.symmetry;
+    const symmetry: ParsedSymmetry = rawSym
+      ? typeof rawSym === "string"
+        ? { type: rawSym }
+        : rawSym.Spiral
+        ? { type: "Spiral", divergenceAngle: rawSym.Spiral.divergence_angle ?? 137.5 }
+        : rawSym.Radial
+        ? { type: "Radial", order: rawSym.Radial.order }
+        : { type: rawSym.type ?? "Radial" }
+      : { type: "Radial" };
 
     const reproductive = spec.reproductive ?? {};
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -595,7 +618,7 @@ function parseSpec(specJson: string | undefined): ParsedSpec | null {
       }),
     );
 
-    return { layers, center, sepals };
+    return { layers, center, sepals, symmetry };
   } catch {
     return null;
   }
@@ -824,6 +847,122 @@ function buildCenter(parsed: NonNullable<ReturnType<typeof parseSpec>>, baseColo
   };
 }
 
+/**
+ * Compute petal angles for a layer based on arrangement type and symmetry.
+ * This is what makes roses look different from daisies from orchids.
+ */
+function computePetalAngles(
+  count: number,
+  baseOffset: number,
+  arrangement: string,
+  symmetry: ParsedSymmetry,
+  sid: number,
+  layerIdx: number,
+): number[] {
+  const TAU = Math.PI * 2;
+
+  switch (arrangement) {
+    case "Spiral": {
+      // Fibonacci spiral — each petal offset by the golden angle (~137.5°)
+      const divergence = (symmetry.divergenceAngle ?? 137.5) * (Math.PI / 180);
+      return Array.from({ length: count }, (_, i) =>
+        baseOffset + i * divergence,
+      );
+    }
+
+    case "Bilateral": {
+      // Mirror symmetry — petals concentrated on two sides
+      // Top half gets most petals, bottom has fewer/none (like orchids, sweet peas)
+      return Array.from({ length: count }, (_, i) => {
+        const t = i / Math.max(1, count - 1); // 0..1
+        // Spread across ~180° (top half), mirrored
+        const halfSpread = Math.PI * 0.7;
+        const angle = baseOffset - halfSpread / 2 + t * halfSpread;
+        // Add slight wobble for organic feel
+        return angle + sidHash(sid, 30 + layerIdx * 50 + i) * 0.15;
+      });
+    }
+
+    case "Papilionaceous": {
+      // Butterfly/pea flower — 1 large banner, 2 wings, 2 keel petals
+      // Only meaningful for count ~5, but degrade gracefully
+      if (count <= 5) {
+        const banner = baseOffset; // top center
+        const wingL = baseOffset + Math.PI * 0.35;
+        const wingR = baseOffset - Math.PI * 0.35;
+        const keelL = baseOffset + Math.PI * 0.6;
+        const keelR = baseOffset - Math.PI * 0.6;
+        return [banner, wingL, wingR, keelL, keelR].slice(0, count);
+      }
+      // More petals: fill radially
+      return Array.from({ length: count }, (_, i) => baseOffset + (i / count) * TAU);
+    }
+
+    case "Cruciform": {
+      // Cross-shaped — petals at exact 90° intervals
+      // Works best with count = 4, but handles others
+      return Array.from({ length: count }, (_, i) =>
+        baseOffset + (i / Math.max(count, 4)) * TAU,
+      );
+    }
+
+    case "Zygomorphic": {
+      // Irregular — one plane of symmetry, clustered toward one side
+      return Array.from({ length: count }, (_, i) => {
+        const t = i / Math.max(1, count - 1);
+        // Cluster in upper 240° arc, leaving bottom open
+        const arcSpan = Math.PI * 1.33;
+        return baseOffset - arcSpan / 2 + t * arcSpan;
+      });
+    }
+
+    case "Imbricate": {
+      // Overlapping — like radial but with slight progressive offset per petal
+      // Creates a pinwheel/twisted look
+      const step = TAU / count;
+      const twist = 0.08; // slight twist per petal
+      return Array.from({ length: count }, (_, i) =>
+        baseOffset + i * step + i * twist,
+      );
+    }
+
+    case "Contorted": {
+      // Each petal overlaps the next in one direction — like a pinwheel
+      const step = TAU / count;
+      const twist = step * 0.15;
+      return Array.from({ length: count }, (_, i) =>
+        baseOffset + i * (step + twist),
+      );
+    }
+
+    case "Whorled": {
+      // Multiple whorls — cluster petals in groups
+      const whorlSize = Math.max(2, Math.ceil(count / 3));
+      return Array.from({ length: count }, (_, i) => {
+        const whorl = Math.floor(i / whorlSize);
+        const posInWhorl = i % whorlSize;
+        const whorlOffset = whorl * 0.3; // offset between whorls
+        return baseOffset + (posInWhorl / whorlSize) * TAU + whorlOffset;
+      });
+    }
+
+    case "Valvate": {
+      // Edge-to-edge, no overlap — evenly spaced (same as radial)
+      return Array.from({ length: count }, (_, i) =>
+        baseOffset + (i / count) * TAU,
+      );
+    }
+
+    case "Radial":
+    default: {
+      // Standard even distribution
+      return Array.from({ length: count }, (_, i) =>
+        baseOffset + (i / count) * TAU,
+      );
+    }
+  }
+}
+
 /** Create a complete, scale-independent rendering plan from a flower spec. */
 export function createFlowerPlan(
   specJson: string | undefined,
@@ -844,21 +983,25 @@ export function createFlowerPlan(
 
   const layers = parsed.layers.map((layer, layerIdx) => {
     const count = Math.max(1, Math.min(55, layer.count));
-    const angleStep = (Math.PI * 2) / count;
     cumulativeOffset += layer.angularOffset;
 
     // Each layer gets progressively lighter/darker for depth
     const layerColor =
       layer.color ?? darkenColor(baseColor, 1 - layerIdx * 0.06);
 
-    const petals = Array.from({ length: count }, (_, i) => ({
+    // ── Petal angle computation — arrangement-aware ──
+    const petalAngles = computePetalAngles(
+      count, cumulativeOffset, layer.arrangement, parsed.symmetry, sid, layerIdx,
+    );
+
+    const petals = petalAngles.map((angle, i) => ({
       cmds: generatePetal(
-        cumulativeOffset + i * angleStep,
+        angle,
         layer.shape,
         layer.edgeStyle,
         layer.length,
         layer.width,
-        layer.curvature,
+        layer.curvature + layer.droop * 0.3, // droop increases curvature (petals cup outward)
         layer.curl,
         sidHash(sid, 10 + layerIdx * 100 + i),
       ),
