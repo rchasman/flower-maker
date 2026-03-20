@@ -265,28 +265,81 @@ function drawFlowerFromPlan(
   });
 
   // Stamens
-  plan.center.stamens.map((s) => {
+  plan.center.stamens.map((s, i) => {
     const sx = Math.cos(s.angle) * s.length * scale;
     const sy = Math.sin(s.angle) * s.length * scale;
+
+    // Curved filament — slight perpendicular bend at midpoint for organic feel
+    const midX = sx * 0.5;
+    const midY = sy * 0.5;
+    const perpX = -sy * 0.12; // perpendicular offset
+    const perpY = sx * 0.12;
+    const bendDir = i % 2 === 0 ? 1 : -1;
+
     g.moveTo(0, 0);
-    g.lineTo(sx, sy);
+    g.bezierCurveTo(
+      midX + perpX * bendDir, midY + perpY * bendDir,
+      midX + perpX * bendDir * 0.5, midY + perpY * bendDir * 0.5,
+      sx, sy,
+    );
     g.stroke({
       color: s.filamentColor,
-      width: Math.max(0.3, scale * 0.02),
-      alpha: alpha * 0.7,
+      width: Math.max(0.4, scale * 0.022),
+      alpha: alpha * 0.75,
     });
-    g.circle(sx, sy, s.antherRadius * scale);
+
+    // Anther — main body
+    const ar = s.antherRadius * scale;
+    g.circle(sx, sy, ar);
     g.fill({ color: s.antherColor, alpha });
+    // Anther outline
+    g.circle(sx, sy, ar);
+    g.stroke({ color: darkenColor(s.antherColor, 0.5), width: Math.max(0.2, scale * 0.004), alpha: alpha * 0.4 });
+    // Specular highlight on anther
+    g.circle(sx - ar * 0.25, sy - ar * 0.25, ar * 0.35);
+    g.fill({ color: 0xffffff, alpha: alpha * 0.25 });
+
     return null;
   });
 
-  // Center disc (pistil)
-  g.circle(0, 0, plan.center.discRadius * scale);
-  g.fill({ color: plan.center.discColor, alpha });
+  // Center disc (pistil) — multi-layer for depth
+  const discR = plan.center.discRadius * scale;
+  const discColor = plan.center.discColor;
 
-  // Pistil highlight
-  g.circle(0, 0, plan.center.highlightRadius * scale);
-  g.fill({ color: plan.center.highlightColor, alpha: alpha * 0.6 });
+  // Outer disc with outline
+  g.circle(0, 0, discR);
+  g.fill({ color: discColor, alpha });
+  g.circle(0, 0, discR);
+  g.stroke({ color: darkenColor(discColor, 0.45), width: Math.max(0.3, scale * 0.006), alpha: alpha * 0.4 });
+
+  // Radial depth — concentric rings fading inward (lighter center)
+  g.circle(0, 0, discR * 0.75);
+  g.fill({ color: lightenColor(discColor, 0.08), alpha: alpha * 0.3 });
+  g.circle(0, 0, discR * 0.5);
+  g.fill({ color: lightenColor(discColor, 0.15), alpha: alpha * 0.25 });
+
+  // Stippling — tiny dots in golden spiral for texture
+  const GOLDEN = Math.PI * (3 - Math.sqrt(5));
+  const stippleCount = Math.max(5, Math.min(16, Math.round(discR * 4)));
+  Array.from({ length: stippleCount }, (_, i) => {
+    const t = (i + 1) / (stippleCount + 1);
+    const r2 = discR * t * 0.85;
+    const theta = i * GOLDEN;
+    const dotX = Math.cos(theta) * r2;
+    const dotY = Math.sin(theta) * r2;
+    const dotR = Math.max(0.3, scale * 0.008 * (1 - t * 0.4));
+    const dotColor = i % 2 === 0 ? darkenColor(discColor, 0.6) : lightenColor(discColor, 0.1);
+    g.circle(dotX, dotY, dotR);
+    g.fill({ color: dotColor, alpha: alpha * (0.35 + t * 0.2) });
+    return null;
+  });
+
+  // Pistil highlight — slightly offset for natural look
+  const hlR = plan.center.highlightRadius * scale;
+  const hlOx = discR * 0.08;
+  const hlOy = -discR * 0.12;
+  g.circle(hlOx, hlOy, hlR);
+  g.fill({ color: plan.center.highlightColor, alpha: alpha * 0.55 });
 
   // Particles (on top of everything, time-animated)
   plan.particles.map((p) => {
@@ -444,26 +497,83 @@ function drawArrangementFromPlan(
     });
 
     // Stamens
-    member.flowerPlan.center.stamens.map((s) => {
+    member.flowerPlan.center.stamens.map((s, i) => {
       const sx = ox + Math.cos(s.angle) * s.length * flowerScale;
       const sy = oy + Math.sin(s.angle) * s.length * flowerScale;
+
+      // Curved filament — slight perpendicular bend at midpoint for organic feel
+      const rawX = Math.cos(s.angle) * s.length * flowerScale;
+      const rawY = Math.sin(s.angle) * s.length * flowerScale;
+      const midX = ox + rawX * 0.5;
+      const midY = oy + rawY * 0.5;
+      const perpX = -rawY * 0.12;
+      const perpY = rawX * 0.12;
+      const bendDir = i % 2 === 0 ? 1 : -1;
+
       g.moveTo(ox, oy);
-      g.lineTo(sx, sy);
+      g.bezierCurveTo(
+        midX + perpX * bendDir, midY + perpY * bendDir,
+        midX + perpX * bendDir * 0.5, midY + perpY * bendDir * 0.5,
+        sx, sy,
+      );
       g.stroke({
         color: s.filamentColor,
-        width: Math.max(0.3, flowerScale * 0.02),
-        alpha: alpha * 0.7,
+        width: Math.max(0.4, flowerScale * 0.022),
+        alpha: alpha * 0.75,
       });
-      g.circle(sx, sy, s.antherRadius * flowerScale);
+
+      // Anther — main body
+      const ar = s.antherRadius * flowerScale;
+      g.circle(sx, sy, ar);
       g.fill({ color: s.antherColor, alpha });
+      // Anther outline
+      g.circle(sx, sy, ar);
+      g.stroke({ color: darkenColor(s.antherColor, 0.5), width: Math.max(0.2, flowerScale * 0.004), alpha: alpha * 0.4 });
+      // Specular highlight on anther
+      g.circle(sx - ar * 0.25, sy - ar * 0.25, ar * 0.35);
+      g.fill({ color: 0xffffff, alpha: alpha * 0.25 });
+
       return null;
     });
 
-    // Center disc
-    g.circle(ox, oy, member.flowerPlan.center.discRadius * flowerScale);
-    g.fill({ color: member.flowerPlan.center.discColor, alpha });
-    g.circle(ox, oy, member.flowerPlan.center.highlightRadius * flowerScale);
-    g.fill({ color: member.flowerPlan.center.highlightColor, alpha: alpha * 0.6 });
+    // Center disc — multi-layer for depth
+    const mDiscR = member.flowerPlan.center.discRadius * flowerScale;
+    const mDiscColor = member.flowerPlan.center.discColor;
+
+    // Outer disc with outline
+    g.circle(ox, oy, mDiscR);
+    g.fill({ color: mDiscColor, alpha });
+    g.circle(ox, oy, mDiscR);
+    g.stroke({ color: darkenColor(mDiscColor, 0.45), width: Math.max(0.3, flowerScale * 0.006), alpha: alpha * 0.4 });
+
+    // Radial depth — concentric rings fading inward
+    g.circle(ox, oy, mDiscR * 0.75);
+    g.fill({ color: lightenColor(mDiscColor, 0.08), alpha: alpha * 0.3 });
+    g.circle(ox, oy, mDiscR * 0.5);
+    g.fill({ color: lightenColor(mDiscColor, 0.15), alpha: alpha * 0.25 });
+
+    // Stippling — tiny dots in golden spiral for texture
+    const GOLDEN_A = Math.PI * (3 - Math.sqrt(5));
+    const mStippleCount = Math.max(5, Math.min(16, Math.round(mDiscR * 4)));
+    Array.from({ length: mStippleCount }, (_, si) => {
+      const t = (si + 1) / (mStippleCount + 1);
+      const sr = mDiscR * t * 0.85;
+      const theta = si * GOLDEN_A;
+      const dotX = ox + Math.cos(theta) * sr;
+      const dotY = oy + Math.sin(theta) * sr;
+      const dotR = Math.max(0.3, flowerScale * 0.008 * (1 - t * 0.4));
+      const dotColor = si % 2 === 0 ? darkenColor(mDiscColor, 0.6) : lightenColor(mDiscColor, 0.1);
+      g.circle(dotX, dotY, dotR);
+      g.fill({ color: dotColor, alpha: alpha * (0.35 + t * 0.2) });
+      return null;
+    });
+
+    // Pistil highlight — slightly offset for natural look
+    const mHlR = member.flowerPlan.center.highlightRadius * flowerScale;
+    const mHlOx = ox + mDiscR * 0.08;
+    const mHlOy = oy - mDiscR * 0.12;
+    g.circle(mHlOx, mHlOy, mHlR);
+    g.fill({ color: member.flowerPlan.center.highlightColor, alpha: alpha * 0.55 });
 
     return null;
   });
