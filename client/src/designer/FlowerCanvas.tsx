@@ -79,19 +79,110 @@ function drawFlowerFromPlan(
   alpha: number,
 ) {
   const scale = r;
+  const now = performance.now();
 
-  // Stem (behind everything)
+  // Aura (behind everything, style-dependent)
+  if (plan.aura) {
+    const auraR = plan.aura.radius * scale * 2.5;
+    const pulse = 0.85 + 0.15 * Math.sin(now / 800);
+    const auraAlpha = alpha * plan.aura.opacity * pulse;
+
+    switch (plan.aura.kind) {
+      case "Prismatic":
+      case "Rainbow": {
+        // Multiple concentric rings with hue variation
+        [0.6, 0.8, 1.0].map((f, i) => {
+          const hueShift = [0xff6b9d, 0x67e8f9, 0xc084fc][i]!;
+          g.circle(0, 0, auraR * f);
+          g.fill({ color: hueShift, alpha: auraAlpha * 0.3 });
+          return null;
+        });
+        break;
+      }
+      case "Crystal": {
+        // Hexagonal shimmer
+        const sides = 6;
+        Array.from({ length: sides }, (_, i) => {
+          const a1 = (i / sides) * Math.PI * 2 + now / 3000;
+          const a2 = ((i + 1) / sides) * Math.PI * 2 + now / 3000;
+          g.moveTo(0, 0);
+          g.lineTo(Math.cos(a1) * auraR, Math.sin(a1) * auraR);
+          g.lineTo(Math.cos(a2) * auraR, Math.sin(a2) * auraR);
+          g.fill({ color: plan.aura!.color, alpha: auraAlpha * (0.3 + 0.1 * Math.sin(now / 400 + i)) });
+          return null;
+        });
+        break;
+      }
+      case "Flame":
+      case "Solar": {
+        // Flickering warm glow with rays
+        const flicker = 0.7 + 0.3 * Math.sin(now / 150);
+        g.circle(0, 0, auraR * flicker);
+        g.fill({ color: plan.aura.color, alpha: auraAlpha * 0.5 });
+        g.circle(0, 0, auraR * 0.6 * flicker);
+        g.fill({ color: 0xfbbf24, alpha: auraAlpha * 0.3 });
+        break;
+      }
+      case "Frost": {
+        // Crisp, steady cool glow
+        g.circle(0, 0, auraR);
+        g.fill({ color: 0xbfdbfe, alpha: auraAlpha * 0.4 });
+        g.circle(0, 0, auraR * 0.7);
+        g.fill({ color: plan.aura.color, alpha: auraAlpha * 0.25 });
+        break;
+      }
+      case "Aurora":
+      case "Nebula": {
+        // Shifting multi-layer glow
+        const shift = Math.sin(now / 1200) * 0.3;
+        g.circle(shift * scale * 0.3, 0, auraR * 1.1);
+        g.fill({ color: plan.aura.color, alpha: auraAlpha * 0.25 });
+        g.circle(-shift * scale * 0.3, 0, auraR * 0.8);
+        g.fill({ color: 0x67e8f9, alpha: auraAlpha * 0.2 });
+        break;
+      }
+      case "Shadow":
+      case "Void": {
+        // Dark inward glow
+        g.circle(0, 0, auraR * 0.9);
+        g.fill({ color: 0x1a1a2e, alpha: auraAlpha * 0.5 });
+        break;
+      }
+      case "Electric":
+      case "Storm": {
+        // Jittering bright arcs
+        const jitter = Math.sin(now / 80) * scale * 0.05;
+        g.circle(jitter, -jitter, auraR * 0.85);
+        g.fill({ color: plan.aura.color, alpha: auraAlpha * 0.35 });
+        break;
+      }
+      default: {
+        // Ethereal, Mist, Sparkle, Moonlight — soft radial glow
+        g.circle(0, 0, auraR);
+        g.fill({ color: plan.aura.color, alpha: auraAlpha * 0.35 });
+        g.circle(0, 0, auraR * 0.6);
+        g.fill({ color: plan.aura.color, alpha: auraAlpha * 0.2 });
+      }
+    }
+  }
+
+  // Stem (behind everything else)
   if (plan.stem) {
     drawCmds(g, plan.stem.cmds, scale);
     g.fill({ color: plan.stem.color, alpha: alpha * 0.9 });
+
+    // Thorns
+    plan.stem.thorns.map((thorn) => {
+      drawCmds(g, thorn.cmds, scale);
+      g.fill({ color: thorn.color, alpha: alpha * 0.85 });
+      return null;
+    });
   }
 
   // Leaves
   plan.leaves.map((leaf) => {
-    // Fill
     drawCmds(g, leaf.cmds, scale);
     g.fill({ color: leaf.color, alpha: alpha * 0.9 });
-    // Veins (midrib + side veins)
     drawCmds(g, leaf.veins, scale);
     g.stroke({ color: darkenColor(leaf.color, 0.55), width: Math.max(0.4, scale * 0.012), alpha: alpha * 0.6 });
     return null;
@@ -111,6 +202,20 @@ function drawFlowerFromPlan(
       g.fill({ color: layer.color, alpha: alpha * layer.opacity });
       return null;
     });
+    return null;
+  });
+
+  // Dewdrops (on top of petals)
+  plan.dewdrops.map((dd) => {
+    const dx = dd.x * scale;
+    const dy = dd.y * scale;
+    const dr = dd.radius * scale;
+    // Main drop — translucent white
+    g.circle(dx, dy, dr);
+    g.fill({ color: 0xffffff, alpha: alpha * 0.45 });
+    // Specular highlight — smaller, brighter
+    g.circle(dx - dr * 0.3, dy - dr * 0.3, dr * 0.4);
+    g.fill({ color: 0xffffff, alpha: alpha * 0.7 });
     return null;
   });
 
@@ -137,6 +242,54 @@ function drawFlowerFromPlan(
   // Pistil highlight
   g.circle(0, 0, plan.center.highlightRadius * scale);
   g.fill({ color: plan.center.highlightColor, alpha: alpha * 0.6 });
+
+  // Particles (on top of everything, time-animated)
+  plan.particles.map((p) => {
+    const t = now / 1000;
+    // Gentle drift based on particle speed
+    const drift = p.speed * 0.15;
+    const px = (p.x + Math.sin(t * drift * 3 + p.y * 10) * drift) * scale;
+    const py = (p.y + Math.cos(t * drift * 2 + p.x * 8) * drift) * scale;
+    const pr = p.size * scale;
+
+    switch (p.kind) {
+      case "Firefly":
+      case "Sparkle":
+      case "Lightning": {
+        // Twinkling point
+        const twinkle = 0.3 + 0.7 * Math.abs(Math.sin(t * 4 + p.x * 20));
+        g.circle(px, py, pr * 1.5);
+        g.fill({ color: p.color, alpha: alpha * twinkle * 0.8 });
+        g.circle(px, py, pr * 0.6);
+        g.fill({ color: 0xffffff, alpha: alpha * twinkle * 0.5 });
+        break;
+      }
+      case "Butterflies": {
+        // Tiny V-shape
+        const wingSpread = pr * 2;
+        const flapAngle = Math.sin(t * 8 + p.x * 15) * 0.3;
+        g.moveTo(px, py);
+        g.lineTo(px - wingSpread * Math.cos(flapAngle), py - wingSpread * Math.sin(flapAngle));
+        g.lineTo(px, py - pr * 0.5);
+        g.lineTo(px + wingSpread * Math.cos(flapAngle), py - wingSpread * Math.sin(flapAngle));
+        g.fill({ color: p.color, alpha: alpha * 0.6 });
+        break;
+      }
+      case "Snowflakes": {
+        // Slowly falling, rotating dot
+        const fallY = py + (t * 0.02 * scale) % (scale * 0.5);
+        g.circle(px, fallY, pr);
+        g.fill({ color: 0xffffff, alpha: alpha * 0.5 });
+        break;
+      }
+      default: {
+        // Pollen, Seeds, Spores, Motes, etc. — simple drifting dot
+        g.circle(px, py, pr);
+        g.fill({ color: p.color, alpha: alpha * 0.5 });
+      }
+    }
+    return null;
+  });
 }
 
 /** Draw a multi-flower arrangement from its pre-computed plan. */
@@ -375,8 +528,9 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             g.stroke({ color: 0xffffff, width: 2, alpha: 0.7 });
           }
 
-          // Aura glow
-          if (flower.has_glow || flower.has_aura) {
+          // Aura glow — fallback for flowers without plan-based aura
+          const flowerPlan = !isArrangement ? (plan as FlowerPlan) : null;
+          if ((flower.has_glow || flower.has_aura) && !flowerPlan?.aura) {
             g.circle(0, 0, r + 4);
             g.fill({ color: liveColor, alpha: 0.15 * flower.alpha });
           }
