@@ -200,24 +200,28 @@ export function createDepthBlurFilter(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 4. ORDERED DITHER — 8×8 Bayer matrix dithering for the entire scene
-//    Apply to app.stage for a full-screen halftone/risograph effect
+// 4. DARK FANTASY DITHER — color grading + ordered dithering in one pass
+//    Crushes blacks, tints shadows purple, warms highlights gold,
+//    then quantizes through an 8×8 Bayer matrix for visible texture.
+//    Apply to app.stage for full-screen effect.
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const ORDERED_DITHER_FRAG = /* glsl */ `
+export const DARK_FANTASY_DITHER_FRAG = /* glsl */ `
 in vec2 vTextureCoord;
 out vec4 finalColor;
 
 uniform sampler2D uTexture;
 uniform float uColorLevels;
-uniform vec4 uInputSize;
+uniform float uContrast;
+uniform vec3 uShadowTint;
+uniform vec3 uHighlightTint;
+uniform float uTintStrength;
+uniform float uVignetteStrength;
 
-// 8×8 Bayer threshold matrix (normalized 0–1)
+// 8×8 Bayer threshold via bit-interleave (3 ALU iterations, no LUT)
 float bayer8(ivec2 p) {
-    // Row-major 8×8 Bayer matrix / 64.0
     int x = p.x & 7;
     int y = p.y & 7;
-    // Recursive bit-interleave construction
     int v = 0;
     int xc = x ^ y;
     int yc = y;
@@ -232,40 +236,70 @@ float bayer8(ivec2 p) {
 void main() {
     vec4 color = texture(uTexture, vTextureCoord);
 
-    // Pixel coordinates for Bayer lookup
-    ivec2 pixelCoord = ivec2(gl_FragCoord.xy);
-    float threshold = bayer8(pixelCoord) - 0.5; // center around 0
+    // ── 1. Contrast: S-curve via smoothstep ──
+    vec3 c = smoothstep(vec3(0.0), vec3(1.0),
+        mix(color.rgb, smoothstep(0.0, 1.0, color.rgb), uContrast));
 
-    // Quantize each channel: floor to nearest level, then use Bayer to decide +1
+    // ── 2. Shadow/highlight tinting ──
+    float luminance = dot(c, vec3(0.299, 0.587, 0.114));
+    // Shadows: blend toward tint where dark, highlights: blend where bright
+    vec3 shadowBlend = mix(c, c * uShadowTint, (1.0 - luminance) * uTintStrength);
+    vec3 highlightBlend = mix(shadowBlend, shadowBlend + uHighlightTint * 0.3,
+        luminance * luminance * uTintStrength);
+    c = highlightBlend;
+
+    // ── 3. Vignette: darken edges ──
+    vec2 uv = vTextureCoord - 0.5;
+    float vignette = 1.0 - dot(uv, uv) * uVignetteStrength;
+    c *= vignette;
+
+    // ── 4. Ordered dither ──
+    ivec2 pixelCoord = ivec2(gl_FragCoord.xy);
+    float threshold = bayer8(pixelCoord) - 0.5;
     float levels = uColorLevels;
-    vec3 scaled = color.rgb * levels;
+    vec3 scaled = c * levels;
     vec3 quantized = (floor(scaled) + step(0.0, fract(scaled) + threshold)) / levels;
 
     finalColor = vec4(clamp(quantized, 0.0, 1.0), color.a);
 }
 `;
 
-export interface OrderedDitherUniforms {
-  uColorLevels: number; // color steps per channel (4 = chunky, 8 = moderate, 16 = subtle)
+export interface DarkFantasyDitherUniforms {
+  uColorLevels: number;    // color steps per channel (5 = chunky dark fantasy)
+  uContrast: number;       // S-curve strength (0 = none, 1 = full)
+  uShadowTint: [number, number, number];    // RGB multiplier for dark tones
+  uHighlightTint: [number, number, number]; // RGB additive for bright tones
+  uTintStrength: number;   // how much tinting to apply (0–1)
+  uVignetteStrength: number; // edge darkening (0 = none, 2 = heavy)
 }
 
-export const ORDERED_DITHER_DEFAULTS: OrderedDitherUniforms = {
-  uColorLevels: 8.0,
+export const DARK_FANTASY_DITHER_DEFAULTS: DarkFantasyDitherUniforms = {
+  uColorLevels: 5.0,
+  uContrast: 0.6,
+  uShadowTint: [0.7, 0.5, 1.0],   // deep purple shadows
+  uHighlightTint: [1.0, 0.85, 0.4], // warm gold highlights
+  uTintStrength: 0.5,
+  uVignetteStrength: 1.2,
 };
 
-/** Create a PixiJS v8 Filter for full-screen ordered dithering. */
-export function createOrderedDitherFilter(
-  overrides?: Partial<OrderedDitherUniforms>,
+/** Create a PixiJS v8 Filter for dark fantasy color grading + ordered dithering. */
+export function createDarkFantasyDitherFilter(
+  overrides?: Partial<DarkFantasyDitherUniforms>,
 ): Filter {
-  const defaults = { ...ORDERED_DITHER_DEFAULTS, ...overrides };
+  const d = { ...DARK_FANTASY_DITHER_DEFAULTS, ...overrides };
   return Filter.from({
     gl: {
       vertex: defaultFilterVert(),
-      fragment: ORDERED_DITHER_FRAG,
+      fragment: DARK_FANTASY_DITHER_FRAG,
     },
     resources: {
       ditherUniforms: {
-        uColorLevels: { value: defaults.uColorLevels, type: "f32" },
+        uColorLevels: { value: d.uColorLevels, type: "f32" },
+        uContrast: { value: d.uContrast, type: "f32" },
+        uShadowTint: { value: new Float32Array(d.uShadowTint), type: "vec3<f32>" },
+        uHighlightTint: { value: new Float32Array(d.uHighlightTint), type: "vec3<f32>" },
+        uTintStrength: { value: d.uTintStrength, type: "f32" },
+        uVignetteStrength: { value: d.uVignetteStrength, type: "f32" },
       },
     },
   });
