@@ -6,6 +6,9 @@ import {
   fallbackColor,
   colorFromSpec,
   darkenColor,
+  lightenColor,
+  scatterColor,
+  lightTint,
   createFlowerPlan,
   createArrangementPlan,
   type FlowerPlan,
@@ -196,10 +199,38 @@ function drawFlowerFromPlan(
   });
 
   // Petal layers (outer first = behind, inner last = on top)
-  plan.layers.map((layer) => {
-    layer.petals.map((petal) => {
+  plan.layers.map((layer, layerIdx) => {
+    layer.petals.map((petal, petalIdx) => {
+      // Per-petal color variation: scatter + directional lighting
+      const scattered = scatterColor(layer.color, 0.06, petalIdx * 7.3 + layerIdx * 13.1);
+      const lit = lightTint(scattered, petal.angle);
+
+      // Pass 1: Base fill
       drawCmds(g, petal.cmds, scale);
-      g.fill({ color: layer.color, alpha: alpha * layer.opacity });
+      g.fill({ color: lit, alpha: alpha * layer.opacity });
+
+      // Pass 2: Inner highlight — simulates translucency/inner glow
+      drawCmds(g, petal.cmds, scale);
+      g.fill({ color: lightenColor(lit, 0.18), alpha: alpha * 0.15 });
+
+      // Pass 3: Stroke outline — crisp edge definition against dark background
+      drawCmds(g, petal.cmds, scale);
+      g.stroke({
+        color: darkenColor(lit, 0.55),
+        width: Math.max(0.3, scale * 0.006),
+        alpha: alpha * layer.opacity * 0.4,
+      });
+
+      // Pass 4: Midrib vein — thin centerline for botanical detail
+      if (petal.veinCmds.length > 0) {
+        drawCmds(g, petal.veinCmds, scale);
+        g.stroke({
+          color: darkenColor(lit, 0.6),
+          width: Math.max(0.3, scale * 0.008),
+          alpha: alpha * 0.25,
+        });
+      }
+
       return null;
     });
     return null;
@@ -353,10 +384,37 @@ function drawArrangementFromPlan(
     });
 
     // Petal layers
-    member.flowerPlan.layers.map((layer) => {
-      layer.petals.map((petal) => {
+    member.flowerPlan.layers.map((layer, layerIdx) => {
+      layer.petals.map((petal, petalIdx) => {
+        const scattered = scatterColor(layer.color, 0.06, petalIdx * 7.3 + layerIdx * 13.1);
+        const lit = lightTint(scattered, petal.angle);
+
+        // Base fill
         drawCmds(g, petal.cmds, flowerScale, ox, oy);
-        g.fill({ color: layer.color, alpha: alpha * layer.opacity });
+        g.fill({ color: lit, alpha: alpha * layer.opacity });
+
+        // Inner highlight
+        drawCmds(g, petal.cmds, flowerScale, ox, oy);
+        g.fill({ color: lightenColor(lit, 0.18), alpha: alpha * 0.15 });
+
+        // Stroke outline
+        drawCmds(g, petal.cmds, flowerScale, ox, oy);
+        g.stroke({
+          color: darkenColor(lit, 0.55),
+          width: Math.max(0.3, flowerScale * 0.006),
+          alpha: alpha * layer.opacity * 0.4,
+        });
+
+        // Midrib vein
+        if (petal.veinCmds.length > 0) {
+          drawCmds(g, petal.veinCmds, flowerScale, ox, oy);
+          g.stroke({
+            color: darkenColor(lit, 0.6),
+            width: Math.max(0.3, flowerScale * 0.008),
+            alpha: alpha * 0.25,
+          });
+        }
+
         return null;
       });
       return null;

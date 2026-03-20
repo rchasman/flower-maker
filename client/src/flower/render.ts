@@ -86,7 +86,7 @@ export type ParticleSeed = {
 export type FlowerPlan = {
   sepals: ReadonlyArray<{ cmds: DrawCmd[]; color: number }>;
   layers: ReadonlyArray<{
-    petals: ReadonlyArray<{ cmds: DrawCmd[] }>;
+    petals: ReadonlyArray<{ cmds: DrawCmd[]; angle: number; veinCmds: DrawCmd[] }>;
     color: number;
     opacity: number;
   }>;
@@ -134,10 +134,32 @@ export function darkenColor(color: number, factor: number): number {
   return (r << 16) | (g << 8) | b;
 }
 
-function lightenColor(color: number, amount: number): number {
+export function lightenColor(color: number, amount: number): number {
   const r = Math.min(255, Math.floor(((color >> 16) & 0xff) + 255 * amount));
   const g = Math.min(255, Math.floor(((color >> 8) & 0xff) + 255 * amount));
   const b = Math.min(255, Math.floor((color & 0xff) + 255 * amount));
+  return (r << 16) | (g << 8) | b;
+}
+
+/** Per-petal color scatter — deterministic hue/brightness jitter for organic variation. */
+export function scatterColor(color: number, amount: number, seed: number): number {
+  const hash = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
+  const jitter = (hash - Math.floor(hash)) * 2 - 1; // [-1, 1]
+  const shift = Math.floor(255 * amount * jitter);
+  const r = Math.min(255, Math.max(0, ((color >> 16) & 0xff) + shift));
+  const g = Math.min(255, Math.max(0, ((color >> 8) & 0xff) + shift));
+  const b = Math.min(255, Math.max(0, (color & 0xff) + shift));
+  return (r << 16) | (g << 8) | b;
+}
+
+/** Directional light tint — petals facing the light source appear brighter. */
+export function lightTint(color: number, petalAngle: number, lightAngle = -Math.PI / 4): number {
+  // Cosine falloff: petals facing the light get up to 10% brightness boost
+  const dot = Math.cos(petalAngle - lightAngle);
+  const boost = dot * 0.1; // [-0.1, 0.1]
+  const r = Math.min(255, Math.max(0, Math.floor(((color >> 16) & 0xff) * (1 + boost))));
+  const g = Math.min(255, Math.max(0, Math.floor(((color >> 8) & 0xff) * (1 + boost))));
+  const b = Math.min(255, Math.max(0, Math.floor((color & 0xff) * (1 + boost))));
   return (r << 16) | (g << 8) | b;
 }
 
@@ -751,7 +773,7 @@ function generateThorns(
 /** Generate dewdrop positions on the flower head. */
 function generateDewdrops(
   dewdrops: ParsedDewdrops[],
-  layers: ReadonlyArray<{ petals: ReadonlyArray<{ cmds: DrawCmd[] }> }>,
+  layers: ReadonlyArray<{ petals: ReadonlyArray<{ cmds: DrawCmd[]; angle: number; veinCmds: DrawCmd[] }> }>,
   sid: number,
 ): DewdropPlan[] {
   const plans: DewdropPlan[] = [];
@@ -994,8 +1016,8 @@ export function createFlowerPlan(
       count, cumulativeOffset, layer.arrangement, parsed.symmetry, sid, layerIdx,
     );
 
-    const petals = petalAngles.map((angle, i) => ({
-      cmds: generatePetal(
+    const petals = petalAngles.map((angle, i) => {
+      const cmds = generatePetal(
         angle,
         layer.shape,
         layer.edgeStyle,
@@ -1004,8 +1026,15 @@ export function createFlowerPlan(
         layer.curvature + layer.droop * 0.3, // droop increases curvature (petals cup outward)
         layer.curl,
         sidHash(sid, 10 + layerIdx * 100 + i),
-      ),
-    }));
+      );
+      // Midrib vein: a single line from near-center to ~85% of petal length
+      const veinLen = layer.length * 0.85;
+      const veinCmds: DrawCmd[] = [
+        { op: "M" as const, x: Math.cos(angle) * layer.length * 0.08, y: Math.sin(angle) * layer.length * 0.08 },
+        { op: "L" as const, x: Math.cos(angle) * veinLen, y: Math.sin(angle) * veinLen },
+      ];
+      return { cmds, angle, veinCmds };
+    });
 
     return { petals, color: layerColor, opacity: layer.opacity };
   });
