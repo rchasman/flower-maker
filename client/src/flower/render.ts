@@ -86,7 +86,7 @@ export type ParticleSeed = {
 export type FlowerPlan = {
   sepals: ReadonlyArray<{ cmds: DrawCmd[]; color: number }>;
   layers: ReadonlyArray<{
-    petals: ReadonlyArray<{ cmds: DrawCmd[] }>;
+    petals: ReadonlyArray<{ cmds: DrawCmd[]; angle: number; veinCmds: DrawCmd[] }>;
     color: number;
     opacity: number;
   }>;
@@ -166,6 +166,28 @@ function coolShift(color: number): number {
   const r = Math.max(0, ((color >> 16) & 0xff) - 10);
   const g = (color >> 8) & 0xff;
   const b = Math.min(255, (color & 0xff) + 15);
+  return (r << 16) | (g << 8) | b;
+}
+
+/** Scatter a color by a small random amount for natural variation. */
+export function scatterColor(color: number, amount: number, seed: number): number {
+  const hash = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+  const jitter = (hash - Math.floor(hash)) * 2 - 1; // -1..1
+  const r = Math.max(0, Math.min(255, ((color >> 16) & 0xff) + Math.round(jitter * amount * 255)));
+  const g = Math.max(0, Math.min(255, ((color >> 8) & 0xff) + Math.round(jitter * amount * 0.7 * 255)));
+  const b = Math.max(0, Math.min(255, (color & 0xff) + Math.round(jitter * amount * 0.5 * 255)));
+  return (r << 16) | (g << 8) | b;
+}
+
+/** Apply directional lighting based on petal angle vs light source. */
+export function lightTint(color: number, petalAngle: number, lightAngle: number = -Math.PI * 0.75): number {
+  // How much this petal faces the light (1 = directly facing, -1 = away)
+  const facing = Math.cos(petalAngle - lightAngle);
+  // Subtle adjustment: +10% brightness when facing light, -8% when away
+  const factor = facing > 0 ? 1 + facing * 0.10 : 1 + facing * 0.08;
+  const r = Math.max(0, Math.min(255, Math.round(((color >> 16) & 0xff) * factor)));
+  const g = Math.max(0, Math.min(255, Math.round(((color >> 8) & 0xff) * factor)));
+  const b = Math.max(0, Math.min(255, Math.round((color & 0xff) * factor)));
   return (r << 16) | (g << 8) | b;
 }
 
@@ -512,6 +534,32 @@ function generatePetal(
   return cmds;
 }
 
+/** Generate a midrib vein — single line from petal base to ~80% of tip. */
+function generatePetalVein(
+  angle: number, length: number, curvature: number, curl: number
+): DrawCmd[] {
+  const petalLen = Math.max(0.25, Math.min(1.15, length * 0.4));
+  const cosA = Math.cos(angle);
+  const sinA = Math.sin(angle);
+
+  const pts: Vec2[] = Array.from({ length: 5 }, (_, i) => {
+    const t = 0.05 + (i / 4) * 0.75; // 5% to 80% along petal
+    const along = BASE_OFFSET + t * petalLen;
+    const bend = curvature * 0.15 * Math.sin(Math.PI * t);
+    const curlDisp = curl > 0 && t > 0.65
+      ? curl * Math.pow((t - 0.65) / 0.35, 2) * -0.12
+      : 0;
+    const localX = along + curlDisp;
+    const localY = bend;
+    return [
+      cosA * localX - sinA * localY,
+      sinA * localX + cosA * localY,
+    ] as Vec2;
+  });
+
+  return smoothCmds(pts);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Spec parsing
 // ═══════════════════════════════════════════════════════════════════════════
@@ -751,7 +799,7 @@ function generateThorns(
 /** Generate dewdrop positions on the flower head. */
 function generateDewdrops(
   dewdrops: ParsedDewdrops[],
-  layers: ReadonlyArray<{ petals: ReadonlyArray<{ cmds: DrawCmd[] }> }>,
+  layers: ReadonlyArray<{ petals: ReadonlyArray<{ cmds: DrawCmd[]; angle: number; veinCmds: DrawCmd[] }> }>,
   sid: number,
 ): DewdropPlan[] {
   const plans: DewdropPlan[] = [];
@@ -1005,6 +1053,8 @@ export function createFlowerPlan(
         layer.curl,
         sidHash(sid, 10 + layerIdx * 100 + i),
       ),
+      angle,
+      veinCmds: generatePetalVein(angle, layer.length, layer.curvature + layer.droop * 0.3, layer.curl),
     }));
 
     return { petals, color: layerColor, opacity: layer.opacity };
