@@ -1,40 +1,47 @@
 /* ── Agentic Era TUI ─────────────────────────────────────────────────────
  * Terminal-inspired design system for flower-maker.
- * Box-drawing borders, monospace type, terminal colors, scanline overlay.
+ *
+ * Aesthetic: retro-futuristic botanical research station. Cold terminal
+ * precision meets warm organic life. Phosphor glow, dot-grid depth,
+ * breathing ambient light. The interface itself feels alive.
  * ──────────────────────────────────────────────────────────────────────── */
 
 :root {
   /* ── Backgrounds ── */
-  --tui-bg-0: #050505;
-  --tui-bg-1: #0a0a0a;
-  --tui-bg-2: #0f0f0f;
-  --tui-bg-3: #141414;
-  --tui-bg-4: #1a1a1a;
+  --tui-bg-0: #030304;
+  --tui-bg-1: #08080a;
+  --tui-bg-2: #0e0e11;
+  --tui-bg-3: #131316;
+  --tui-bg-4: #19191d;
 
   /* ── Foregrounds ── */
-  --tui-fg-0: #e5e5e5;
-  --tui-fg-1: #a3a3a3;
-  --tui-fg-2: #737373;
-  --tui-fg-3: #525252;
-  --tui-fg-4: #404040;
+  --tui-fg-0: #d4d4d8;
+  --tui-fg-1: #a1a1aa;
+  --tui-fg-2: #71717a;
+  --tui-fg-3: #52525b;
+  --tui-fg-4: #3f3f46;
 
-  /* ── Accents ── */
-  --tui-green: #22c55e;
+  /* ── Accents — botanical terminal palette ── */
+  --tui-green: #4ade80;
   --tui-green-dim: #166534;
-  --tui-amber: #eab308;
+  --tui-green-glow: rgba(74, 222, 128, 0.35);
+  --tui-amber: #fbbf24;
   --tui-amber-dim: #854d0e;
-  --tui-red: #ef4444;
+  --tui-amber-glow: rgba(251, 191, 36, 0.3);
+  --tui-red: #f87171;
   --tui-red-dim: #991b1b;
   --tui-blue: #60a5fa;
   --tui-blue-dim: #1e3a5f;
-  --tui-purple: #a78bfa;
-  --tui-purple-dim: #3b3b6d;
-  --tui-cyan: #22d3ee;
+  --tui-purple: #c4b5fd;
+  --tui-purple-dim: #4c3f82;
+  --tui-purple-glow: rgba(196, 181, 253, 0.25);
+  --tui-cyan: #67e8f9;
+  --tui-cyan-glow: rgba(103, 232, 249, 0.3);
 
   /* ── Borders ── */
-  --tui-border: #262626;
-  --tui-border-dim: #1a1a1a;
-  --tui-border-bright: #404040;
+  --tui-border: #27272a;
+  --tui-border-dim: #1c1c1f;
+  --tui-border-bright: #3f3f46;
 
   /* ── Font ── */
   --tui-font: "Geist Mono", "SF Mono", "Fira Code", "Cascadia Code", monospace;
@@ -67,10 +74,16 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Scrollbar styling ── */
+/* ── Text selection — phosphor green ── */
+::selection {
+  background: rgba(74, 222, 128, 0.2);
+  color: var(--tui-green);
+}
+
+/* ── Scrollbar — near-invisible, terminal-style ── */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 3px;
+  height: 3px;
 }
 
 ::-webkit-scrollbar-track {
@@ -79,16 +92,143 @@ body {
 
 ::-webkit-scrollbar-thumb {
   background: var(--tui-border);
-  border-radius: 0;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--tui-border-bright);
+  background: var(--tui-fg-4);
 }
 
-/* ── TUI Panel ──
- * Use with data-label="TITLE" to get the labeled header effect.
- * The label sits on the top border like classic TUI frames. */
+/* ══════════════════════════════════════════════════════════════════════════
+   ATMOSPHERE — Dot grid, scanlines, vignette, ambient pulse
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Dot grid background — creates spatial depth like graph paper */
+.tui-dotgrid {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: radial-gradient(
+    circle at center,
+    rgba(74, 222, 128, 0.04) 1px,
+    transparent 1px
+  );
+  background-size: 24px 24px;
+}
+
+/* CRT scanlines — horizontal lines + subtle flicker */
+.tui-scanlines {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 1px,
+    rgba(0, 0, 0, 0.04) 1px,
+    rgba(0, 0, 0, 0.04) 2px
+  );
+  animation: tui-flicker 8s ease-in-out infinite;
+}
+
+/* Vignette — darker edges like a CRT monitor */
+.tui-vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 50%,
+    rgba(0, 0, 0, 0.4) 100%
+  );
+}
+
+@keyframes tui-flicker {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.97; }
+  52% { opacity: 1; }
+  85% { opacity: 0.98; }
+  87% { opacity: 1; }
+}
+
+/* Ambient pulse — breathing glow on borders/accents */
+@keyframes tui-breathe {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.tui-breathe {
+  animation: tui-breathe 4s ease-in-out infinite;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PHOSPHOR GLOW — Multi-layer CRT text rendering
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.tui-glow-green {
+  color: var(--tui-green);
+  text-shadow:
+    0 0 4px var(--tui-green-glow),
+    0 0 12px rgba(74, 222, 128, 0.15),
+    0 0 24px rgba(74, 222, 128, 0.05);
+}
+
+.tui-glow-amber {
+  color: var(--tui-amber);
+  text-shadow:
+    0 0 4px var(--tui-amber-glow),
+    0 0 12px rgba(251, 191, 36, 0.15);
+}
+
+.tui-glow-purple {
+  color: var(--tui-purple);
+  text-shadow:
+    0 0 4px var(--tui-purple-glow),
+    0 0 12px rgba(196, 181, 253, 0.12);
+}
+
+.tui-glow-cyan {
+  color: var(--tui-cyan);
+  text-shadow:
+    0 0 4px var(--tui-cyan-glow),
+    0 0 12px rgba(103, 232, 249, 0.12);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   GLITCH EFFECT — Chromatic aberration for dramatic moments
+   ══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes tui-glitch {
+  0%, 100% { transform: translate(0); filter: none; }
+  2% { transform: translate(-2px, 1px); filter: hue-rotate(90deg); }
+  4% { transform: translate(2px, -1px); filter: hue-rotate(-90deg); }
+  6% { transform: translate(0); filter: none; }
+  40% { transform: translate(0); filter: none; }
+  42% { transform: translate(1px, 0); }
+  44% { transform: translate(-1px, 0); }
+  46% { transform: translate(0); filter: none; }
+}
+
+@keyframes tui-glitch-skew {
+  0%, 100% { transform: skewX(0deg); }
+  3% { transform: skewX(-1deg); }
+  5% { transform: skewX(1deg); }
+  7% { transform: skewX(0deg); }
+}
+
+.tui-glitch {
+  animation: tui-glitch 6s ease-in-out infinite;
+}
+
+.tui-glitch-skew {
+  animation: tui-glitch-skew 8s ease-in-out infinite;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TUI PANEL — Box-drawn frames with labeled headers
+   ══════════════════════════════════════════════════════════════════════════ */
 
 .tui-panel {
   position: relative;
@@ -109,10 +249,12 @@ body {
   text-transform: uppercase;
   white-space: nowrap;
   font-weight: 500;
+  text-shadow: 0 0 6px var(--tui-green-glow);
 }
 
 .tui-panel.accent-purple[data-label]::before {
   color: var(--tui-purple);
+  text-shadow: 0 0 6px var(--tui-purple-glow);
 }
 
 .tui-panel.accent-blue[data-label]::before {
@@ -121,13 +263,18 @@ body {
 
 .tui-panel.accent-amber[data-label]::before {
   color: var(--tui-amber);
+  text-shadow: 0 0 6px var(--tui-amber-glow);
 }
 
 .tui-panel.accent-cyan[data-label]::before {
   color: var(--tui-cyan);
+  text-shadow: 0 0 6px var(--tui-cyan-glow);
 }
 
-/* ── TUI Input ── */
+/* ══════════════════════════════════════════════════════════════════════════
+   TUI INPUT — Terminal prompt with > prefix and phosphor caret
+   ══════════════════════════════════════════════════════════════════════════ */
+
 .tui-input {
   width: 100%;
   padding: 0.375rem 0.5rem;
@@ -139,36 +286,40 @@ body {
   font-size: var(--tui-font-size-sm);
   outline: none;
   caret-color: var(--tui-green);
-  transition: border-color 0.15s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .tui-input:focus {
   border-color: var(--tui-green-dim);
+  box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.08), inset 0 0 12px rgba(74, 222, 128, 0.03);
 }
 
 .tui-input::placeholder {
   color: var(--tui-fg-4);
 }
 
-/* Prompt prefix: > */
 .tui-input-wrap {
   position: relative;
 }
 
 .tui-input-wrap::before {
-  content: ">";
+  content: "❯";
   position: absolute;
-  left: 0.5ch;
+  left: 0.4ch;
   top: 50%;
   transform: translateY(-50%);
   color: var(--tui-green);
   font-family: var(--tui-font);
-  font-size: var(--tui-font-size-sm);
+  font-size: var(--tui-font-size-2xs);
   pointer-events: none;
   z-index: 1;
+  text-shadow: 0 0 4px var(--tui-green-glow);
 }
 
-/* ── TUI Button ── */
+/* ══════════════════════════════════════════════════════════════════════════
+   TUI BUTTON — Terminal action with hover glow
+   ══════════════════════════════════════════════════════════════════════════ */
+
 .tui-btn {
   padding: 0.375rem 1rem;
   background: var(--tui-bg-3);
@@ -177,7 +328,7 @@ body {
   font-family: var(--tui-font);
   font-size: var(--tui-font-size-sm);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.2s;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -186,10 +337,11 @@ body {
   border-color: var(--tui-green-dim);
   color: var(--tui-green);
   background: var(--tui-bg-4);
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.08);
 }
 
 .tui-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: default;
 }
 
@@ -197,6 +349,7 @@ body {
   border-color: var(--tui-border);
   color: var(--tui-fg-1);
   background: var(--tui-bg-3);
+  box-shadow: none;
 }
 
 .tui-btn-primary {
@@ -207,6 +360,7 @@ body {
 .tui-btn-primary:hover {
   background: var(--tui-green-dim);
   color: var(--tui-fg-0);
+  box-shadow: 0 0 12px rgba(74, 222, 128, 0.15);
 }
 
 .tui-btn-danger {
@@ -214,12 +368,15 @@ body {
   color: var(--tui-red);
 }
 
-/* ── TUI Badge / Tag ── */
+/* ══════════════════════════════════════════════════════════════════════════
+   TUI BADGE — Status indicators with glow
+   ══════════════════════════════════════════════════════════════════════════ */
+
 .tui-badge {
   display: inline-flex;
   align-items: center;
   gap: 0.375ch;
-  padding: 0 0.75ch;
+  padding: 0.0625rem 0.75ch;
   font-size: var(--tui-font-size-2xs);
   color: var(--tui-fg-2);
   border: 1px solid var(--tui-border-dim);
@@ -230,11 +387,14 @@ body {
 .tui-badge-green {
   color: var(--tui-green);
   border-color: var(--tui-green-dim);
+  text-shadow: 0 0 4px var(--tui-green-glow);
 }
 
 .tui-badge-amber {
   color: var(--tui-amber);
   border-color: var(--tui-amber-dim);
+  text-shadow: 0 0 4px var(--tui-amber-glow);
+  animation: tui-breathe 2s ease-in-out infinite;
 }
 
 .tui-badge-red {
@@ -245,9 +405,13 @@ body {
 .tui-badge-purple {
   color: var(--tui-purple);
   border-color: var(--tui-purple-dim);
+  text-shadow: 0 0 4px var(--tui-purple-glow);
 }
 
-/* ── TUI Tabs ── */
+/* ══════════════════════════════════════════════════════════════════════════
+   TUI TABS
+   ══════════════════════════════════════════════════════════════════════════ */
+
 .tui-tabs {
   display: flex;
   border-bottom: 1px solid var(--tui-border);
@@ -265,7 +429,7 @@ body {
   cursor: pointer;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  transition: all 0.15s;
+  transition: all 0.2s;
   margin-bottom: -1px;
 }
 
@@ -277,14 +441,18 @@ body {
   color: var(--tui-green);
   border-bottom-color: var(--tui-green);
   background: var(--tui-bg-2);
+  text-shadow: 0 0 6px var(--tui-green-glow);
 }
 
-/* ── TUI Status Bar ── */
+/* ══════════════════════════════════════════════════════════════════════════
+   TUI STATUS BAR
+   ══════════════════════════════════════════════════════════════════════════ */
+
 .tui-status-bar {
   display: flex;
   align-items: center;
   gap: 1ch;
-  padding: 0.25rem 1ch;
+  padding: 0.1875rem 1ch;
   background: var(--tui-bg-0);
   border-top: 1px solid var(--tui-border);
   font-size: var(--tui-font-size-xs);
@@ -295,10 +463,13 @@ body {
   color: var(--tui-border);
 }
 
-/* ── TUI Log / IRC-style messages ── */
+/* ══════════════════════════════════════════════════════════════════════════
+   TUI LOG — IRC-style messages
+   ══════════════════════════════════════════════════════════════════════════ */
+
 .tui-log-entry {
   font-size: var(--tui-font-size-sm);
-  line-height: 1.5;
+  line-height: 1.6;
   padding: 0 0.5ch;
 }
 
@@ -315,56 +486,35 @@ body {
   color: var(--tui-fg-1);
 }
 
-/* ── Blinking cursor ── */
+/* ══════════════════════════════════════════════════════════════════════════
+   BLINKING CURSOR — Phosphor-glow block cursor
+   ══════════════════════════════════════════════════════════════════════════ */
+
 @keyframes tui-blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
 }
 
 .tui-cursor {
   display: inline-block;
-  width: 1ch;
-  height: 1.2em;
+  width: 0.8ch;
+  height: 1.1em;
   background: var(--tui-green);
-  animation: tui-blink 1s step-end infinite;
+  box-shadow: 0 0 6px var(--tui-green-glow), 0 0 12px rgba(74, 222, 128, 0.1);
+  animation: tui-blink 1.1s step-end infinite;
   vertical-align: text-bottom;
-  margin-left: 1px;
+  margin-left: 2px;
 }
 
 .tui-cursor-amber {
   background: var(--tui-amber);
+  box-shadow: 0 0 6px var(--tui-amber-glow);
 }
 
-/* ── Scanline overlay ── */
-.tui-scanlines {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 9999;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    rgba(0, 0, 0, 0.03) 2px,
-    rgba(0, 0, 0, 0.03) 4px
-  );
-  mix-blend-mode: multiply;
-}
+/* ══════════════════════════════════════════════════════════════════════════
+   TUI SELECT / DROPDOWN
+   ══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Glow effect for accent elements ── */
-.tui-glow-green {
-  text-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
-}
-
-.tui-glow-amber {
-  text-shadow: 0 0 8px rgba(234, 179, 8, 0.4);
-}
-
-.tui-glow-purple {
-  text-shadow: 0 0 8px rgba(167, 139, 250, 0.4);
-}
-
-/* ── TUI Select / Dropdown ── */
 .tui-select {
   position: relative;
 }
@@ -382,6 +532,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5ch;
+  transition: border-color 0.15s;
 }
 
 .tui-select-trigger:hover {
@@ -399,6 +550,7 @@ body {
   max-height: 280px;
   overflow: auto;
   z-index: 100;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
 }
 
 .tui-select-group-label {
@@ -421,6 +573,7 @@ body {
   text-align: left;
   display: block;
   position: relative;
+  transition: all 0.1s;
 }
 
 .tui-select-option:hover {
@@ -430,24 +583,21 @@ body {
 
 .tui-select-option[data-selected="true"] {
   color: var(--tui-green);
+  text-shadow: 0 0 4px var(--tui-green-glow);
 }
 
 .tui-select-option[data-selected="true"]::before {
-  content: ">";
+  content: "❯";
   position: absolute;
-  left: 0.75ch;
+  left: 0.6ch;
   color: var(--tui-green);
+  font-size: var(--tui-font-size-2xs);
+  text-shadow: 0 0 4px var(--tui-green-glow);
 }
 
-/* ── TUI Progress / Generating indicator ── */
-@keyframes tui-progress {
-  0% { content: "[    ]"; }
-  20% { content: "[=   ]"; }
-  40% { content: "[==  ]"; }
-  60% { content: "[=== ]"; }
-  80% { content: "[====]"; }
-  100% { content: "[    ]"; }
-}
+/* ══════════════════════════════════════════════════════════════════════════
+   GENERATING INDICATOR — Animated dots
+   ══════════════════════════════════════════════════════════════════════════ */
 
 .tui-generating::after {
   content: "";
@@ -461,7 +611,10 @@ body {
   75% { content: "..."; }
 }
 
-/* ── Zone grid ── */
+/* ══════════════════════════════════════════════════════════════════════════
+   ZONE GRID — Player zone cards with reticle corners
+   ══════════════════════════════════════════════════════════════════════════ */
+
 .tui-zone-grid {
   flex: 1;
   display: grid;
@@ -476,7 +629,41 @@ body {
   border: 1px solid var(--tui-border-dim);
   overflow: hidden;
   position: relative;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+
+/* Corner reticle marks — targeting aesthetic */
+.tui-zone-card::before,
+.tui-zone-card::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-color: var(--tui-fg-4);
+  border-style: solid;
+  border-width: 0;
+  opacity: 0;
+  transition: opacity 0.25s;
+  z-index: 2;
+}
+
+.tui-zone-card::before {
+  top: 3px;
+  left: 3px;
+  border-top-width: 1px;
+  border-left-width: 1px;
+}
+
+.tui-zone-card::after {
+  bottom: 3px;
+  right: 3px;
+  border-bottom-width: 1px;
+  border-right-width: 1px;
+}
+
+.tui-zone-card:hover::before,
+.tui-zone-card:hover::after {
+  opacity: 1;
 }
 
 .tui-zone-card:hover {
@@ -488,13 +675,24 @@ body {
   cursor: pointer;
 }
 
+.tui-zone-card[data-yours="true"]::before,
+.tui-zone-card[data-yours="true"]::after {
+  border-color: var(--tui-purple);
+  opacity: 0.5;
+}
+
 .tui-zone-card[data-yours="true"]:hover {
   border-color: var(--tui-purple);
-  box-shadow: inset 0 0 20px rgba(167, 139, 250, 0.05);
+  box-shadow: inset 0 0 30px rgba(196, 181, 253, 0.06), 0 0 12px rgba(196, 181, 253, 0.04);
+}
+
+.tui-zone-card[data-yours="true"]:hover::before,
+.tui-zone-card[data-yours="true"]:hover::after {
+  opacity: 1;
 }
 
 .tui-zone-card[data-offline="true"] {
-  opacity: 0.5;
+  opacity: 0.4;
 }
 
 .tui-zone-label {
@@ -503,7 +701,7 @@ body {
   left: 0;
   right: 0;
   padding: 0.25rem 0.5ch;
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+  background: linear-gradient(transparent, rgba(3, 3, 4, 0.85));
   font-size: var(--tui-font-size-2xs);
   color: var(--tui-fg-3);
   display: flex;
@@ -518,7 +716,10 @@ body {
   white-space: nowrap;
 }
 
-/* ── ASCII art header ── */
+/* ══════════════════════════════════════════════════════════════════════════
+   ASCII ART — Phosphor-rendered display text
+   ══════════════════════════════════════════════════════════════════════════ */
+
 .tui-ascii-art {
   font-family: var(--tui-font);
   font-size: 0.5rem;
@@ -527,10 +728,16 @@ body {
   white-space: pre;
   text-align: center;
   user-select: none;
-  opacity: 0.9;
+  text-shadow:
+    0 0 4px var(--tui-green-glow),
+    0 0 16px rgba(74, 222, 128, 0.1),
+    0 0 40px rgba(74, 222, 128, 0.04);
 }
 
-/* ── Template row ── */
+/* ══════════════════════════════════════════════════════════════════════════
+   TEMPLATE ROW
+   ══════════════════════════════════════════════════════════════════════════ */
+
 .tui-template-row {
   display: flex;
   align-items: center;
@@ -543,7 +750,7 @@ body {
   color: var(--tui-fg-1);
   font-family: var(--tui-font);
   font-size: var(--tui-font-size-sm);
-  transition: all 0.1s;
+  transition: all 0.15s;
   width: 100%;
 }
 
@@ -555,20 +762,25 @@ body {
 .tui-template-row[data-generating="true"] {
   border-color: var(--tui-purple-dim);
   color: var(--tui-purple);
+  box-shadow: inset 0 0 12px rgba(196, 181, 253, 0.04);
 }
 
 .tui-template-row:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: default;
 }
 
-/* ── Flower selector bar ── */
+/* ══════════════════════════════════════════════════════════════════════════
+   FLOWER SELECTOR BAR
+   ══════════════════════════════════════════════════════════════════════════ */
+
 .tui-flower-bar {
   padding: 0.25rem 0.5ch;
   border-top: 1px solid var(--tui-border);
   display: flex;
   gap: 0.25rem;
   overflow-x: auto;
+  background: var(--tui-bg-0);
 }
 
 .tui-flower-tag {
@@ -581,7 +793,7 @@ body {
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
-  transition: all 0.1s;
+  transition: all 0.15s;
 }
 
 .tui-flower-tag:hover {
@@ -592,4 +804,20 @@ body {
 .tui-flower-tag[data-active="true"] {
   border-color: var(--tui-green-dim);
   color: var(--tui-green);
+  text-shadow: 0 0 4px var(--tui-green-glow);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SECTION HEADERS — Glowing divider labels
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.tui-section-header {
+  padding: 0.375rem 1ch;
+  font-size: var(--tui-font-size-xs);
+  color: var(--tui-green);
+  text-shadow: 0 0 6px var(--tui-green-glow);
+  border-bottom: 1px solid var(--tui-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }

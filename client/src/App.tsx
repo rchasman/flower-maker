@@ -40,7 +40,9 @@ export function App() {
             )}
           </AnimatePresence>
 
-          {/* CRT scanline overlay */}
+          {/* Atmospheric layers */}
+          <div className="tui-dotgrid" />
+          <div className="tui-vignette" />
           <div className="tui-scanlines" />
         </div>
       </NameGate>

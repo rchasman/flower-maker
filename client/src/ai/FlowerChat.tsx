@@ -111,17 +111,7 @@ export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerG
       }}
     >
       {/* Header */}
-      <div
-        style={{
-          padding: "0.375rem 1ch",
-          borderBottom: "1px solid var(--tui-border)",
-          fontSize: "var(--tui-font-size-xs)",
-          color: "var(--tui-green)",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
+      <div className="tui-section-header">
         <span>── AI PROMPT</span>
         {activeCount > 0 && (
           <span className="tui-badge tui-badge-amber">

@@ -99,12 +99,12 @@ export function NameGate({ children }: NameGateProps) {
   return (
     <div style={centerStyle}>
       <div style={{ maxWidth: 420, width: "100%", padding: "2rem" }}>
-        {/* ASCII Logo */}
+        {/* ASCII Logo — phosphor glow + subtle glitch */}
         <motion.pre
-          className="tui-ascii-art tui-glow-green"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.6 }}
+          className="tui-ascii-art tui-glitch-skew"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
           style={{ marginBottom: "1.5rem" }}
         >
           {ASCII_LOGO}
@@ -127,6 +127,7 @@ export function NameGate({ children }: NameGateProps) {
                 initial={{ opacity: 0, x: -4 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.15 }}
+                className={line.includes("[ok") ? "tui-glow-green" : ""}
                 style={{
                   fontSize: "var(--tui-font-size-xs)",
                   lineHeight: 1.6,
