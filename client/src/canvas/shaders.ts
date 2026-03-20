@@ -200,6 +200,78 @@ export function createDepthBlurFilter(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 4. ORDERED DITHER — 8×8 Bayer matrix dithering for the entire scene
+//    Apply to app.stage for a full-screen halftone/risograph effect
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const ORDERED_DITHER_FRAG = /* glsl */ `
+in vec2 vTextureCoord;
+out vec4 finalColor;
+
+uniform sampler2D uTexture;
+uniform float uColorLevels;
+uniform vec4 uInputSize;
+
+// 8×8 Bayer threshold matrix (normalized 0–1)
+float bayer8(ivec2 p) {
+    // Row-major 8×8 Bayer matrix / 64.0
+    int x = p.x & 7;
+    int y = p.y & 7;
+    // Recursive bit-interleave construction
+    int v = 0;
+    int xc = x ^ y;
+    int yc = y;
+    for (int i = 0; i < 3; i++) {
+        v |= ((yc & 1) << (2 * i + 1)) | ((xc & 1) << (2 * i));
+        xc >>= 1;
+        yc >>= 1;
+    }
+    return (float(v) + 0.5) / 64.0;
+}
+
+void main() {
+    vec4 color = texture(uTexture, vTextureCoord);
+
+    // Pixel coordinates for Bayer lookup
+    ivec2 pixelCoord = ivec2(gl_FragCoord.xy);
+    float threshold = bayer8(pixelCoord) - 0.5; // center around 0
+
+    // Quantize each channel: floor to nearest level, then use Bayer to decide +1
+    float levels = uColorLevels;
+    vec3 scaled = color.rgb * levels;
+    vec3 quantized = (floor(scaled) + step(0.0, fract(scaled) + threshold)) / levels;
+
+    finalColor = vec4(clamp(quantized, 0.0, 1.0), color.a);
+}
+`;
+
+export interface OrderedDitherUniforms {
+  uColorLevels: number; // color steps per channel (4 = chunky, 8 = moderate, 16 = subtle)
+}
+
+export const ORDERED_DITHER_DEFAULTS: OrderedDitherUniforms = {
+  uColorLevels: 8.0,
+};
+
+/** Create a PixiJS v8 Filter for full-screen ordered dithering. */
+export function createOrderedDitherFilter(
+  overrides?: Partial<OrderedDitherUniforms>,
+): Filter {
+  const defaults = { ...ORDERED_DITHER_DEFAULTS, ...overrides };
+  return Filter.from({
+    gl: {
+      vertex: defaultFilterVert(),
+      fragment: ORDERED_DITHER_FRAG,
+    },
+    resources: {
+      ditherUniforms: {
+        uColorLevels: { value: defaults.uColorLevels, type: "f32" },
+      },
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Default filter vertex shader (PixiJS v8 compatible)
 // ═══════════════════════════════════════════════════════════════════════════
 

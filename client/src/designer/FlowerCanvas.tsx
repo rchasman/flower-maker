@@ -16,7 +16,7 @@ import {
   type DrawCmd,
 } from "../flower/render.ts";
 import { setCanvasViewport, getCanvasViewport } from "../spacetime/bridge.ts";
-import { createMergeGlowFilter } from "../canvas/shaders.ts";
+import { createMergeGlowFilter, createOrderedDitherFilter } from "../canvas/shaders.ts";
 import { createMergeEffect, tickMergeEffect, type MergeEffectState } from "../canvas/MergeEffect.ts";
 
 export type ConstituentEntry = { specJson: string; sid: number };
@@ -766,6 +766,9 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           const flowerContainer = new Container();
           app.stage.addChild(flowerContainer);
           stageContainerRef.current = flowerContainer;
+
+          // Full-screen ordered dithering — 8 color levels, Bayer 8×8
+          app.stage.filters = [createOrderedDitherFilter({ uColorLevels: 8.0 })];
 
           // Stage-level drag handlers
           app.stage.eventMode = "static";
