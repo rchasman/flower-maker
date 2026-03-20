@@ -235,9 +235,8 @@ float bayer4(vec2 p) {
 void main() {
     vec4 color = texture(uTexture, vTextureCoord);
 
-    // ── 1. Contrast: S-curve via smoothstep ──
-    vec3 c = smoothstep(vec3(0.0), vec3(1.0),
-        mix(color.rgb, smoothstep(0.0, 1.0, color.rgb), uContrast));
+    // ── 1. Contrast: single S-curve blended with original ──
+    vec3 c = mix(color.rgb, smoothstep(0.0, 1.0, color.rgb), uContrast);
 
     // ── 2. Shadow/highlight tinting ──
     float luminance = dot(c, vec3(0.299, 0.587, 0.114));
