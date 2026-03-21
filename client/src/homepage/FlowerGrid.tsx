@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import { motion } from "motion/react";
-import { run, scoreColor } from "../lib/utils.ts";
 import { useSession } from "../session/SessionProvider.tsx";
 import { useFlowerSessions, useFlowerSpecs, useUsers, usePartOverrides } from "../spacetime/hooks.ts";
 import type { FlowerSession, FlowerSpec, User } from "../spacetime/types.ts";
 import { isVariant } from "../spacetime/types.ts";
-import { createFlowerPlan, createArrangementPlan, cmdsToSvgD, hexString, darkenColor, parseArrangementMeta, type ArrangementMeta } from "../flower/render.ts";
+import { parseArrangementMeta, type ArrangementMeta } from "../flower/render.ts";
+import { PixiMiniCanvas } from "./PixiMiniCanvas.tsx";
 
 interface FlowerGridProps {
   onEnterDesigner: () => void;
@@ -212,231 +212,6 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
   );
 }
 
-// ── Mini canvas — live SVG replica of a user's designer canvas ───────────
-
-/** Render a single flower from its spec-driven plan. */
-function SvgFlower({ sid, x, y, r, specJson, plan: precomputedPlan }: { sid: number; x: number; y: number; r: number; specJson?: string; plan?: ReturnType<typeof createFlowerPlan> }) {
-  const plan = precomputedPlan ?? createFlowerPlan(specJson, sid);
-  const scale = r;
-
-  return (
-    <g>
-      {/* Stem */}
-      {plan.stem && (
-        <path
-          d={cmdsToSvgD(plan.stem.cmds, x, y, scale)}
-          fill={hexString(plan.stem.color)}
-          opacity={0.9}
-        />
-      )}
-
-      {/* Leaves */}
-      {plan.leaves.map((leaf, i) => (
-        <g key={`leaf-${i}`}>
-          <path
-            d={cmdsToSvgD(leaf.cmds, x, y, scale)}
-            fill={hexString(leaf.color)}
-            opacity={0.9}
-          />
-          <path
-            d={cmdsToSvgD(leaf.veins, x, y, scale)}
-            fill="none"
-            stroke={hexString(darkenColor(leaf.color, 0.6))}
-            strokeWidth={Math.max(0.3, scale * 0.015)}
-            opacity={0.7}
-          />
-        </g>
-      ))}
-
-      {/* Sepals */}
-      {plan.sepals.map((sepal, i) => (
-        <path
-          key={`sep-${i}`}
-          d={cmdsToSvgD(sepal.cmds, x, y, scale)}
-          fill={hexString(sepal.color)}
-          opacity={0.85}
-        />
-      ))}
-
-      {/* Petal layers */}
-      {plan.layers.map((layer, li) =>
-        layer.petals.map((petal, pi) => (
-          <path
-            key={`l${li}-p${pi}`}
-            d={cmdsToSvgD(petal.cmds, x, y, scale)}
-            fill={hexString(petal.color)}
-            opacity={layer.opacity}
-          />
-        )),
-      )}
-
-      {/* Stamens */}
-      {plan.center.stamens.map((s, i) => {
-        const sx = x + Math.cos(s.angle) * s.length * scale;
-        const sy = y + Math.sin(s.angle) * s.length * scale;
-        return (
-          <g key={`stm-${i}`}>
-            <line
-              x1={x}
-              y1={y}
-              x2={sx}
-              y2={sy}
-              stroke={hexString(s.filamentColor)}
-              strokeWidth={Math.max(0.3, scale * 0.02)}
-              opacity={0.7}
-            />
-            <circle
-              cx={sx}
-              cy={sy}
-              r={s.antherRadius * scale}
-              fill={hexString(s.antherColor)}
-            />
-          </g>
-        );
-      })}
-
-      {/* Center disc (pistil) */}
-      <circle cx={x} cy={y} r={plan.center.discRadius * scale} fill={hexString(plan.center.discColor)} />
-      <circle cx={x} cy={y} r={plan.center.highlightRadius * scale} fill={hexString(plan.center.highlightColor)} opacity={0.6} />
-    </g>
-  );
-}
-
-/** Render a multi-flower arrangement from its pre-computed plan. */
-function SvgArrangement({ x, y, r, constituents, level, meta }: {
-  x: number; y: number; r: number;
-  constituents: ReadonlyArray<{ specJson: string; sid: number }>;
-  level: number;
-  meta?: ArrangementMeta;
-}) {
-  const plan = createArrangementPlan(constituents, level, meta);
-  const scale = r;
-
-  return (
-    <g>
-      {/* Stems */}
-      {plan.members.map((member, i) => (
-        <path
-          key={`stem-${i}`}
-          d={cmdsToSvgD(member.stem.cmds, x, y, scale)}
-          fill={hexString(member.stem.color)}
-          opacity={0.9}
-        />
-      ))}
-
-      {/* Adornment (wrap, vase, pedestal) */}
-      {plan.adornment && (
-        <g>
-          <path
-            d={cmdsToSvgD(plan.adornment.cmds, x, y, scale)}
-            fill={hexString(plan.adornment.color)}
-            opacity={plan.adornment.opacity}
-          />
-          {plan.adornment.accent && (
-            <path
-              d={cmdsToSvgD(plan.adornment.accent.cmds, x, y, scale)}
-              fill={hexString(plan.adornment.accent.color)}
-              opacity={plan.adornment.accent.opacity}
-            />
-          )}
-          {plan.adornment.detail && (
-            <path
-              d={cmdsToSvgD(plan.adornment.detail.cmds, x, y, scale)}
-              fill={hexString(plan.adornment.detail.color)}
-              opacity={plan.adornment.detail.opacity}
-            />
-          )}
-        </g>
-      )}
-
-      {/* Leaves */}
-      {plan.members.map((member, mi) =>
-        member.leaves.map((leaf, li) => (
-          <g key={`leaf-${mi}-${li}`}>
-            <path
-              d={cmdsToSvgD(leaf.cmds, x, y, scale)}
-              fill={hexString(leaf.color)}
-              opacity={0.9}
-            />
-            <path
-              d={cmdsToSvgD(leaf.veins, x, y, scale)}
-              fill="none"
-              stroke={hexString(darkenColor(leaf.color, 0.6))}
-              strokeWidth={Math.max(0.3, scale * 0.015)}
-              opacity={0.7}
-            />
-          </g>
-        )),
-      )}
-
-      {/* Flower heads (back to front) */}
-      {[...plan.members].reverse().map((member, i) => {
-        const flowerScale = scale * member.scale;
-        const ox = x + member.offsetX * scale;
-        const oy = y + member.offsetY * scale;
-        return (
-          <SvgFlower key={`head-${i}`} sid={member.flowerPlan === plan.members[0]?.flowerPlan ? 0 : i + 1} x={ox} y={oy} r={flowerScale} specJson={undefined} plan={member.flowerPlan} />
-        );
-      })}
-    </g>
-  );
-}
-
-/** Live mini-canvas: renders all of a user's flowers at their real positions, scaled to fit. */
-function MiniCanvas({ sessions, specBySessionId, constituentMap, arrangementMetaMap }: { sessions: readonly FlowerSession[]; specBySessionId: Map<string, FlowerSpec>; constituentMap: Map<string, Array<{ specJson: string; sid: number }>>; arrangementMetaMap: Map<string, ArrangementMeta> }) {
-  if (sessions.length === 0) return null;
-
-  const positions = sessions.map(s => ({
-    sid: Number(s.id),
-    sessionKey: String(s.id),
-    x: Number(s.canvasX) || 0,
-    y: Number(s.canvasY) || 0,
-  }));
-
-  const allZero = positions.every(p => p.x === 0 && p.y === 0);
-  const resolved = allZero
-    ? positions.map((p, i) => {
-        const cols = Math.max(1, Math.ceil(Math.sqrt(positions.length)));
-        const spacing = 80;
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-        return { ...p, x: 100 + col * spacing, y: 100 + row * spacing };
-      })
-    : positions;
-
-  const xs = resolved.map(p => p.x);
-  const ys = resolved.map(p => p.y);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-
-  const rawW = Math.max(maxX - minX, 1);
-  const rawH = Math.max(maxY - minY, 1);
-  const flowerR = Math.max(6, Math.min(14, rawW / (sessions.length + 1)));
-  const pad = flowerR * 1.5;
-  const bboxW = rawW + pad * 2;
-  const bboxH = rawH + pad * 2;
-  const vbX = minX - pad;
-  const vbY = minY - pad;
-
-  return (
-    <svg
-      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", background: "var(--tui-bg-0)" }}
-      viewBox={`${vbX} ${vbY} ${bboxW} ${bboxH}`}
-      preserveAspectRatio="xMidYMid meet"
-    >
-      {resolved.map(p => {
-        const constituents = constituentMap.get(p.sessionKey);
-        if (constituents && constituents.length > 1) {
-          const level = Math.min(7, Math.ceil(constituents.length / 3));
-          return <SvgArrangement key={p.sid} x={p.x} y={p.y} r={flowerR} constituents={constituents} level={level} meta={arrangementMetaMap.get(p.sessionKey)} />;
-        }
-        return <SvgFlower key={p.sid} sid={p.sid} x={p.x} y={p.y} r={flowerR} specJson={specBySessionId.get(p.sessionKey)?.specJson} />;
-      })}
-    </svg>
-  );
-}
 
 /** Empty zone placeholder — subtle crosshair. */
 function EmptyZoneIcon({ isYours }: { isYours: boolean }) {
@@ -489,7 +264,7 @@ function ZoneCard({
       data-offline={!user.online ? "true" : undefined}
     >
       {allSessions.length > 0 ? (
-        <MiniCanvas sessions={allSessions} specBySessionId={specBySessionId} constituentMap={constituentMap} arrangementMetaMap={arrangementMetaMap} />
+        <PixiMiniCanvas sessions={allSessions} specBySessionId={specBySessionId} constituentMap={constituentMap} arrangementMetaMap={arrangementMetaMap} />
       ) : (
         <EmptyZoneIcon isYours={isYours} />
       )}
