@@ -33,7 +33,7 @@ function specName(specJson: string): string {
   return run(() => {
     try {
       const s = JSON.parse(specJson) as Record<string, unknown>;
-      return (s.common_name as string) ?? (s.species as string) ?? "unknown";
+      return (s.name as string) ?? (s.common_name as string) ?? (s.species as string) ?? "unknown";
     } catch {
       return "unknown";
     }

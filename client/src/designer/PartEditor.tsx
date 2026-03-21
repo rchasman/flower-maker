@@ -181,7 +181,7 @@ export function PartEditor({ sessionId, specJson, constituents = [] }: PartEdito
               try { return JSON.parse(c.specJson) as Record<string, unknown>; }
               catch { return {} as Record<string, unknown>; }
             });
-            const name = (cSpec.common_name as string) ?? (cSpec.species as string) ?? `Flower ${c.index}`;
+            const name = (cSpec.name as string) ?? (cSpec.common_name as string) ?? (cSpec.species as string) ?? `Flower ${c.index}`;
             const shape = getNestedValue(cSpec, "petals.layers.0.shape") as string | null;
             return (
               <div
@@ -251,9 +251,9 @@ export function PartEditor({ sessionId, specJson, constituents = [] }: PartEdito
 
       {/* ── Spec identity ── */}
       <div style={{ marginBottom: "0.5rem" }}>
-        {typeof spec.common_name === "string" && (
+        {(typeof spec.name === "string" || typeof spec.common_name === "string") && (
           <div style={{ color: "var(--tui-fg-0)", fontSize: "var(--tui-font-size-sm)", fontWeight: 600 }}>
-            {spec.common_name}
+            {(spec.name as string) ?? (spec.common_name as string)}
           </div>
         )}
         {typeof spec.species === "string" && (
