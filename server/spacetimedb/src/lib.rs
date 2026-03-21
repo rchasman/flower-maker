@@ -492,15 +492,11 @@ pub fn set_name(ctx: &ReducerContext, name: String) -> Result<(), String> {
 // Delete & Split
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[spacetimedb::reducer]
-pub fn delete_session(ctx: &ReducerContext, session_id: u64) -> Result<(), String> {
-    let session = require_session_owner(ctx, session_id)?;
-
-    if session.status == SessionStatus::Ordered {
-        return Err("Cannot delete an ordered session".to_string());
-    }
-
-    // Delete all part overrides for this session
+/// Cascade-delete all data referencing a session_id.
+/// Every table with a session_id column must be handled here.
+/// When adding a new table that references session_id, add its cleanup below.
+fn cascade_delete_session_data(ctx: &ReducerContext, session_id: u64) {
+    // part_override → session_id
     let override_ids: Vec<u64> = ctx.db.part_override().iter()
         .filter(|o| o.session_id == session_id)
         .map(|o| o.id)
@@ -509,10 +505,10 @@ pub fn delete_session(ctx: &ReducerContext, session_id: u64) -> Result<(), Strin
         ctx.db.part_override().id().delete(oid);
     }
 
-    // Delete the flower spec
+    // flower_spec → session_id (primary key)
     ctx.db.flower_spec().session_id().delete(session_id);
 
-    // Delete any orders
+    // flower_order → session_id
     let order_ids: Vec<u64> = ctx.db.flower_order().iter()
         .filter(|o| o.session_id == session_id)
         .map(|o| o.id)
@@ -520,6 +516,17 @@ pub fn delete_session(ctx: &ReducerContext, session_id: u64) -> Result<(), Strin
     for oid in order_ids {
         ctx.db.flower_order().id().delete(oid);
     }
+}
+
+#[spacetimedb::reducer]
+pub fn delete_session(ctx: &ReducerContext, session_id: u64) -> Result<(), String> {
+    let session = require_session_owner(ctx, session_id)?;
+
+    if session.status == SessionStatus::Ordered {
+        return Err("Cannot delete an ordered session".to_string());
+    }
+
+    cascade_delete_session_data(ctx, session_id);
 
     // Clear user's current_session_id if it points here
     if let Some(user) = ctx.db.user().identity().find(ctx.sender()) {
