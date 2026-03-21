@@ -251,6 +251,19 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
       // Persist the completed spec to DB — this is the authoritative save
       if (entry.sid !== null) {
         conn?.reducers.updateFlowerSpec({ sessionId: BigInt(entry.sid), specJson });
+
+        // Update canvas immediately with the final spec — don't wait for
+        // the DB round-trip, otherwise the flower reverts to the last partial
+        // streaming spec between delete and subscription update.
+        entry.spec = specJson;
+        const specMap = specsRef.current.reduce<Map<number, string>>(
+          (acc, s) => acc.set(Number(s.sessionId), s.specJson),
+          new Map(),
+        );
+        for (const e of streamingRef.current.values()) {
+          if (e.sid !== null && e.spec) specMap.set(e.sid, e.spec);
+        }
+        canvasRef.current?.setSpecMap(specMap);
       } else {
         // SID still unresolved — defer until session appears in subscription
         entry.spec = specJson;
