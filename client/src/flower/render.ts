@@ -471,8 +471,8 @@ function generatePetal(
   seed: number,
 ): DrawCmd[] {
   // Normalize dimensions to unit flower space
-  const petalLen = Math.max(0.25, Math.min(1.15, length * 0.4));
-  const petalW = Math.max(0.06, Math.min(0.45, width * 0.15));
+  const petalLen = Math.max(0.18, Math.min(0.7, length * 0.25));
+  const petalW = Math.max(0.05, Math.min(0.3, width * 0.1));
 
   // Combine spec edge with any intrinsic edge from shape
   const effectiveEdge = edge !== "Smooth" ? edge : (intrinsicEdge(shape) ?? "Smooth");
@@ -544,7 +544,7 @@ function generatePetal(
 function generatePetalVein(
   angle: number, length: number, curvature: number, curl: number
 ): DrawCmd[] {
-  const petalLen = Math.max(0.25, Math.min(1.15, length * 0.4));
+  const petalLen = Math.max(0.18, Math.min(0.7, length * 0.25));
   const cosA = Math.cos(angle);
   const sinA = Math.sin(angle);
 
