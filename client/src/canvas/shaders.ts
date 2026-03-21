@@ -235,6 +235,10 @@ float bayer4(vec2 p) {
 void main() {
     vec4 color = texture(uTexture, vTextureCoord);
 
+    // Skip transparent pixels — filter covers the container bounding box
+    // and we don't want to promote empty space to visible gray via dithering
+    if (color.a < 0.01) { finalColor = color; return; }
+
     // ── 1. Contrast: single S-curve blended with original ──
     vec3 c = mix(color.rgb, smoothstep(0.0, 1.0, color.rgb), uContrast);
 
