@@ -364,25 +364,6 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
             />
           </div>
 
-          {/* Flower selector bar */}
-          {mySessions.length > 0 && (
-            <div className="tui-flower-bar">
-              {mySessions.map(s => (
-                <button
-                  key={Number(s.id)}
-                  onClick={() => setSelectedId(Number(s.id))}
-                  className="tui-flower-tag"
-                  data-active={selectedId === Number(s.id) ? "true" : undefined}
-                >
-                  {s.prompt.slice(0, 18)}
-                  {s.prompt.length > 18 ? "…" : ""}
-                  <span style={{ color: "var(--tui-fg-4)", marginLeft: "0.5ch" }}>
-                    L{Number(s.arrangementLevel)}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
         </main>
 
         {/* Right sidebar — contextual panels */}
@@ -396,6 +377,21 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
             background: "var(--tui-bg-1)",
           }}
         >
+          {/* Canvas flower list */}
+          <div
+            style={{
+              flex: "0 1 auto",
+              maxHeight: "50%",
+              overflow: "auto",
+            }}
+          >
+            <ActivityFeed
+              onMerge={handleMergeDrop}
+              onSelect={setSelectedId}
+              selectedId={selectedId}
+            />
+          </div>
+
           {/* Panel tabs */}
           <div className="tui-tabs">
             {(
@@ -462,38 +458,9 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
               </div>
             )}
           </div>
-
-          {/* Activity feed at bottom */}
-          <div
-            style={{
-              borderTop: "1px solid var(--tui-border)",
-              flex: "0 1 auto",
-              maxHeight: "45%",
-              overflow: "auto",
-            }}
-          >
-            <ActivityFeed
-              onMerge={handleMergeDrop}
-              onSelect={setSelectedId}
-              selectedId={selectedId}
-            />
-          </div>
         </aside>
       </div>
 
-      {/* ── Bottom status bar ── */}
-      <div className="tui-status-bar">
-        <span>{mySessions.length} sessions</span>
-        <span className="sep">│</span>
-        <span>{flowerCount} on canvas</span>
-        <span className="sep">│</span>
-        <span style={{ color: selected ? "var(--tui-purple)" : "var(--tui-fg-4)" }}>
-          {selected ? `selected: #${Number(selected.id)}` : "none selected"}
-        </span>
-        <span style={{ marginLeft: "auto", color: "var(--tui-fg-4)" }}>
-          {model.split("/").pop()}
-        </span>
-      </div>
     </div>
   );
 }

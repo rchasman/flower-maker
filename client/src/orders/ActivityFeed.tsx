@@ -1,8 +1,8 @@
 import { useState, useMemo, useCallback } from "react";
 import { useSession } from "../session/SessionProvider.tsx";
-import { useOrders, useFlowerSessions, useFlowerSpecs, usePartOverrides } from "../spacetime/hooks.ts";
+import { useFlowerSessions, useFlowerSpecs, usePartOverrides } from "../spacetime/hooks.ts";
 import { isVariant } from "../spacetime/types.ts";
-import type { FlowerOrder, FlowerSession, FlowerSpec } from "../spacetime/types.ts";
+import type { FlowerSession, FlowerSpec } from "../spacetime/types.ts";
 import { run, getNestedValue } from "../lib/utils.ts";
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -13,14 +13,6 @@ type ActiveFlower = {
   spec: FlowerSpec | null;
   constituents: ConstituentEntry[];
   arrangementName: string | null;
-};
-
-type OrderEvent = {
-  kind: "order";
-  ts: number;
-  order: FlowerOrder;
-  session: FlowerSession | null;
-  spec: FlowerSpec | null;
 };
 
 type ConstituentEntry = {
@@ -63,14 +55,6 @@ function levelLabel(level: number): string {
   return ["", "stem", "group", "bunch", "arrangement", "bouquet", "centerpiece", "installation"][level] ?? "?";
 }
 
-function timeAgo(ts: number): string {
-  const delta = Math.floor((Date.now() - ts) / 1000);
-  if (delta < 60) return `${delta}s`;
-  if (delta < 3600) return `${Math.floor(delta / 60)}m`;
-  if (delta < 86400) return `${Math.floor(delta / 3600)}h`;
-  return `${Math.floor(delta / 86400)}d`;
-}
-
 const actionBtnStyle: React.CSSProperties = {
   padding: "0.1875rem 0.75ch",
   fontSize: "var(--tui-font-size-2xs)",
@@ -89,7 +73,6 @@ const actionBtnStyle: React.CSSProperties = {
 
 export function ActivityFeed({ onMerge, onSelect, selectedId }: ActivityFeedProps) {
   const { conn, identityHex } = useSession();
-  const orders = useOrders(conn);
   const sessions = useFlowerSessions(conn);
   const specs = useFlowerSpecs(conn);
   const partOverrides = usePartOverrides(conn);
@@ -97,19 +80,18 @@ export function ActivityFeed({ onMerge, onSelect, selectedId }: ActivityFeedProp
   // Merge mode: pick a second flower to merge with
   const [mergeSource, setMergeSource] = useState<number | null>(null);
 
-  const { activeFlowers, orderEvents } = useMemo(() => {
+  const activeFlowers = useMemo(() => {
     const specMap = new Map(specs.map(s => [Number(s.sessionId), s]));
-    const sessionMap = new Map(sessions.map(s => [Number(s.id), s]));
 
     // Only show the current user's designing sessions
     const designing = sessions.filter(s => {
       if (!isVariant(s.status, "Designing")) return false;
-      if (!identityHex) return true; // can't determine identity, show all
+      if (!identityHex) return true;
       const ownerStr = String(s.owner);
       return !ownerStr.startsWith("[object") && ownerStr === identityHex;
     });
 
-    const activeFlowers: ActiveFlower[] = designing.map(session => {
+    return designing.map(session => {
       const sid = Number(session.id);
       const constituents = partOverrides
         .filter(o => o.sessionId === session.id && o.partPath.startsWith("constituent:"))
@@ -144,20 +126,7 @@ export function ActivityFeed({ onMerge, onSelect, selectedId }: ActivityFeedProp
         arrangementName,
       };
     });
-
-    const orderEvents: OrderEvent[] = [...orders]
-      .sort((a, b) => Number(b.orderedAt) - Number(a.orderedAt))
-      .slice(0, 10)
-      .map(order => ({
-        kind: "order" as const,
-        ts: Number(order.orderedAt),
-        order,
-        session: sessionMap.get(Number(order.sessionId)) ?? null,
-        spec: specMap.get(Number(order.sessionId)) ?? null,
-      }));
-
-    return { activeFlowers, orderEvents };
-  }, [orders, sessions, specs, partOverrides, identityHex]);
+  }, [sessions, specs, partOverrides, identityHex]);
 
   const handleDelete = useCallback((sid: bigint) => {
     conn?.reducers.deleteSession({ sessionId: sid });
@@ -224,7 +193,7 @@ export function ActivityFeed({ onMerge, onSelect, selectedId }: ActivityFeedProp
             textShadow: "0 0 6px var(--tui-green-glow)",
             borderBottom: "1px solid var(--tui-border-dim)",
           }}>
-            ACTIVE ({activeFlowers.length})
+            CANVAS ({activeFlowers.length})
           </div>
           {activeFlowers.map(flower => {
             const sid = Number(flower.session.id);
@@ -400,71 +369,13 @@ export function ActivityFeed({ onMerge, onSelect, selectedId }: ActivityFeedProp
         </div>
       )}
 
-      {/* ── Order events ── */}
-      {orderEvents.length > 0 && (
-        <div>
-          <div style={{
-            padding: "0.25rem 1ch",
-            fontSize: "var(--tui-font-size-xs)",
-            color: "var(--tui-amber)",
-            textShadow: "0 0 6px var(--tui-amber-glow)",
-            borderBottom: "1px solid var(--tui-border-dim)",
-          }}>
-            ORDERS
-          </div>
-          {orderEvents.map(e => {
-            const name = e.spec ? specName(e.spec.specJson) : `#${Number(e.order.sessionId)}`;
-            const level = e.session ? Number(e.session.arrangementLevel) : 0;
-            const count = e.session ? Number(e.session.flowerCount) : 0;
-            const isAgent = isVariant(e.order.source, "Agent");
-
-            return (
-              <div
-                key={`order-${Number(e.order.id)}`}
-                style={{
-                  padding: "0.375rem 1ch",
-                  borderBottom: "1px solid var(--tui-border-dim)",
-                  fontSize: "var(--tui-font-size-xs)",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5ch" }}>
-                  <span style={{ color: "var(--tui-green)", textShadow: "0 0 4px var(--tui-green-glow)" }}>
-                    ORDER
-                  </span>
-                  <span style={{ color: "var(--tui-fg-1)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {name}
-                  </span>
-                  {isAgent && (
-                    <span className="tui-badge tui-badge-purple" style={{ fontSize: "var(--tui-font-size-2xs)" }}>AI</span>
-                  )}
-                  <span style={{ color: "var(--tui-fg-4)", fontSize: "var(--tui-font-size-2xs)", flexShrink: 0 }}>
-                    {timeAgo(e.ts)}
-                  </span>
-                </div>
-                <div style={{
-                  display: "flex",
-                  gap: "1ch",
-                  marginTop: "0.1875rem",
-                  fontSize: "var(--tui-font-size-2xs)",
-                  color: "var(--tui-fg-4)",
-                }}>
-                  {level > 0 && <span>{levelLabel(level)}</span>}
-                  {count > 1 && <span>{count} flowers</span>}
-                  {e.order.note && <span style={{ color: "var(--tui-fg-3)" }}>{e.order.note}</span>}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {activeFlowers.length === 0 && orderEvents.length === 0 && (
+      {activeFlowers.length === 0 && (
         <div style={{
           padding: "0.5rem 1ch",
           color: "var(--tui-fg-4)",
           fontSize: "var(--tui-font-size-xs)",
         }}>
-          no activity yet.
+          no flowers on canvas.
         </div>
       )}
     </div>
