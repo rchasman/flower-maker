@@ -251,14 +251,14 @@ export function PartEditor({ sessionId, specJson, constituents = [] }: PartEdito
 
       {/* ── Spec identity ── */}
       <div style={{ marginBottom: "0.5rem" }}>
-        {spec.common_name && (
+        {typeof spec.common_name === "string" && (
           <div style={{ color: "var(--tui-fg-0)", fontSize: "var(--tui-font-size-sm)", fontWeight: 600 }}>
-            {spec.common_name as string}
+            {spec.common_name}
           </div>
         )}
-        {spec.species && (
+        {typeof spec.species === "string" && (
           <div style={{ color: "var(--tui-fg-3)", fontSize: "var(--tui-font-size-xs)", fontStyle: "italic" }}>
-            {spec.species as string}
+            {spec.species}
           </div>
         )}
       </div>
