@@ -4,7 +4,7 @@ import { useFlowerSessions, useFlowerSpecs, usePartOverrides } from "../spacetim
 import { TemplatePicker } from "./TemplatePicker.tsx";
 import { FlowerChat } from "../ai/FlowerChat.tsx";
 import { OrderFlow } from "../orders/OrderFlow.tsx";
-import { OrderFeed } from "../orders/OrderFeed.tsx";
+import { ActivityFeed } from "../orders/ActivityFeed.tsx";
 import { Chat } from "../social/Chat.tsx";
 import { ConnectedUsers } from "../social/ConnectedUsers.tsx";
 import { PartEditor } from "./PartEditor.tsx";
@@ -72,6 +72,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
   const genCounter = useRef(0);
 
   // Push spec data to canvas whenever specs update, merging any streaming specs.
+  // Also persist specs to DB when SIDs are resolved here (fixes race condition).
   useEffect(() => {
     const currentSessions = sessionsRef.current;
     for (const entry of streamingRef.current.values()) {
@@ -86,7 +87,13 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
             s => Number(s.id) > 0 && !claimedSids.has(Number(s.id)),
           );
           if (unclaimed.length > 0) {
-            entry.sid = Number(unclaimed[unclaimed.length - 1]!.id);
+            const resolvedSid = Number(unclaimed[unclaimed.length - 1]!.id);
+            entry.sid = resolvedSid;
+            // SID just resolved — persist the spec to DB
+            if (entry.spec && entry.spec !== entry.lastPushedSpec) {
+              entry.lastPushedSpec = entry.spec;
+              conn?.reducers.updateFlowerSpec({ sessionId: BigInt(resolvedSid), specJson: entry.spec });
+            }
           }
         }
       }
@@ -109,7 +116,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
       }
     }
     canvasRef.current?.setSpecMap(specMap);
-  }, [specs, mySessions.length, partOverrides]);
+  }, [specs, mySessions.length, partOverrides, conn]);
 
   // Push constituent data and arrangement metadata to canvas
   useEffect(() => {
@@ -235,9 +242,30 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     }
   }, [resolveStreamingSid, conn]);
 
-  const handleFlowerGenerated = useCallback((genId: string, _specJson: string) => {
+  const handleFlowerGenerated = useCallback((genId: string, specJson: string) => {
+    const entry = streamingRef.current.get(genId);
+    if (entry) {
+      // Final SID resolution attempt
+      resolveStreamingSid(entry);
+
+      // Persist the completed spec to DB — this is the authoritative save
+      if (entry.sid !== null) {
+        conn?.reducers.updateFlowerSpec({ sessionId: BigInt(entry.sid), specJson });
+      } else {
+        // SID still unresolved — defer until session appears in subscription
+        entry.spec = specJson;
+        setTimeout(() => {
+          resolveStreamingSid(entry);
+          if (entry.sid !== null) {
+            conn?.reducers.updateFlowerSpec({ sessionId: BigInt(entry.sid), specJson });
+          }
+          streamingRef.current.delete(genId);
+        }, 3000);
+        return;
+      }
+    }
     streamingRef.current.delete(genId);
-  }, []);
+  }, [resolveStreamingSid, conn]);
 
   const handleGenerationFailed = useCallback((genId: string) => {
     const entry = streamingRef.current.get(genId);
@@ -373,7 +401,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
             {(
               [
                 ["order", "ORDER"],
-                ["parts", "PARTS"],
+                ["parts", "TAXONOMY"],
                 ["chat", "CHAT"],
               ] as const
             ).map(([key, label]) => (
@@ -435,24 +463,20 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
             )}
           </div>
 
-          {/* Order feed at bottom */}
+          {/* Activity feed at bottom */}
           <div
             style={{
               borderTop: "1px solid var(--tui-border)",
-              maxHeight: "120px",
+              flex: "0 1 auto",
+              maxHeight: "45%",
               overflow: "auto",
             }}
           >
-            <div
-              style={{
-                padding: "0.25rem 1ch",
-                fontSize: "var(--tui-font-size-xs)",
-                color: "var(--tui-green)",
-              }}
-            >
-              ── RECENT ORDERS
-            </div>
-            <OrderFeed />
+            <ActivityFeed
+              onMerge={handleMergeDrop}
+              onSelect={setSelectedId}
+              selectedId={selectedId}
+            />
           </div>
         </aside>
       </div>
