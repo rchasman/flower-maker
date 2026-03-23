@@ -54,6 +54,7 @@ const MERGE_GLOW_DURATION = 2000;
 const FLOWER_BASE_RADIUS = 70;
 const SELECTION_RING_PAD = 6;
 const MERGE_RANGE = FLOWER_BASE_RADIUS * 3;
+const DRAG_THRESHOLD = 8; // px movement before click becomes drag
 
 export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
   function FlowerCanvas(
@@ -65,7 +66,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const flowerGraphicsRef = useRef<Map<number, Graphics>>(new Map());
     const stageContainerRef = useRef<Container | null>(null);
     const selectedIdRef = useRef(selectedId);
-    const dragRef = useRef<{ sid: number } | null>(null);
+    const dragRef = useRef<{ sid: number; started: boolean; originX: number; originY: number } | null>(null);
+    const onFlowerClickRef = useRef(onFlowerClick);
     const onFlowerDragRef = useRef(onFlowerDrag);
     const onFlowerDragEndRef = useRef(onFlowerDragEnd);
     const onMergeDropRef = useRef(onMergeDrop);
@@ -88,6 +90,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
 
     // Keep refs in sync without re-running effects
     selectedIdRef.current = selectedId;
+    onFlowerClickRef.current = onFlowerClick;
     onFlowerDragRef.current = onFlowerDrag;
     onFlowerDragEndRef.current = onFlowerDragEnd;
     onMergeDropRef.current = onMergeDrop;
@@ -169,9 +172,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             g.cursor = "grab";
             const sid = flower.sid;
             g.on("pointerdown", (e) => {
-              onFlowerClick?.(sid);
-              dragRef.current = { sid };
-              g!.cursor = "grabbing";
+              dragRef.current = { sid, started: false, originX: e.global.x, originY: e.global.y };
               e.stopPropagation();
             });
             g.on("pointerup", () => {
@@ -241,9 +242,9 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           return flower.sid;
         });
 
-        // ── Merge proximity detection ──
+        // ── Merge proximity detection (only when actively dragging) ──
         const drag = dragRef.current;
-        if (drag) {
+        if (drag?.started) {
           const dragged = data.find(f => f.sid === drag.sid);
           if (dragged) {
             const nearest = data
@@ -327,7 +328,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             });
         }
       },
-      [onFlowerClick, getPlan],
+      [getPlan],
     );
 
     useImperativeHandle(ref, () => ({ updateFlowers, setSpecMap, setConstituentMap, setArrangementMetaMap }), [
@@ -380,6 +381,17 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             const drag = dragRef.current;
             if (!drag) return;
             const pos = e.global;
+
+            // Promote to real drag only after moving past threshold
+            if (!drag.started) {
+              const dx = pos.x - drag.originX;
+              const dy = pos.y - drag.originY;
+              if (dx * dx + dy * dy < DRAG_THRESHOLD * DRAG_THRESHOLD) return;
+              drag.started = true;
+              const g = flowerGraphicsRef.current.get(drag.sid);
+              if (g) g.cursor = "grabbing";
+            }
+
             onFlowerDragRef.current?.(drag.sid, pos.x, pos.y);
           });
 
@@ -388,6 +400,14 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             if (drag) {
               const g = flowerGraphicsRef.current.get(drag.sid);
               if (g) g.cursor = "grab";
+
+              // Click (no drag) — select the flower, don't merge
+              if (!drag.started) {
+                onFlowerClickRef.current?.(drag.sid);
+                dragRef.current = null;
+                mergeTargetRef.current = null;
+                return;
+              }
 
               const mt = mergeTargetRef.current;
               if (mt && mt.dragSid === drag.sid) {
