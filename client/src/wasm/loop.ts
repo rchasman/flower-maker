@@ -6,7 +6,7 @@ export interface MergeEvent {
 }
 
 export type MergeHandler = (event: MergeEvent) => void;
-export type RenderCallback = (data: FlowerRenderData[]) => void;
+export type RenderCallback = (pool: FlowerRenderData[], count: number) => void;
 
 export interface FlowerRenderData {
   sid: number;
@@ -27,6 +27,42 @@ export interface FlowerRenderData {
 // SharedArrayBuffer layout constants (must match buffer.rs)
 const FLOATS_PER_FLOWER = 14;
 const HEADER_FLOATS = 2;
+
+// ── Object pool: pre-allocated FlowerRenderData slots, reused every frame ──
+const INITIAL_POOL_CAPACITY = 256;
+
+function createEmptyFlower(): FlowerRenderData {
+  return { sid: 0, x: 0, y: 0, rotation: 0, scale: 0, alpha: 0, has_aura: false, has_glow: false, particles: 0, petal_color_r: 0, petal_color_g: 0, petal_color_b: 0, petal_count: 0 };
+}
+
+/** Module-level pool — grows by 2x when capacity is exceeded, never shrinks. */
+let pool: FlowerRenderData[] = Array.from({ length: INITIAL_POOL_CAPACITY }, createEmptyFlower);
+
+function ensurePoolCapacity(needed: number): void {
+  if (needed <= pool.length) return;
+  let newCap = pool.length;
+  while (newCap < needed) newCap *= 2;
+  for (let i = pool.length; i < newCap; i++) {
+    pool.push(createEmptyFlower());
+  }
+}
+
+/** Copy all fields from src into an existing pool slot (zero allocation). */
+function copyIntoSlot(slot: FlowerRenderData, src: FlowerRenderData): void {
+  slot.sid = src.sid;
+  slot.x = src.x;
+  slot.y = src.y;
+  slot.rotation = src.rotation;
+  slot.scale = src.scale;
+  slot.alpha = src.alpha;
+  slot.has_aura = src.has_aura;
+  slot.has_glow = src.has_glow;
+  slot.particles = src.particles;
+  slot.petal_color_r = src.petal_color_r;
+  slot.petal_color_g = src.petal_color_g;
+  slot.petal_color_b = src.petal_color_b;
+  slot.petal_count = src.petal_count;
+}
 
 let animFrameId: number | null = null;
 let lastTime = 0;
@@ -63,31 +99,30 @@ function getOrCreateBuffer(sim: GardenSim): Float32Array | null {
   return null;
 }
 
-/** Read flower data from the typed buffer. */
-function readFromBuffer(buf: Float32Array): FlowerRenderData[] {
+/** Read flower data from the typed buffer into the pre-allocated pool. Returns active count. */
+function readFromBuffer(buf: Float32Array): number {
   const count = buf[0] ?? 0;
-  const result: FlowerRenderData[] = [];
+  ensurePoolCapacity(count);
 
   for (let i = 0; i < count; i++) {
     const off = HEADER_FLOATS + i * FLOATS_PER_FLOWER;
-    result.push({
-      sid: buf[off]!,
-      x: buf[off + 1]!,
-      y: buf[off + 2]!,
-      rotation: buf[off + 3]!,
-      scale: buf[off + 4]!,
-      alpha: buf[off + 5]!,
-      has_aura: buf[off + 6]! > 0.5,
-      has_glow: buf[off + 7]! > 0.5,
-      particles: buf[off + 8]!,
-      petal_color_r: buf[off + 9]!,
-      petal_color_g: buf[off + 10]!,
-      petal_color_b: buf[off + 11]!,
-      petal_count: buf[off + 12]!,
-    });
+    const slot = pool[i]!;
+    slot.sid = buf[off]!;
+    slot.x = buf[off + 1]!;
+    slot.y = buf[off + 2]!;
+    slot.rotation = buf[off + 3]!;
+    slot.scale = buf[off + 4]!;
+    slot.alpha = buf[off + 5]!;
+    slot.has_aura = buf[off + 6]! > 0.5;
+    slot.has_glow = buf[off + 7]! > 0.5;
+    slot.particles = buf[off + 8]!;
+    slot.petal_color_r = buf[off + 9]!;
+    slot.petal_color_g = buf[off + 10]!;
+    slot.petal_color_b = buf[off + 11]!;
+    slot.petal_count = buf[off + 12]!;
   }
 
-  return result;
+  return count;
 }
 
 export function startLoop(
@@ -120,14 +155,19 @@ export function startLoop(
     // 3. Export render data
     try {
       if (useBuffer && buf) {
-        // Fast path: write directly to typed buffer (no JSON alloc)
+        // Fast path: write directly to typed buffer, read into pool (zero alloc)
         sim.write_to_buffer!(buf);
-        onRender(readFromBuffer(buf));
+        const count = readFromBuffer(buf);
+        onRender(pool, count);
       } else {
-        // Fallback: JSON serialization
+        // Fallback: JSON → pool (avoids per-frame object allocation)
         const renderJson = sim.render_data();
-        const data = JSON.parse(renderJson) as FlowerRenderData[];
-        onRender(data);
+        const raw = JSON.parse(renderJson) as FlowerRenderData[];
+        ensurePoolCapacity(raw.length);
+        for (let i = 0; i < raw.length; i++) {
+          copyIntoSlot(pool[i]!, raw[i]!);
+        }
+        onRender(pool, raw.length);
       }
     } catch {
       /* render error */

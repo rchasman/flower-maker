@@ -196,9 +196,9 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
       startLoop(
         sim,
         () => {},
-        data => {
-          setFlowerCount(data.length);
-          canvasRef.current?.updateFlowers(data);
+        (pool, count) => {
+          setFlowerCount(count);
+          canvasRef.current?.updateFlowers(pool, count);
         },
       );
     });
