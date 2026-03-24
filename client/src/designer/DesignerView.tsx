@@ -49,9 +49,53 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
   const [rightPanel, setRightPanel] = useState<RightPanel>("order");
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [flowerCount, setFlowerCount] = useState(0);
+  const [leftCollapsed, setLeftCollapsed] = useState(() => {
+    try { return localStorage.getItem("sidebar-left-collapsed") === "true"; } catch { return false; }
+  });
+  const [rightCollapsed, setRightCollapsed] = useState(() => {
+    try {
+      const saved = localStorage.getItem("sidebar-right-collapsed");
+      if (saved !== null) return saved === "true";
+      return window.innerWidth < 900;
+    } catch { return false; }
+  });
   const wasmInitialized = useRef(false);
   const canvasRef = useRef<FlowerCanvasHandle>(null);
   const simRef = useRef<GardenSim | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("sidebar-left-collapsed", String(leftCollapsed));
+      localStorage.setItem("sidebar-right-collapsed", String(rightCollapsed));
+    } catch { /* storage unavailable */ }
+  }, [leftCollapsed, rightCollapsed]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setRightCollapsed(prev => prev || window.innerWidth < 900);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSelectedId(null);
+        return;
+      }
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedIdRef.current !== null) {
+        if ((e.target as HTMLElement).tagName === "INPUT" || (e.target as HTMLElement).tagName === "TEXTAREA") return;
+        conn?.reducers.deleteSession({ sessionId: BigInt(selectedIdRef.current) });
+        setSelectedId(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [conn]);
 
   const mySessions = sessions.filter(s => isVariant(s.status, "Designing"));
   const selected: FlowerSession | null =
@@ -336,23 +380,38 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
         {/* Left sidebar — templates + AI chat */}
         <aside
           style={{
-            width: "280px",
+            width: leftCollapsed ? "40px" : "clamp(220px, 18vw, 320px)",
             borderRight: "1px solid var(--tui-border)",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
             background: "var(--tui-bg-1)",
+            transition: "width 0.2s ease",
           }}
         >
-          {/* Templates section */}
-          <div style={{ flex: "0 0 auto", maxHeight: "40%", overflow: "auto" }}>
-            <TemplatePicker conn={conn} model={model} onGenerationStart={handleGenerationStart} onSpecProgress={handleSpecProgress} onFlowerGenerated={handleFlowerGenerated} onGenerationFailed={handleGenerationFailed} />
-          </div>
-
-          {/* AI chat section */}
-          <div style={{ flex: 1, minHeight: 0, borderTop: "1px solid var(--tui-border)" }}>
-            <FlowerChat model={model} onGenerationStart={handleGenerationStart} onSpecProgress={handleSpecProgress} onFlowerGenerated={handleFlowerGenerated} onGenerationFailed={handleGenerationFailed} />
-          </div>
+          <button
+            onClick={() => setLeftCollapsed(c => !c)}
+            className="tui-btn"
+            style={{
+              padding: "0.125rem 0.5ch",
+              fontSize: "var(--tui-font-size-2xs)",
+              alignSelf: "flex-end",
+              margin: "0.25rem 0.25rem 0 0",
+            }}
+            title={leftCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {leftCollapsed ? "\u00BB" : "\u00AB"}
+          </button>
+          {!leftCollapsed && (
+            <>
+              <div style={{ flex: "0 0 auto", maxHeight: "40%", overflow: "auto" }}>
+                <TemplatePicker conn={conn} model={model} onGenerationStart={handleGenerationStart} onSpecProgress={handleSpecProgress} onFlowerGenerated={handleFlowerGenerated} onGenerationFailed={handleGenerationFailed} />
+              </div>
+              <div style={{ flex: 1, minHeight: 0, borderTop: "1px solid var(--tui-border)" }}>
+                <FlowerChat model={model} onGenerationStart={handleGenerationStart} onSpecProgress={handleSpecProgress} onFlowerGenerated={handleFlowerGenerated} onGenerationFailed={handleGenerationFailed} />
+              </div>
+            </>
+          )}
         </aside>
 
         {/* Center — canvas area */}
@@ -382,95 +441,113 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
         {/* Right sidebar — contextual panels */}
         <aside
           style={{
-            width: "280px",
+            width: rightCollapsed ? "40px" : "clamp(220px, 18vw, 320px)",
             borderLeft: "1px solid var(--tui-border)",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
             background: "var(--tui-bg-1)",
+            transition: "width 0.2s ease",
           }}
         >
-          {/* Canvas flower list */}
-          <div
+          <button
+            onClick={() => setRightCollapsed(c => !c)}
+            className="tui-btn"
             style={{
-              flex: "0 1 auto",
-              maxHeight: "50%",
-              overflow: "auto",
+              padding: "0.125rem 0.5ch",
+              fontSize: "var(--tui-font-size-2xs)",
+              alignSelf: "flex-start",
+              margin: "0.25rem 0 0 0.25rem",
             }}
+            title={rightCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            <ActivityFeed
-              onMerge={handleMergeDrop}
-              onSelect={setSelectedId}
-              selectedId={selectedId}
-            />
-          </div>
-
-          {/* Panel tabs */}
-          <div className="tui-tabs">
-            {(
-              [
-                ["order", "ORDER"],
-                ["parts", "TAXONOMY"],
-                ["chat", "CHAT"],
-              ] as const
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => setRightPanel(key)}
-                className="tui-tab"
-                data-active={rightPanel === key ? "true" : undefined}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {/* Panel content */}
-          <div style={{ flex: 1, overflow: "auto", padding: "0.75rem 1ch" }}>
-            {rightPanel === "order" && <OrderFlow session={selected} />}
-            {rightPanel === "parts" && selected && (
-              <PartEditor
-                sessionId={Number(selected.id)}
-                specJson={selectedSpec?.specJson ?? "{}"}
-                constituents={partOverrides
-                  .filter(o => o.sessionId === selected.id && o.partPath.startsWith("constituent:"))
-                  .map(o => ({
-                    index: parseInt(o.partPath.split(":")[1] ?? "0", 10),
-                    specJson: o.overrideJson,
-                    forkedFrom: o.forkedFrom,
-                  }))
-                  .sort((a, b) => a.index - b.index)
-                }
-              />
-            )}
-            {rightPanel === "parts" && !selected && (
-              <div style={{ color: "var(--tui-fg-4)", fontSize: "var(--tui-font-size-sm)" }}>
-                select a flower to edit parts.
-              </div>
-            )}
-            {rightPanel === "chat" && (
+            {rightCollapsed ? "\u00AB" : "\u00BB"}
+          </button>
+          {!rightCollapsed && (
+            <>
+              {/* Canvas flower list */}
               <div
                 style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.75rem",
-                  height: "100%",
+                  flex: "0 1 auto",
+                  maxHeight: "50%",
+                  overflow: "auto",
                 }}
               >
-                <ConnectedUsers />
-                <div
-                  style={{
-                    flex: 1,
-                    minHeight: 0,
-                    borderTop: "1px solid var(--tui-border-dim)",
-                    paddingTop: "0.5rem",
-                  }}
-                >
-                  <Chat />
-                </div>
+                <ActivityFeed
+                  onMerge={handleMergeDrop}
+                  onSelect={setSelectedId}
+                  selectedId={selectedId}
+                />
               </div>
-            )}
-          </div>
+
+              {/* Panel tabs */}
+              <div className="tui-tabs">
+                {(
+                  [
+                    ["order", "ORDER"],
+                    ["parts", "TAXONOMY"],
+                    ["chat", "CHAT"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setRightPanel(key)}
+                    className="tui-tab"
+                    data-active={rightPanel === key ? "true" : undefined}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Panel content */}
+              <div style={{ flex: 1, overflow: "auto", padding: "0.75rem 1ch" }}>
+                {rightPanel === "order" && <OrderFlow session={selected} />}
+                {rightPanel === "parts" && selected && (
+                  <PartEditor
+                    sessionId={Number(selected.id)}
+                    specJson={selectedSpec?.specJson ?? "{}"}
+                    constituents={partOverrides
+                      .filter(o => o.sessionId === selected.id && o.partPath.startsWith("constituent:"))
+                      .map(o => ({
+                        index: parseInt(o.partPath.split(":")[1] ?? "0", 10),
+                        specJson: o.overrideJson,
+                        forkedFrom: o.forkedFrom,
+                      }))
+                      .sort((a, b) => a.index - b.index)
+                    }
+                  />
+                )}
+                {rightPanel === "parts" && !selected && (
+                  <div style={{ color: "var(--tui-fg-4)", fontSize: "var(--tui-font-size-sm)" }}>
+                    select a flower to edit parts.
+                  </div>
+                )}
+                {rightPanel === "chat" && (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.75rem",
+                      height: "100%",
+                    }}
+                  >
+                    <ConnectedUsers />
+                    <div
+                      style={{
+                        flex: 1,
+                        minHeight: 0,
+                        borderTop: "1px solid var(--tui-border-dim)",
+                        paddingTop: "0.5rem",
+                      }}
+                    >
+                      <Chat />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </aside>
       </div>
 
