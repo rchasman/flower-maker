@@ -696,6 +696,15 @@ body {
   opacity: 0.4;
 }
 
+@keyframes tui-zone-fade-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.tui-zone-enter {
+  animation: tui-zone-fade-in 0.2s ease-out both;
+}
+
 .tui-zone-label {
   position: absolute;
   bottom: 0;
