@@ -81,6 +81,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const mergeGlowFiltersRef = useRef<Map<number, { filter: Filter; startTime: number }>>(new Map());
     const mergeEffectsRef = useRef<MergeEffectState[]>([]);
     const mergeParticleGfxRef = useRef<Graphics | null>(null);
+    const resizeObsRef = useRef<ResizeObserver | null>(null);
 
     // Spec map, constituent map, arrangement meta, and cached plans
     const specMapRef = useRef<Map<number, string>>(new Map());
@@ -377,6 +378,18 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           app.stage.eventMode = "static";
           app.stage.hitArea = app.screen;
 
+          // Watch for container resize (e.g., sidebar collapse)
+          const resizeObs = new ResizeObserver(() => {
+            const width = el.clientWidth;
+            const height = el.clientHeight;
+            if (width > 0 && height > 0) {
+              setCanvasViewport(width, height);
+              app.stage.hitArea = app.screen;
+            }
+          });
+          resizeObs.observe(el);
+          resizeObsRef.current = resizeObs;
+
           app.stage.on("pointermove", (e) => {
             const drag = dragRef.current;
             if (!drag) return;
@@ -448,6 +461,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
 
       return () => {
         destroyed = true;
+        resizeObsRef.current?.disconnect();
+        resizeObsRef.current = null;
         stageContainerRef.current = null;
         flowerGraphicsRef.current.clear();
         auraGraphicsRef.current.clear();
