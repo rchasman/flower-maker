@@ -26,7 +26,11 @@ interface PixiMiniCanvasProps {
   arrangementMetaMap: Map<string, ArrangementMeta>;
 }
 
-const PREVIEW_FLOWER_RADIUS = 70;
+const GOLDEN_ANGLE = 2.399963; // radians
+
+function previewRadius(count: number): number {
+  return Math.max(18, 55 / Math.sqrt(Math.max(1, count)));
+}
 
 export function PixiMiniCanvas({
   sessions,
@@ -112,16 +116,38 @@ export function PixiMiniCanvas({
       y: Number(s.canvasY) || 0,
     }));
 
+    const radius = previewRadius(positions.length);
+
     const allZero = positions.every(p => p.x === 0 && p.y === 0);
     const resolved = allZero
       ? positions.map((p, i) => {
-          const cols = Math.max(1, Math.ceil(Math.sqrt(positions.length)));
-          const spacing = PREVIEW_FLOWER_RADIUS * 4;
-          const col = i % cols;
-          const row = Math.floor(i / cols);
-          return { ...p, x: spacing + col * spacing, y: spacing + row * spacing };
+          const spacing = radius * 3;
+          const angle = i * GOLDEN_ANGLE;
+          const r = spacing * Math.sqrt(i + 1);
+          return { ...p, x: r * Math.cos(angle), y: r * Math.sin(angle) };
         })
-      : positions;
+      : [...positions];
+
+    // Prevent flowers from overlapping in the small preview cards
+    const minSpacing = radius * 2.5;
+    for (let iter = 0; iter < 5; iter++) {
+      for (let i = 0; i < resolved.length; i++) {
+        for (let j = i + 1; j < resolved.length; j++) {
+          const a = resolved[i]!;
+          const b = resolved[j]!;
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < minSpacing && dist > 0.01) {
+            const push = (minSpacing - dist) / 2;
+            const nx = dx / dist;
+            const ny = dy / dist;
+            resolved[i] = { ...a, x: a.x - nx * push, y: a.y - ny * push };
+            resolved[j] = { ...b, x: b.x + nx * push, y: b.y + ny * push };
+          }
+        }
+      }
+    }
 
     // Compute bounding box in world coordinates
     const xs = resolved.map(p => p.x);
@@ -131,8 +157,7 @@ export function PixiMiniCanvas({
     const minY = Math.min(...ys);
     const maxY = Math.max(...ys);
 
-    // Pad by flower radius to avoid clipping
-    const pad = PREVIEW_FLOWER_RADIUS * 2.5;
+    const pad = radius * 3.5;
     const worldW = Math.max(maxX - minX, 1) + pad * 2;
     const worldH = Math.max(maxY - minY, 1) + pad * 2;
     const worldCenterX = (minX + maxX) / 2;
@@ -162,11 +187,11 @@ export function PixiMiniCanvas({
         const level = Math.min(7, Math.ceil(constituents.length / 3));
         const meta = arrangementMetaMap.get(p.sessionKey);
         const plan = createArrangementPlan(constituents, level, meta);
-        drawArrangementFromPlan(g, plan, PREVIEW_FLOWER_RADIUS, 1.0);
+        drawArrangementFromPlan(g, plan, radius, 1.0);
       } else {
         const specJson = specBySessionId.get(p.sessionKey)?.specJson;
         const plan = createFlowerPlan(specJson, p.sid);
-        drawFlowerFromPlan(g, plan, PREVIEW_FLOWER_RADIUS, 1.0);
+        drawFlowerFromPlan(g, plan, radius, 1.0);
       }
 
       g.position.set(p.x, p.y);
