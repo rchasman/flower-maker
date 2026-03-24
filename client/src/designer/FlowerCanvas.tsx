@@ -51,10 +51,16 @@ function resolveColor(flower: FlowerRenderData): number {
 const MERGE_GLOW_DURATION = 2000;
 
 
+const FRAME_DT = 1 / 60;
 const FLOWER_BASE_RADIUS = 70;
 const SELECTION_RING_PAD = 6;
 const MERGE_RANGE = FLOWER_BASE_RADIUS * 3;
 const DRAG_THRESHOLD = 8; // px movement before click becomes drag
+const BLOOM_DURATION = 500;
+const BLOOM_SENTINEL_WINDOW = 2000;
+const SHAKE_DURATION = 200;
+const CONNECTOR_SEGMENTS = 8;
+const CONNECTOR_DASH_INDICES = Array.from({ length: CONNECTOR_SEGMENTS / 2 }, (_, i) => i * 2);
 
 export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
   function FlowerCanvas(
@@ -73,6 +79,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const onMergeDropRef = useRef(onMergeDrop);
     const mergeTargetRef = useRef<{ dragSid: number; targetSid: number; distance: number } | null>(null);
     const mergeOverlayRef = useRef<Graphics | null>(null);
+    const mergeOverlayOpacityRef = useRef(0);
+    const mergeBloomRef = useRef<Map<number, number>>(new Map()); // sid → startTime
 
     // Aura graphics — separate from flower graphics to avoid bounding-box artifacts
     const auraGraphicsRef = useRef<Map<number, Graphics>>(new Map());
@@ -181,6 +189,12 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             });
             graphics.set(flower.sid, g);
             stage.addChild(g);
+
+            const bloomSentinel = mergeBloomRef.current.get(-1);
+            if (bloomSentinel && performance.now() - bloomSentinel < BLOOM_SENTINEL_WINDOW) {
+              mergeBloomRef.current.delete(-1);
+              mergeBloomRef.current.set(flower.sid, performance.now());
+            }
           }
 
           const r = FLOWER_BASE_RADIUS * flower.scale;
@@ -240,29 +254,48 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           g.position.set(flower.x, flower.y);
           g.rotation = flower.rotation;
 
+          const bloomStart = mergeBloomRef.current.get(flower.sid);
+          if (bloomStart) {
+            const elapsed = performance.now() - bloomStart;
+            if (elapsed < BLOOM_DURATION) {
+              const progress = elapsed / BLOOM_DURATION;
+              const bloomScale = 1 + 0.15 * Math.sin(progress * Math.PI) * (1 - progress * 0.5);
+              g.scale.set(bloomScale);
+            } else {
+              g.scale.set(1);
+              mergeBloomRef.current.delete(flower.sid);
+            }
+          }
+
           return flower.sid;
         });
 
         // ── Merge proximity detection (only when actively dragging) ──
         const drag = dragRef.current;
-        if (drag?.started) {
-          const dragged = data.find(f => f.sid === drag.sid);
-          if (dragged) {
-            const nearest = data
-              .filter(f => f.sid !== dragged.sid)
-              .map(f => ({ sid: f.sid, dist: Math.hypot(f.x - dragged.x, f.y - dragged.y), x: f.x, y: f.y }))
-              .filter(f => f.dist < MERGE_RANGE)
-              .sort((a, b) => a.dist - b.dist)[0] ?? null;
+        const draggedFlower = drag?.started ? data.find(f => f.sid === drag.sid) : null;
+        if (drag?.started && draggedFlower) {
+          const nearest = data
+            .filter(f => f.sid !== draggedFlower.sid)
+            .map(f => ({ sid: f.sid, dist: Math.hypot(f.x - draggedFlower.x, f.y - draggedFlower.y), x: f.x, y: f.y }))
+            .filter(f => f.dist < MERGE_RANGE)
+            .sort((a, b) => a.dist - b.dist)[0] ?? null;
 
-            mergeTargetRef.current = nearest
-              ? { dragSid: dragged.sid, targetSid: nearest.sid, distance: nearest.dist }
-              : null;
-          }
+          mergeTargetRef.current = nearest
+            ? { dragSid: draggedFlower.sid, targetSid: nearest.sid, distance: nearest.dist }
+            : null;
+
+          const g = flowerGraphicsRef.current.get(drag.sid);
+          if (g) g.cursor = mergeTargetRef.current ? "cell" : "grabbing";
         } else {
           mergeTargetRef.current = null;
         }
 
-        // ── Merge overlay ring ──
+        // ── Merge overlay ring (smooth opacity lerp) ──
+        const targetOpacity = mergeTargetRef.current ? 1 : 0;
+        const lerpSpeed = targetOpacity > 0 ? 8.0 : 12.0; // faster fade-out
+        mergeOverlayOpacityRef.current += (targetOpacity - mergeOverlayOpacityRef.current) * Math.min(1, lerpSpeed * FRAME_DT);
+        if (mergeOverlayOpacityRef.current < 0.01) mergeOverlayOpacityRef.current = 0;
+
         if (!mergeOverlayRef.current && stage) {
           mergeOverlayRef.current = new Graphics();
           stage.addChild(mergeOverlayRef.current);
@@ -271,17 +304,33 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         if (overlay) {
           overlay.clear();
           const mt = mergeTargetRef.current;
-          if (mt) {
+          if (mt && mergeOverlayOpacityRef.current > 0) {
             const targetFlower = data.find(f => f.sid === mt.targetSid);
             if (targetFlower) {
               const proximity = 1 - mt.distance / MERGE_RANGE;
               const pulse = 0.3 + 0.2 * Math.sin(performance.now() / 200);
-              const alpha = proximity * pulse;
+              const baseAlpha = proximity * pulse;
+              const alpha = baseAlpha * mergeOverlayOpacityRef.current;
               const ringR = FLOWER_BASE_RADIUS * targetFlower.scale * 0.6 + 12;
               overlay.circle(targetFlower.x, targetFlower.y, ringR);
               overlay.stroke({ color: 0xffffff, width: 2.5, alpha });
               overlay.circle(targetFlower.x, targetFlower.y, ringR + 6);
               overlay.stroke({ color: 0xffffff, width: 1, alpha: alpha * 0.4 });
+
+              if (draggedFlower) {
+                CONNECTOR_DASH_INDICES.map(i => {
+                    const t0 = i / CONNECTOR_SEGMENTS;
+                    const t1 = (i + 1) / CONNECTOR_SEGMENTS;
+                    const x0 = draggedFlower.x + (targetFlower.x - draggedFlower.x) * t0;
+                    const y0 = draggedFlower.y + (targetFlower.y - draggedFlower.y) * t0;
+                    const x1 = draggedFlower.x + (targetFlower.x - draggedFlower.x) * t1;
+                    const y1 = draggedFlower.y + (targetFlower.y - draggedFlower.y) * t1;
+                    overlay.moveTo(x0, y0);
+                    overlay.lineTo(x1, y1);
+                    overlay.stroke({ color: 0xc4b5fd, width: 1, alpha: alpha * 0.5 });
+                    return null;
+                  });
+              }
             }
           }
         }
@@ -313,11 +362,10 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         const particleGfx = mergeParticleGfxRef.current;
         if (particleGfx) {
           particleGfx.clear();
-          const dt = 1 / 60; // approximate frame delta
           mergeEffectsRef.current = mergeEffectsRef.current
             .filter(effect => effect.active)
             .map(effect => {
-              tickMergeEffect(effect, dt);
+              tickMergeEffect(effect, FRAME_DT);
               effect.particles
                 .filter(p => p.life > 0)
                 .map(p => {
@@ -446,6 +494,29 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
                   ];
                 }
                 onMergeDropRef.current?.(drag.sid, mt.targetSid);
+
+                mergeBloomRef.current.set(-1, performance.now());
+
+                const shakeStage = stageContainerRef.current;
+                if (shakeStage) {
+                  const origX = shakeStage.position.x;
+                  const origY = shakeStage.position.y;
+                  const shakeStart = performance.now();
+                  const shakeFrame = () => {
+                    const elapsed = performance.now() - shakeStart;
+                    if (elapsed < SHAKE_DURATION) {
+                      const intensity = 2 * (1 - elapsed / SHAKE_DURATION);
+                      shakeStage.position.set(
+                        origX + (Math.random() - 0.5) * intensity * 2,
+                        origY + (Math.random() - 0.5) * intensity * 2,
+                      );
+                      requestAnimationFrame(shakeFrame);
+                    } else {
+                      shakeStage.position.set(origX, origY);
+                    }
+                  };
+                  requestAnimationFrame(shakeFrame);
+                }
               } else if (g) {
                 onFlowerDragEndRef.current?.(drag.sid, g.position.x, g.position.y);
               }
@@ -468,6 +539,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         auraGraphicsRef.current.clear();
         planCacheRef.current.clear();
         mergeOverlayRef.current = null;
+        mergeBloomRef.current.clear();
         mergeParticleGfxRef.current = null;
         mergeGlowFiltersRef.current.clear();
         mergeEffectsRef.current = [];
