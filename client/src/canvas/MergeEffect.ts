@@ -18,6 +18,7 @@ export interface Particle {
   maxLife: number;
   color: number; // hex color for PixiJS tint
   scale: number;
+  spinSpeed: number; // radial velocity for spiral motion
 }
 
 export interface MergeEffectState {
@@ -25,9 +26,9 @@ export interface MergeEffectState {
   active: boolean;
 }
 
-const PARTICLE_COUNT = 24;
-const BURST_SPEED = 150;
-const LIFETIME = 0.8;
+const PARTICLE_COUNT = 48;
+const BURST_SPEED = 200;
+const LIFETIME = 1.2;
 
 export function createMergeEffect(
   x: number,
@@ -51,7 +52,8 @@ export function createMergeEffect(
         life: 1.0,
         maxLife: LIFETIME * (0.8 + Math.random() * 0.4),
         color,
-        scale: 0.5 + Math.random() * 0.5,
+        scale: 0.3 + Math.random() * 0.9,
+        spinSpeed: (Math.random() - 0.5) * 4,
       };
     },
   );
@@ -65,10 +67,19 @@ export function tickMergeEffect(effect: MergeEffectState, dt: number): void {
   for (const p of effect.particles) {
     if (p.life <= 0) continue;
 
+    // Rotate velocity to create spiral trajectories
+    const cos = Math.cos(p.spinSpeed * dt);
+    const sin = Math.sin(p.spinSpeed * dt);
+    const nvx = p.vx * cos - p.vy * sin;
+    const nvy = p.vx * sin + p.vy * cos;
+    p.vx = nvx;
+    p.vy = nvy;
+
     p.x += p.vx * dt;
     p.y += p.vy * dt;
     p.vx *= 0.95; // drag
     p.vy *= 0.95;
+    p.vy += 30 * dt; // gentle downward pull
     p.life -= dt / p.maxLife;
     p.scale *= 0.98;
 
