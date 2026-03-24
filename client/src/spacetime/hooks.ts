@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { connect, getConnection, onConnectionChange } from "./connection.ts";
 import type { ConnectionState } from "./connection.ts";
 import type {
@@ -29,28 +29,56 @@ export function useSpacetimeDB(oidcToken?: string) {
   return { state, conn };
 }
 
-// Generic hook for subscribing to a SpacetimeDB table
+// Generic hook for subscribing to a SpacetimeDB table.
+// Batches rapid-fire DB events into a single microtask flush
+// and skips setState when row identity hasn't changed.
 function useTable<T>(
   conn: DbConnection | null,
   tableName: keyof DbConnection["db"],
 ): T[] {
   const [rows, setRows] = useState<T[]>([]);
+  const dirtyRef = useRef(false);
+  const tableRef = useRef<{
+    iter(): Iterable<T>;
+    onInsert(cb: (ctx: unknown, row: T) => void): void;
+    onUpdate(cb: (ctx: unknown, old: T, next: T) => void): void;
+    onDelete(cb: (ctx: unknown, row: T) => void): void;
+  } | null>(null);
 
   useEffect(() => {
     if (!conn) return;
-    const table = conn.db[tableName] as unknown as {
-      iter(): Iterable<T>;
-      onInsert(cb: (ctx: unknown, row: T) => void): void;
-      onUpdate(cb: (ctx: unknown, old: T, next: T) => void): void;
-      onDelete(cb: (ctx: unknown, row: T) => void): void;
+    const table = conn.db[tableName] as unknown as typeof tableRef.current & {};
+    tableRef.current = table;
+
+    const flush = () => {
+      dirtyRef.current = false;
+      const t = tableRef.current;
+      if (!t) return;
+      setRows(prev => {
+        const next = [...t.iter()];
+        if (prev.length === next.length && prev.every((r, i) => r === next[i])) return prev;
+        return next;
+      });
     };
 
-    setRows([...table.iter()]);
+    const markDirty = () => {
+      if (!dirtyRef.current) {
+        dirtyRef.current = true;
+        queueMicrotask(flush);
+      }
+    };
 
-    const refresh = () => setRows([...table.iter()]);
-    table.onInsert(refresh);
-    table.onUpdate(refresh);
-    table.onDelete(refresh);
+    table.onInsert(markDirty);
+    table.onUpdate(markDirty);
+    table.onDelete(markDirty);
+
+    // Initial load
+    flush();
+
+    return () => {
+      tableRef.current = null;
+      dirtyRef.current = false;
+    };
   }, [conn, tableName]);
 
   return rows;
