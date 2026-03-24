@@ -132,7 +132,7 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
       <div
         className="tui-zone-grid"
         style={{
-          gridTemplateColumns: `repeat(${Math.ceil(Math.sqrt(zones.length || 1))}, 1fr)`,
+          gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
         }}
       >
         {zones.map((zone, i) => (
@@ -277,8 +277,8 @@ function ZoneCard({
         </span>
         <span>
           {allSessions.length > 0 && (
-            <span style={{ color: "var(--tui-fg-4)" }}>
-              {allSessions.length}
+            <span style={{ color: "var(--tui-fg-2)" }}>
+              {allSessions.length} {allSessions.length === 1 ? "flower" : "flowers"}
             </span>
           )}
           {user.online && (

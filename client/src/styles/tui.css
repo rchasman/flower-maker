@@ -618,7 +618,7 @@ body {
 .tui-zone-grid {
   flex: 1;
   display: grid;
-  gap: 0px;
+  gap: 2px;
   overflow: auto;
   background: var(--tui-bg-0);
 }
@@ -629,7 +629,7 @@ body {
   border: 1px solid var(--tui-border-dim);
   overflow: hidden;
   position: relative;
-  transition: border-color 0.25s, box-shadow 0.25s;
+  transition: border-color 0.25s, box-shadow 0.25s, transform 0.2s;
 }
 
 /* Corner reticle marks — targeting aesthetic */
@@ -668,6 +668,7 @@ body {
 
 .tui-zone-card:hover {
   border-color: var(--tui-border-bright);
+  transform: scale(1.02);
 }
 
 .tui-zone-card[data-yours="true"] {
@@ -700,8 +701,8 @@ body {
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 0.25rem 0.5ch;
-  background: linear-gradient(transparent, rgba(3, 3, 4, 0.85));
+  padding: 0.375rem 0.5ch;
+  background: linear-gradient(transparent 0%, rgba(3, 3, 4, 0.5) 30%, rgba(3, 3, 4, 0.85) 100%);
   font-size: var(--tui-font-size-2xs);
   color: var(--tui-fg-3);
   display: flex;
