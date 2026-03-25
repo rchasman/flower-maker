@@ -1,5 +1,3 @@
-/* @ts-self-types="./client_wasm.d.ts" */
-
 /**
  * Single-zone garden simulation with rapier2d physics.
  * Runs in the designer view for YOUR flowers only.
@@ -110,12 +108,12 @@ export class GardenSimulation {
     /**
      * Add or update a flower from SpacetimeDB data
      * @param {bigint} session_id
-     * @param {string} spec_json
+     * @param {string} spec_yaml
      * @param {number} x
      * @param {number} y
      */
-    upsert_flower(session_id, spec_json, x, y) {
-        const ptr0 = passStringToWasm0(spec_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    upsert_flower(session_id, spec_yaml, x, y) {
+        const ptr0 = passStringToWasm0(spec_yaml, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         wasm.gardensimulation_upsert_flower(this.__wbg_ptr, session_id, ptr0, len0, x, y);
     }
@@ -164,6 +162,14 @@ function __wbg_get_imports() {
         },
         __wbg___wbindgen_throw_6ddd609b62940d55: function(arg0, arg1) {
             throw new Error(getStringFromWasm0(arg0, arg1));
+        },
+        __wbg_error_8d9a8e04cd1d3588: function(arg0) {
+            console.error(arg0);
+        },
+        __wbindgen_cast_0000000000000001: function(arg0, arg1) {
+            // Cast intrinsic for `Ref(String) -> Externref`.
+            const ret = getStringFromWasm0(arg0, arg1);
+            return ret;
         },
         __wbindgen_init_externref_table: function() {
             const table = wasm.__wbindgen_externrefs;
