@@ -201,7 +201,9 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             }
           }
 
-          const r = FLOWER_BASE_RADIUS * flower.scale;
+          // Enforce minimums so specless/new flowers are visible and clickable
+          const r = FLOWER_BASE_RADIUS * Math.max(flower.scale, 0.5);
+          const alpha = Math.max(flower.alpha, 0.6);
           const { plan, isArrangement } = getPlan(flower.sid);
 
           // Override plan layer colors with live WASM color data
@@ -236,11 +238,11 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             }
             ag.clear();
             if (flowerPlan?.aura) {
-              drawAura(ag, flowerPlan, r, flower.alpha);
+              drawAura(ag, flowerPlan, r, alpha);
             } else {
               // Fallback glow
               ag.circle(0, 0, r + 4);
-              ag.fill({ color: liveColor, alpha: 0.15 * flower.alpha });
+              ag.fill({ color: liveColor, alpha: 0.15 * alpha });
             }
             ag.position.set(flower.x, flower.y);
             ag.rotation = flower.rotation;
@@ -250,9 +252,9 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
 
           // Draw the flower or arrangement from its spec-driven plan
           if (isArrangement) {
-            drawArrangementFromPlan(g, plan as ArrangementPlan, r, flower.alpha);
+            drawArrangementFromPlan(g, plan as ArrangementPlan, r, alpha);
           } else {
-            drawFlowerFromPlan(g, plan as FlowerPlan, r, flower.alpha);
+            drawFlowerFromPlan(g, plan as FlowerPlan, r, alpha);
           }
 
           g.position.set(flower.x, flower.y);
