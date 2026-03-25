@@ -201,9 +201,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             }
           }
 
-          // Enforce minimums so specless/new flowers are visible and clickable
-          const r = FLOWER_BASE_RADIUS * Math.max(flower.scale, 0.5);
-          const alpha = Math.max(flower.alpha, 0.6);
+          const r = FLOWER_BASE_RADIUS * flower.scale;
+          const alpha = flower.alpha;
           const { plan, isArrangement } = getPlan(flower.sid);
 
           // Override plan layer colors with live WASM color data

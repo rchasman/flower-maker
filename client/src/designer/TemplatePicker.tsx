@@ -60,7 +60,11 @@ export function TemplatePicker({ conn, model, onGenerationStart, onSpecProgress,
         const specJson = tryParseYamlToJson(accumulated);
         if (specJson) onSpecProgress(genId, specJson);
       });
-      const specJson = tryParseYamlToJson(raw) ?? "{}";
+      const specJson = tryParseYamlToJson(raw);
+      if (!specJson) {
+        onGenerationFailed(genId);
+        return;
+      }
       onFlowerGenerated(genId, specJson);
     } catch {
       onGenerationFailed(genId);
