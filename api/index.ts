@@ -15,6 +15,7 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
 };
 
 export default {
+  port: 9200,
   async fetch(request: Request) {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders });
