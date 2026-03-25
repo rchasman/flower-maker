@@ -624,11 +624,15 @@ function parseSymmetry(raw: any): ParsedSymmetry {
   return { type: raw.type ?? "Radial" };
 }
 
-function parseSpec(raw: string | undefined): ParsedSpec | null {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseRawSpec(raw: string | undefined): any {
   if (!raw) return null;
+  try { return parseYaml(raw); } catch { return null; }
+}
+
+function parseFlowerSpec(spec: any): ParsedSpec | null {
+  if (!spec) return null;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const spec = parseYaml(raw) as any;
 
     const layers: ParsedLayer[] = (spec.petals?.layers ?? []).map(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -712,17 +716,16 @@ type ParsedParticles = {
   gravity: number;
 };
 
-function parseEffects(raw: string | undefined): {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseEffects(spec: any): {
   thorns: ParsedThorns | null;
   dewdrops: ParsedDewdrops[];
   aura: ParsedAura | null;
   particles: ParsedParticles[];
 } {
   const empty = { thorns: null, dewdrops: [], aura: null, particles: [] };
-  if (!raw) return empty;
+  if (!spec) return empty;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const spec = parseYaml(raw) as any;
 
     // Thorns
     const rawThorns = spec.structure?.stem?.thorns;
@@ -874,7 +877,7 @@ const EMPTY_CENTER: CenterPlan = {
   discRadius: 0, discColor: 0, highlightRadius: 0, highlightColor: 0, stamens: [],
 };
 
-function buildCenter(parsed: NonNullable<ReturnType<typeof parseSpec>>, baseColor: number, sid: number): CenterPlan {
+function buildCenter(parsed: NonNullable<ReturnType<typeof parseFlowerSpec>>, baseColor: number, sid: number): CenterPlan {
   if (parsed.layers.length === 0) return EMPTY_CENTER;
 
   const layerFactor = Math.max(0.4, 1 - parsed.layers.length * 0.15);
@@ -1024,7 +1027,8 @@ export function createFlowerPlan(
   spec: string | undefined,
   sid: number,
 ): FlowerPlan {
-  const parsed = parseSpec(spec);
+  const raw = parseRawSpec(spec);
+  const parsed = parseFlowerSpec(raw);
 
   if (!parsed) {
     // Unparseable spec — return empty plan.
@@ -1102,12 +1106,11 @@ export function createFlowerPlan(
   });
 
   // ── Stem + leaves (only when spec contains stem/foliage data) ──
-  const stemData = parseSpecStem(spec);
-  const foliage = parseFoliage(spec);
+  const stemData = parseSpecStem(raw);
+  const foliage = parseFoliage(raw);
   const stemLen = stemData ? Math.max(0.6, Math.min(1.8, stemData.height * 1.4)) : 0;
 
-  // ── Effects ──
-  const effects = parseEffects(spec);
+  const effects = parseEffects(raw);
 
   // ── Stem + thorns ──
   const thornPlans: ThornPlan[] = stemData && effects.thorns
@@ -1262,11 +1265,10 @@ type ParsedStem = {
   style: string;
 };
 
-function parseSpecStem(raw: string | undefined): ParsedStem | null {
-  if (!raw) return null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseSpecStem(spec: any): ParsedStem | null {
+  if (!spec) return null;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const spec = parseYaml(raw) as any;
     const stem = spec.structure?.stem;
     if (!stem) return null;
     return {
@@ -1305,11 +1307,10 @@ const DEFAULT_FOLIAGE: ParsedFoliage = {
   ],
 };
 
-function parseFoliage(raw: string | undefined): ParsedFoliage | null {
-  if (!raw) return null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseFoliage(spec: any): ParsedFoliage | null {
+  if (!spec) return null;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const spec = parseYaml(raw) as any;
     const foliage = spec.foliage;
     if (!foliage) return null;
 
@@ -2313,9 +2314,10 @@ export function createArrangementPlan(
 
   const members: ArrangementMember[] = slots.map((slot, i) => {
     const { spec, sid } = constituents[Math.min(i, count - 1)]!;
+    const raw = parseRawSpec(spec);
     const flowerPlan = createFlowerPlan(spec, sid);
-    const stemData = parseSpecStem(spec);
-    const foliage = parseFoliage(spec);
+    const stemData = parseSpecStem(raw);
+    const foliage = parseFoliage(raw);
 
     // Stem from base to flower head position (use defaults for arrangements since
     // the arrangement layout itself provides structure even when spec is partial)
@@ -2387,7 +2389,7 @@ export function resolveFlowerColor(
   sid: number,
   spec: string | undefined,
 ): number {
-  const parsed = parseSpec(spec);
+  const parsed = parseFlowerSpec(parseRawSpec(spec));
   return parsed?.layers[0]?.color ?? fallbackColor(sid);
 }
 
@@ -2396,7 +2398,7 @@ export function resolveFlowerPetalCount(
   sid: number,
   spec: string | undefined,
 ): number {
-  const parsed = parseSpec(spec);
+  const parsed = parseFlowerSpec(parseRawSpec(spec));
   const count = parsed?.layers[0]?.count ?? 0;
   return count > 0 ? count : 5 + Math.floor(sidHash(sid, 1) * 3);
 }

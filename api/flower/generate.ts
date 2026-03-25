@@ -138,6 +138,8 @@ export async function handleGenerate(request: Request) {
 
     return result.toTextStreamResponse();
   } catch (err) {
+    // Catches sync errors (bad body, invalid model). Stream errors surface
+    // asynchronously via the AI SDK's error protocol — handled client-side.
     const message = err instanceof Error ? err.message : String(err);
     console.error("[generate] failed:", message);
     return Response.json({ error: message }, { status: 502 });
