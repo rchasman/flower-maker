@@ -62,6 +62,9 @@ const SHAKE_DURATION = 200;
 const CONNECTOR_SEGMENTS = 8;
 const CONNECTOR_DASH_INDICES = Array.from({ length: CONNECTOR_SEGMENTS / 2 }, (_, i) => i * 2);
 
+// ── Module-level reusable Set for hot-path sid tracking (zero per-frame allocation) ──
+const _activeSids = new Set<number>();
+
 export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
   function FlowerCanvas(
     { onFlowerClick, onFlowerDrag, onFlowerDragEnd, onMergeDrop, selectedId },
@@ -156,24 +159,25 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         if (!stage) return;
 
         const graphics = flowerGraphicsRef.current;
-        const activeSids = new Set(data.map((d) => d.sid));
 
-        // Remove flowers no longer present
+        _activeSids.clear();
+        for (let i = 0; i < data.length; i++) _activeSids.add(data[i]!.sid);
+
+        // Remove flowers no longer present — direct Map iteration, no intermediate array
         const auras = auraGraphicsRef.current;
-        [...graphics.entries()]
-          .filter(([sid]) => !activeSids.has(sid))
-          .map(([sid, g]) => {
-            stage.removeChild(g);
-            g.destroy();
-            graphics.delete(sid);
-            planCacheRef.current.delete(sid);
-            const ag = auras.get(sid);
-            if (ag) { stage.removeChild(ag); ag.destroy(); auras.delete(sid); }
-            return sid;
-          });
+        graphics.forEach((g, sid) => {
+          if (_activeSids.has(sid)) return;
+          stage.removeChild(g);
+          g.destroy();
+          graphics.delete(sid);
+          planCacheRef.current.delete(sid);
+          const ag = auras.get(sid);
+          if (ag) { stage.removeChild(ag); ag.destroy(); auras.delete(sid); }
+        });
 
         // Update or create flower graphics
-        data.map((flower) => {
+        for (let fi = 0; fi < data.length; fi++) {
+          const flower = data[fi]!;
           let g = graphics.get(flower.sid);
           if (!g) {
             g = new Graphics();
@@ -267,21 +271,27 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             }
           }
 
-          return flower.sid;
-        });
+        }
 
         // ── Merge proximity detection (only when actively dragging) ──
         const drag = dragRef.current;
         const draggedFlower = drag?.started ? data.find(f => f.sid === drag.sid) : null;
         if (drag?.started && draggedFlower) {
-          const nearest = data
-            .filter(f => f.sid !== draggedFlower.sid)
-            .map(f => ({ sid: f.sid, dist: Math.hypot(f.x - draggedFlower.x, f.y - draggedFlower.y), x: f.x, y: f.y }))
-            .filter(f => f.dist < MERGE_RANGE)
-            .sort((a, b) => a.dist - b.dist)[0] ?? null;
+          // Single pass nearest-neighbor — no intermediate arrays
+          let nearestSid = -1;
+          let nearestDist = MERGE_RANGE;
+          for (let i = 0; i < data.length; i++) {
+            const f = data[i]!;
+            if (f.sid === draggedFlower.sid) continue;
+            const dist = Math.hypot(f.x - draggedFlower.x, f.y - draggedFlower.y);
+            if (dist < nearestDist) {
+              nearestDist = dist;
+              nearestSid = f.sid;
+            }
+          }
 
-          mergeTargetRef.current = nearest
-            ? { dragSid: draggedFlower.sid, targetSid: nearest.sid, distance: nearest.dist }
+          mergeTargetRef.current = nearestSid >= 0
+            ? { dragSid: draggedFlower.sid, targetSid: nearestSid, distance: nearestDist }
             : null;
 
           const g = flowerGraphicsRef.current.get(drag.sid);
@@ -318,9 +328,10 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
               overlay.stroke({ color: 0xffffff, width: 1, alpha: alpha * 0.4 });
 
               if (draggedFlower) {
-                CONNECTOR_DASH_INDICES.map(i => {
-                    const t0 = i / CONNECTOR_SEGMENTS;
-                    const t1 = (i + 1) / CONNECTOR_SEGMENTS;
+                for (let ci = 0; ci < CONNECTOR_DASH_INDICES.length; ci++) {
+                    const idx = CONNECTOR_DASH_INDICES[ci]!;
+                    const t0 = idx / CONNECTOR_SEGMENTS;
+                    const t1 = (idx + 1) / CONNECTOR_SEGMENTS;
                     const x0 = draggedFlower.x + (targetFlower.x - draggedFlower.x) * t0;
                     const y0 = draggedFlower.y + (targetFlower.y - draggedFlower.y) * t0;
                     const x1 = draggedFlower.x + (targetFlower.x - draggedFlower.x) * t1;
@@ -328,8 +339,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
                     overlay.moveTo(x0, y0);
                     overlay.lineTo(x1, y1);
                     overlay.stroke({ color: 0xc4b5fd, width: 1, alpha: alpha * 0.5 });
-                    return null;
-                  });
+                  }
               }
             }
           }
@@ -337,7 +347,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
 
         // ── Merge glow filter animation (fade intensity 1.0 → 0.0) ──
         const now = performance.now();
-        [...mergeGlowFiltersRef.current.entries()].map(([sid, { filter, startTime }]) => {
+        mergeGlowFiltersRef.current.forEach(({ filter, startTime }, sid) => {
           const elapsed = now - startTime;
           if (elapsed >= MERGE_GLOW_DURATION) {
             // Remove expired glow filter
@@ -351,7 +361,6 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             const intensity = 1.0 - elapsed / MERGE_GLOW_DURATION;
             filter.resources.mergeGlowUniforms.uniforms.uIntensity = intensity;
           }
-          return null;
         });
 
         // ── Merge particle burst rendering ──
@@ -362,19 +371,23 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         const particleGfx = mergeParticleGfxRef.current;
         if (particleGfx) {
           particleGfx.clear();
-          mergeEffectsRef.current = mergeEffectsRef.current
-            .filter(effect => effect.active)
-            .map(effect => {
-              tickMergeEffect(effect, FRAME_DT);
-              effect.particles
-                .filter(p => p.life > 0)
-                .map(p => {
-                  particleGfx.circle(p.x, p.y, 3 * p.scale);
-                  particleGfx.fill({ color: p.color, alpha: p.life * 0.8 });
-                  return null;
-                });
-              return effect;
-            });
+          // In-place compaction — no intermediate arrays
+          let writeIdx = 0;
+          const effects = mergeEffectsRef.current;
+          for (let i = 0; i < effects.length; i++) {
+            const effect = effects[i]!;
+            if (!effect.active) continue;
+            tickMergeEffect(effect, FRAME_DT);
+            const particles = effect.particles;
+            for (let j = 0; j < particles.length; j++) {
+              const p = particles[j]!;
+              if (p.life <= 0) continue;
+              particleGfx.circle(p.x, p.y, 3 * p.scale);
+              particleGfx.fill({ color: p.color, alpha: p.life * 0.8 });
+            }
+            effects[writeIdx++] = effect!;
+          }
+          effects.length = writeIdx;
         }
       },
       [getPlan],
