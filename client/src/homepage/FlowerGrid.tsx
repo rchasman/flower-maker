@@ -1,5 +1,4 @@
-import { useMemo } from "react";
-import { motion } from "motion/react";
+import { useMemo, memo } from "react";
 import { useSession } from "../session/SessionProvider.tsx";
 import { useFlowerSessions, useFlowerSpecs, useUsers, usePartOverrides } from "../spacetime/hooks.ts";
 import type { FlowerSession, FlowerSpec, User } from "../spacetime/types.ts";
@@ -23,7 +22,7 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
   const specs = useFlowerSpecs(conn);
   const users = useUsers(conn);
   const partOverrides = usePartOverrides(conn);
-  const onlineCount = users.filter(u => u.online).length;
+  const onlineCount = useMemo(() => users.filter(u => u.online).length, [users]);
 
   // Build constituent map for arrangement rendering
   const constituentMap = useMemo(() => partOverrides
@@ -53,16 +52,16 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
   ), [specs]);
 
   // Group all "Designing" sessions by owner
-  const sessionsByOwner = sessions
+  const sessionsByOwner = useMemo(() => sessions
     .filter(s => isVariant(s.status, "Designing"))
     .reduce<Map<string, FlowerSession[]>>((acc, s) => {
       const key = String(s.owner);
       const list = acc.get(key) ?? [];
       return acc.set(key, [...list, s]);
-    }, new Map());
+    }, new Map()), [sessions]);
 
   // Build zone data: one slot per user
-  const zones: readonly ZoneData[] = users
+  const zones = useMemo((): readonly ZoneData[] => users
     .map((user): ZoneData => ({
       user,
       allSessions: sessionsByOwner.get(String(user.identity)) ?? [],
@@ -78,7 +77,7 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
         return Number(a.user.joinedAt) - Number(b.user.joinedAt);
       }
       return Number(b.user.totalOrders) - Number(a.user.totalOrders);
-    });
+    }), [users, sessionsByOwner, identityHex]);
 
   const userNameMap = useMemo(
     () => new Map(users.map(u => [String(u.identity), u.name])),
@@ -135,14 +134,12 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
           gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
         }}
       >
-        {zones.map((zone, i) => (
-          <motion.div
+        {zones.map((zone) => (
+          <div
             key={String(zone.user.identity)}
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.2, delay: Math.min(i * 0.03, 0.3) }}
+            className="tui-zone-enter"
           >
-            <ZoneCard
+            <MemoZoneCard
               zone={zone}
               specBySessionId={specBySessionId}
               constituentMap={constituentMap}
@@ -150,7 +147,7 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
               userName={userNameMap.get(String(zone.user.identity))}
               onClick={zone.isYours ? onEnterDesigner : undefined}
             />
-          </motion.div>
+          </div>
         ))}
 
         {/* Empty state */}
@@ -239,21 +236,23 @@ function EmptyZoneIcon({ isYours }: { isYours: boolean }) {
 
 // ── Zone card ────────────────────────────────────────────────────────────
 
-function ZoneCard({
-  zone,
-  specBySessionId,
-  constituentMap,
-  arrangementMetaMap,
-  userName,
-  onClick,
-}: {
+type ZoneCardProps = {
   zone: ZoneData;
   specBySessionId: Map<string, FlowerSpec>;
   constituentMap: Map<string, Array<{ specJson: string; sid: number }>>;
   arrangementMetaMap: Map<string, ArrangementMeta>;
   userName?: string;
   onClick?: () => void;
-}) {
+};
+
+const MemoZoneCard = memo(function ZoneCard({
+  zone,
+  specBySessionId,
+  constituentMap,
+  arrangementMetaMap,
+  userName,
+  onClick,
+}: ZoneCardProps) {
   const { user, allSessions, isYours } = zone;
 
   return (
@@ -288,7 +287,17 @@ function ZoneCard({
       </div>
     </div>
   );
-}
+}, (prev, next) =>
+  String(prev.zone.user.identity) === String(next.zone.user.identity) &&
+  prev.userName === next.userName &&
+  prev.zone.user.online === next.zone.user.online &&
+  prev.zone.allSessions.length === next.zone.allSessions.length &&
+  prev.zone.isYours === next.zone.isYours &&
+  prev.specBySessionId === next.specBySessionId &&
+  prev.constituentMap === next.constituentMap &&
+  prev.arrangementMetaMap === next.arrangementMetaMap &&
+  prev.onClick === next.onClick
+);
 
 function ConnectionStatus({ state }: { state: string }) {
   const stateConfig: Record<string, { label: string; cls: string }> = {
