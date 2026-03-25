@@ -40,10 +40,8 @@ export function App() {
             )}
           </AnimatePresence>
 
-          {/* Atmospheric layers */}
-          <div className="tui-dotgrid" />
-          <div className="tui-vignette" />
-          <div className="tui-scanlines" />
+          {/* Atmosphere — single compositing layer for dot grid, vignette, scanlines */}
+          <div className="tui-atmosphere" />
         </div>
       </NameGate>
     </SessionProvider>

@@ -102,26 +102,35 @@ body {
    ATMOSPHERE — Dot grid, scanlines, vignette, ambient pulse
    ══════════════════════════════════════════════════════════════════════════ */
 
-/* Dot grid background — creates spatial depth like graph paper */
-.tui-dotgrid {
+/* ── Combined atmosphere overlay ──
+   Single GPU compositing layer for dot grid, vignette, and scanlines.
+   Uses the element for dot grid + vignette, ::after for scanlines. */
+.tui-atmosphere {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 0;
-  background-image: radial-gradient(
-    circle at center,
-    rgba(74, 222, 128, 0.04) 1px,
-    transparent 1px
-  );
-  background-size: 24px 24px;
+  z-index: 9998;
+  will-change: transform;
+  contain: strict;
+  background:
+    radial-gradient(
+      ellipse at center,
+      transparent 50%,
+      rgba(0, 0, 0, 0.4) 100%
+    ),
+    radial-gradient(
+      circle at center,
+      rgba(74, 222, 128, 0.04) 1px,
+      transparent 1px
+    );
+  background-size: 100% 100%, 24px 24px;
 }
 
-/* CRT scanlines — horizontal lines + subtle flicker */
-.tui-scanlines {
-  position: fixed;
+/* Scanlines as pseudo-element — shares the same compositing layer */
+.tui-atmosphere::after {
+  content: "";
+  position: absolute;
   inset: 0;
-  pointer-events: none;
-  z-index: 9999;
   background: repeating-linear-gradient(
     0deg,
     transparent,
@@ -130,19 +139,6 @@ body {
     rgba(0, 0, 0, 0.04) 2px
   );
   animation: tui-flicker 8s ease-in-out infinite;
-}
-
-/* Vignette — darker edges like a CRT monitor */
-.tui-vignette {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 9998;
-  background: radial-gradient(
-    ellipse at center,
-    transparent 50%,
-    rgba(0, 0, 0, 0.4) 100%
-  );
 }
 
 @keyframes tui-flicker {
