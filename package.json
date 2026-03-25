@@ -10,10 +10,10 @@
     ],
     "catalog": {
       "@types/bun": "latest",
-      "ai": "^6.0.116",
-      "typescript": "^5.9.3",
+      "ai": "^6.0.138",
+      "typescript": "^6.0.2",
       "zod": "^4.3.6",
-      "spacetimedb": "^2.0.4"
+      "spacetimedb": "^2.1.0"
     }
   },
   "scripts": {
@@ -41,8 +41,8 @@
     "update": "bun update --filter '*'"
   },
   "devDependencies": {
-    "oxfmt": "^0.41.0",
-    "oxlint": "^1.56.0",
-    "oxlint-tsgolint": "^0.17.1"
+    "oxfmt": "^0.42.0",
+    "oxlint": "^1.57.0",
+    "oxlint-tsgolint": "^0.17.3"
   }
 }
