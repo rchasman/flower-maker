@@ -125,15 +125,21 @@ RULES:
 - Be botanically accurate but creatively expressive`;
 
 export async function handleGenerate(request: Request) {
-  const body = await request.json() as { prompt: string; template_name?: string; model?: string };
+  try {
+    const body = await request.json() as { prompt: string; template_name?: string; model?: string };
 
-  const result = streamText({
-    model: gateway(body.model ?? DEFAULT_MODEL),
-    system: FLORIST_SYSTEM_PROMPT,
-    prompt: body.template_name
-      ? `Create a ${body.template_name} flower based on this description: ${body.prompt}. Use the real botanical properties of ${body.template_name} as a starting point but make it unique.`
-      : `Create a unique flower based on this description: ${body.prompt}`,
-  });
+    const result = streamText({
+      model: gateway(body.model ?? DEFAULT_MODEL),
+      system: FLORIST_SYSTEM_PROMPT,
+      prompt: body.template_name
+        ? `Create a ${body.template_name} flower based on this description: ${body.prompt}. Use the real botanical properties of ${body.template_name} as a starting point but make it unique.`
+        : `Create a unique flower based on this description: ${body.prompt}`,
+    });
 
-  return result.toTextStreamResponse();
+    return result.toTextStreamResponse();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[generate] failed:", message);
+    return Response.json({ error: message }, { status: 502 });
+  }
 }
