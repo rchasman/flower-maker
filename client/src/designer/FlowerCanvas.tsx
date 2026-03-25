@@ -155,14 +155,13 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
 
     const updateFlowers = useCallback(
       (pool: FlowerRenderData[], count: number) => {
-        const data = pool.slice(0, count);
         const stage = stageContainerRef.current;
         if (!stage) return;
 
         const graphics = flowerGraphicsRef.current;
 
         _activeSids.clear();
-        for (let i = 0; i < data.length; i++) _activeSids.add(data[i]!.sid);
+        for (let i = 0; i < count; i++) _activeSids.add(pool[i]!.sid);
 
         // Remove flowers no longer present — direct Map iteration, no intermediate array
         const auras = auraGraphicsRef.current;
@@ -177,8 +176,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         });
 
         // Update or create flower graphics
-        for (let fi = 0; fi < data.length; fi++) {
-          const flower = data[fi]!;
+        for (let fi = 0; fi < count; fi++) {
+          const flower = pool[fi]!;
           let g = graphics.get(flower.sid);
           if (!g) {
             g = new Graphics();
@@ -276,13 +275,16 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
 
         // ── Merge proximity detection (only when actively dragging) ──
         const drag = dragRef.current;
-        const draggedFlower = drag?.started ? data.find(f => f.sid === drag.sid) : null;
+        let draggedFlower: FlowerRenderData | null = null;
+        if (drag?.started) {
+          for (let i = 0; i < count; i++) { if (pool[i]!.sid === drag.sid) { draggedFlower = pool[i]!; break; } }
+        }
         if (drag?.started && draggedFlower) {
           // Single pass nearest-neighbor — no intermediate arrays
           let nearestSid = -1;
           let nearestDist = MERGE_RANGE;
-          for (let i = 0; i < data.length; i++) {
-            const f = data[i]!;
+          for (let i = 0; i < count; i++) {
+            const f = pool[i]!;
             if (f.sid === draggedFlower.sid) continue;
             const dist = Math.hypot(f.x - draggedFlower.x, f.y - draggedFlower.y);
             if (dist < nearestDist) {
@@ -316,7 +318,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           overlay.clear();
           const mt = mergeTargetRef.current;
           if (mt && mergeOverlayOpacityRef.current > 0) {
-            const targetFlower = data.find(f => f.sid === mt.targetSid);
+            let targetFlower: FlowerRenderData | undefined;
+            for (let i = 0; i < count; i++) { if (pool[i]!.sid === mt.targetSid) { targetFlower = pool[i]!; break; } }
             if (targetFlower) {
               const proximity = 1 - mt.distance / MERGE_RANGE;
               const pulse = 0.3 + 0.2 * Math.sin(performance.now() / 200);

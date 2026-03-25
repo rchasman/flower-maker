@@ -170,13 +170,19 @@ async function renderZoneSnapshot(
   app.renderer.render({ container, target: renderTexture });
 
   const canvas = app.renderer.texture.generateCanvas(renderTexture) as HTMLCanvasElement;
-  const dataUrl = canvas.toDataURL("image/png");
 
-  // Cleanup
+  // Async blob encode — avoids blocking the main thread with synchronous PNG encoding.
+  // toBlob is async (callback-based) unlike toDataURL which blocks.
+  const blob = await new Promise<Blob>((resolve) =>
+    canvas.toBlob(b => resolve(b!), "image/webp", 0.8),
+  );
+
+  const url = URL.createObjectURL(blob);
+
   renderTexture.destroy(true);
   container.destroy({ children: true });
 
-  return dataUrl;
+  return url;
 }
 
 // ── React component ──────────────────────────────────────────────────────
@@ -189,6 +195,7 @@ export function PixiMiniCanvas({
 }: PixiMiniCanvasProps) {
   const [snapshot, setSnapshot] = useState<string | null>(null);
   const renderIdRef = useRef(0);
+  const prevUrlRef = useRef<string | null>(null);
 
   // Stable key for data changes — triggers re-render
   const dataKey = useMemo(() => {
@@ -204,6 +211,7 @@ export function PixiMiniCanvas({
 
   useEffect(() => {
     if (sessions.length === 0) {
+      if (prevUrlRef.current) { URL.revokeObjectURL(prevUrlRef.current); prevUrlRef.current = null; }
       setSnapshot(null);
       return;
     }
@@ -212,14 +220,19 @@ export function PixiMiniCanvas({
 
     renderZoneSnapshot(sessions, specBySessionId, constituentMap, arrangementMetaMap)
       .then(url => {
-        // Only apply if this is still the latest render request
-        if (renderIdRef.current === renderId) {
-          setSnapshot(url);
+        if (renderIdRef.current !== renderId) {
+          URL.revokeObjectURL(url);
+          return;
         }
+        if (prevUrlRef.current) URL.revokeObjectURL(prevUrlRef.current);
+        prevUrlRef.current = url;
+        setSnapshot(url);
       })
-      .catch(() => {
-        // Silently fail — card will show empty
-      });
+      .catch(() => {});
+
+    return () => {
+      if (prevUrlRef.current) { URL.revokeObjectURL(prevUrlRef.current); prevUrlRef.current = null; }
+    };
   }, [dataKey]);
 
   if (!snapshot) {
