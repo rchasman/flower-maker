@@ -3,7 +3,7 @@ import { useSession } from "../session/SessionProvider.tsx";
 import { useFlowerSessions, useFlowerSpecs, usePartOverrides } from "../spacetime/hooks.ts";
 import { isVariant } from "../spacetime/types.ts";
 import type { FlowerSession, FlowerSpec } from "../spacetime/types.ts";
-import { run, getNestedValue } from "../lib/utils.ts";
+import { run, getNestedValue, parseSpec } from "../lib/utils.ts";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -29,26 +29,16 @@ interface ActivityFeedProps {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function specName(specJson: string): string {
-  return run(() => {
-    try {
-      const s = JSON.parse(specJson) as Record<string, unknown>;
-      return (s.name as string) ?? (s.common_name as string) ?? (s.species as string) ?? "unknown";
-    } catch {
-      return "unknown";
-    }
-  });
+function specName(raw: string): string {
+  const s = parseSpec(raw);
+  if (!s) return "unknown";
+  return (s.name as string) ?? (s.common_name as string) ?? (s.species as string) ?? "unknown";
 }
 
-function specShape(specJson: string): string | null {
-  return run(() => {
-    try {
-      const s = JSON.parse(specJson) as Record<string, unknown>;
-      return (getNestedValue(s, "petals.layers.0.shape") as string) ?? null;
-    } catch {
-      return null;
-    }
-  });
+function specShape(raw: string): string | null {
+  const s = parseSpec(raw);
+  if (!s) return null;
+  return (getNestedValue(s, "petals.layers.0.shape") as string) ?? null;
 }
 
 function levelLabel(level: number): string {
@@ -110,12 +100,8 @@ export function ActivityFeed({ onMerge, onSelect, selectedId }: ActivityFeedProp
       );
       const arrangementName = run(() => {
         if (!arrangementOverride) return null;
-        try {
-          const meta = JSON.parse(arrangementOverride.overrideJson) as Record<string, unknown>;
-          return (meta.name as string) ?? null;
-        } catch {
-          return null;
-        }
+        const meta = parseSpec(arrangementOverride.overrideJson);
+        return (meta?.name as string) ?? null;
       });
 
       return {
@@ -197,8 +183,8 @@ export function ActivityFeed({ onMerge, onSelect, selectedId }: ActivityFeedProp
           </div>
           {activeFlowers.map(flower => {
             const sid = Number(flower.session.id);
-            const name = flower.spec ? specName(flower.spec.specJson) : flower.session.prompt.slice(0, 20);
-            const shape = flower.spec ? specShape(flower.spec.specJson) : null;
+            const name = flower.spec ? specName(flower.spec.spec) : flower.session.prompt.slice(0, 20);
+            const shape = flower.spec ? specShape(flower.spec.spec) : null;
             const level = Number(flower.session.arrangementLevel);
             const isBundle = flower.constituents.length > 0;
             const isMergeSource = mergeSource === sid;

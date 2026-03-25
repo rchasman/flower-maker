@@ -46,7 +46,7 @@ pub struct FlowerSession {
 pub struct FlowerSpec {
     #[primary_key]
     session_id: u64,
-    spec_json: String,
+    spec: String,
     version: u32,
     updated_at: Timestamp,
 }
@@ -178,7 +178,7 @@ pub fn create_session(ctx: &ReducerContext, prompt: String) -> Result<(), String
 
     ctx.db.flower_spec().insert(FlowerSpec {
         session_id: session.id,
-        spec_json: String::from("{}"),
+        spec: String::new(),
         version: 0,
         updated_at: ctx.timestamp,
     });
@@ -206,13 +206,13 @@ pub fn update_position(ctx: &ReducerContext, session_id: u64, x: f64, y: f64) ->
 }
 
 #[spacetimedb::reducer]
-pub fn update_flower_spec(ctx: &ReducerContext, session_id: u64, spec_json: String) -> Result<(), String> {
+pub fn update_flower_spec(ctx: &ReducerContext, session_id: u64, spec: String) -> Result<(), String> {
     let _session = require_session_owner(ctx, session_id)?;
     let existing = ctx.db.flower_spec().session_id().find(session_id)
         .ok_or_else(|| "Spec not found".to_string())?;
 
     ctx.db.flower_spec().session_id().update(FlowerSpec {
-        spec_json,
+        spec,
         version: existing.version + 1,
         updated_at: ctx.timestamp,
         ..existing
@@ -568,11 +568,11 @@ pub fn split_constituent(ctx: &ReducerContext, session_id: u64, constituent_inde
     }
 
     // Find the constituent to extract
-    let (target_id, _, ref spec_json, _) = *constituents.iter()
+    let (target_id, _, ref spec, _) = *constituents.iter()
         .find(|&&(_, idx, _, _)| idx == constituent_index)
         .ok_or_else(|| format!("Constituent {} not found", constituent_index))?;
 
-    let extracted_spec = spec_json.clone();
+    let extracted_spec = spec.clone();
 
     // Random canvas position for the new session
     let x = (ctx.rng().r#gen::<u32>() % 10000) as f64 / 100.0;
@@ -594,7 +594,7 @@ pub fn split_constituent(ctx: &ReducerContext, session_id: u64, constituent_inde
 
     ctx.db.flower_spec().insert(FlowerSpec {
         session_id: new_session.id,
-        spec_json: extracted_spec,
+        spec: extracted_spec,
         version: 0,
         updated_at: ctx.timestamp,
     });
@@ -682,12 +682,12 @@ pub fn merge_sessions(
 
     // Cross-breed using genetics (deterministic via ctx.rng seed)
     let seed = ctx.rng().r#gen::<u64>();
-    let parent_a: flower_core::catalog::FlowerSpec = serde_json::from_str(&spec_a.spec_json)
+    let parent_a: flower_core::catalog::FlowerSpec = serde_yaml::from_str(&spec_a.spec)
         .map_err(|e| format!("Failed to parse spec A: {e}"))?;
-    let parent_b: flower_core::catalog::FlowerSpec = serde_json::from_str(&spec_b.spec_json)
+    let parent_b: flower_core::catalog::FlowerSpec = serde_yaml::from_str(&spec_b.spec)
         .map_err(|e| format!("Failed to parse spec B: {e}"))?;
     let child = flower_core::genetics::cross(&parent_a, &parent_b, seed);
-    let child_json = serde_json::to_string(&child)
+    let child_yaml = serde_yaml::to_string(&child)
         .map_err(|e| format!("Failed to serialize child: {e}"))?;
 
     // Combined stats
@@ -711,12 +711,12 @@ pub fn merge_sessions(
         generation: new_generation,
     });
 
-    // Clone child_json before moving into FlowerSpec — needed for constituent override below
-    let child_json_for_constituent = child_json.clone();
+    // Clone child_yaml before moving into FlowerSpec — needed for constituent override below
+    let child_yaml_for_constituent = child_yaml.clone();
 
     ctx.db.flower_spec().insert(FlowerSpec {
         session_id: child_session.id,
-        spec_json: child_json,
+        spec: child_yaml,
         version: 0,
         updated_at: ctx.timestamp,
     });
@@ -742,7 +742,7 @@ pub fn merge_sessions(
         id: 0,
         session_id: child_session.id,
         part_path: format!("constituent:{constituent_idx}"),
-        override_json: child_json_for_constituent,
+        override_json: child_yaml_for_constituent,
         forked_from: format!("cross:{}+{}", session_a_id, session_b_id),
         created_at: ctx.timestamp,
     });
@@ -763,7 +763,7 @@ pub fn merge_sessions(
                     id: 0,
                     session_id: child_session.id,
                     part_path: format!("constituent:{constituent_idx}"),
-                    override_json: ps.spec_json.clone(),
+                    override_json: ps.spec.clone(),
                     forked_from: format!("parent:{parent_id}"),
                     created_at: ctx.timestamp,
                 });
@@ -771,12 +771,12 @@ pub fn merge_sessions(
             }
         } else {
             // Parent is an arrangement — propagate all its constituents
-            for spec_json in parent_constituents {
+            for spec in parent_constituents {
                 ctx.db.part_override().insert(FlowerPartOverride {
                     id: 0,
                     session_id: child_session.id,
                     part_path: format!("constituent:{constituent_idx}"),
-                    override_json: spec_json,
+                    override_json: spec,
                     forked_from: format!("parent:{parent_id}"),
                     created_at: ctx.timestamp,
                 });

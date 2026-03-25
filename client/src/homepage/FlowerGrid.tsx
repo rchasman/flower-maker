@@ -27,11 +27,11 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
   // Build constituent map for arrangement rendering
   const constituentMap = useMemo(() => partOverrides
     .filter(o => o.partPath.startsWith("constituent:"))
-    .reduce<Map<string, Array<{ specJson: string; sid: number }>>>((acc, o) => {
+    .reduce<Map<string, Array<{ spec: string; sid: number }>>>((acc, o) => {
       const key = String(o.sessionId);
       const idx = parseInt(o.partPath.split(":")[1] ?? "0", 10);
       const existing = acc.get(key) ?? [];
-      existing[idx] = { specJson: o.overrideJson, sid: idx };
+      existing[idx] = { spec: o.overrideJson, sid: idx };
       acc.set(key, existing);
       return acc;
     }, new Map()), [partOverrides]);
@@ -239,7 +239,7 @@ function EmptyZoneIcon({ isYours }: { isYours: boolean }) {
 type ZoneCardProps = {
   zone: ZoneData;
   specBySessionId: Map<string, FlowerSpec>;
-  constituentMap: Map<string, Array<{ specJson: string; sid: number }>>;
+  constituentMap: Map<string, Array<{ spec: string; sid: number }>>;
   arrangementMetaMap: Map<string, ArrangementMeta>;
   userName?: string;
   onClick?: () => void;

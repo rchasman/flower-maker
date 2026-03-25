@@ -1,16 +1,16 @@
 import { useState } from "react";
 import { useSession } from "../session/SessionProvider.tsx";
-import { run, getNestedValue } from "../lib/utils.ts";
+import { run, getNestedValue, parseSpec } from "../lib/utils.ts";
 
 interface ConstituentInfo {
   index: number;
-  specJson: string;
+  spec: string;
   forkedFrom: string;
 }
 
 interface PartEditorProps {
   sessionId: number;
-  specJson: string;
+  spec: string;
   constituents?: ConstituentInfo[];
 }
 
@@ -135,18 +135,12 @@ const TAXONOMY: TaxonomySection[] = [
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export function PartEditor({ sessionId, specJson, constituents = [] }: PartEditorProps) {
+export function PartEditor({ sessionId, spec, constituents = [] }: PartEditorProps) {
   const { conn } = useSession();
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
-  const spec = run(() => {
-    try {
-      return JSON.parse(specJson) as Record<string, unknown>;
-    } catch {
-      return {};
-    }
-  });
+  const spec = parseSpec(spec) ?? {};
 
   const toggleSection = (key: string) =>
     setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
@@ -178,8 +172,7 @@ export function PartEditor({ sessionId, specJson, constituents = [] }: PartEdito
         >
           {constituents.map((c) => {
             const cSpec = run(() => {
-              try { return JSON.parse(c.specJson) as Record<string, unknown>; }
-              catch { return {} as Record<string, unknown>; }
+              return parseSpec(c.spec) ?? {} as Record<string, unknown>;
             });
             const name = (cSpec.name as string) ?? (cSpec.common_name as string) ?? (cSpec.species as string) ?? `Flower ${c.index}`;
             const shape = getNestedValue(cSpec, "petals.layers.0.shape") as string | null;

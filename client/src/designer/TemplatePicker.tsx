@@ -2,25 +2,15 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import type { DbConnection } from "../spacetime/types.ts";
 import { templatesByCategory, type TemplateInfo } from "../data/templates.ts";
-import { readStreamWithProgress } from "../lib/utils.ts";
-import { parse as parseYaml } from "yaml";
+import { readStreamWithProgress, parseSpec } from "../lib/utils.ts";
 
 interface TemplatePickerProps {
   conn: DbConnection | null;
   model: string;
   onGenerationStart: (prompt: string) => string;
-  onSpecProgress: (genId: string, specJson: string) => void;
-  onFlowerGenerated: (genId: string, specJson: string) => void;
+  onSpecProgress: (genId: string, specYaml: string) => void;
+  onFlowerGenerated: (genId: string, specYaml: string) => void;
   onGenerationFailed: (genId: string) => void;
-}
-
-function tryParseYamlToJson(raw: string): string | null {
-  try {
-    const parsed = parseYaml(raw);
-    return parsed && typeof parsed === "object" ? JSON.stringify(parsed) : null;
-  } catch {
-    return null;
-  }
 }
 
 export function TemplatePicker({ conn, model, onGenerationStart, onSpecProgress, onFlowerGenerated, onGenerationFailed }: TemplatePickerProps) {
@@ -57,15 +47,13 @@ export function TemplatePicker({ conn, model, onGenerationStart, onSpecProgress,
         return;
       }
       const raw = await readStreamWithProgress(res, accumulated => {
-        const specJson = tryParseYamlToJson(accumulated);
-        if (specJson) onSpecProgress(genId, specJson);
+        if (parseSpec(accumulated)) onSpecProgress(genId, accumulated);
       });
-      const specJson = tryParseYamlToJson(raw);
-      if (!specJson) {
+      if (!parseSpec(raw)) {
         onGenerationFailed(genId);
         return;
       }
-      onFlowerGenerated(genId, specJson);
+      onFlowerGenerated(genId, raw);
     } catch {
       onGenerationFailed(genId);
     } finally {

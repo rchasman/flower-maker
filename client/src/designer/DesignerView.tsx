@@ -17,21 +17,22 @@ import { wireToWasm, handleMerge, getCanvasViewport } from "../spacetime/bridge.
 import type { FlowerSession, FlowerPartOverride } from "../spacetime/types.ts";
 import { isVariant } from "../spacetime/types.ts";
 import { parseArrangementMeta } from "../flower/render.ts";
-import { groupBy, setNestedValue } from "../lib/utils.ts";
+import { groupBy, setNestedValue, parseSpec } from "../lib/utils.ts";
+import { stringify } from "yaml";
 
-/** Merge field-level part overrides (e.g. "structure.stem.height") into a spec JSON string. */
-function applyFieldOverrides(specJson: string, overrides: FlowerPartOverride[]): string {
+/** Merge field-level part overrides into a spec YAML string. */
+function applyFieldOverrides(specYaml: string, overrides: FlowerPartOverride[]): string {
   const fieldOverrides = overrides.filter(
     o => !o.partPath.startsWith("constituent:") && o.partPath !== "arrangement",
   );
-  if (fieldOverrides.length === 0) return specJson;
+  if (fieldOverrides.length === 0) return specYaml;
 
-  const spec = JSON.parse(specJson) as Record<string, unknown>;
+  const spec = parseSpec(specYaml) ?? {};
   for (const o of fieldOverrides) {
     const num = Number(o.overrideJson);
     setNestedValue(spec, o.partPath, Number.isNaN(num) ? o.overrideJson : num);
   }
-  return JSON.stringify(spec);
+  return stringify(spec);
 }
 
 interface DesignerViewProps {
@@ -136,7 +137,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
             // SID just resolved — persist the spec to DB
             if (entry.spec && entry.spec !== entry.lastPushedSpec) {
               entry.lastPushedSpec = entry.spec;
-              conn?.reducers.updateFlowerSpec({ sessionId: BigInt(resolvedSid), specJson: entry.spec });
+              conn?.reducers.updateFlowerSpec({ sessionId: BigInt(resolvedSid), spec: entry.spec });
             }
           }
         }
@@ -144,7 +145,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     }
 
     const specMap = specs.reduce<Map<number, string>>(
-      (acc, s) => acc.set(Number(s.sessionId), s.specJson),
+      (acc, s) => acc.set(Number(s.sessionId), s.spec),
       new Map(),
     );
     for (const entry of streamingRef.current.values()) {
@@ -154,9 +155,9 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     }
     const overridesBySid = groupBy(partOverrides, o => Number(o.sessionId));
     for (const [sid, sidOverrides] of overridesBySid) {
-      const specJson = specMap.get(sid);
-      if (specJson) {
-        specMap.set(sid, applyFieldOverrides(specJson, sidOverrides));
+      const spec = specMap.get(sid);
+      if (spec) {
+        specMap.set(sid, applyFieldOverrides(spec, sidOverrides));
       }
     }
     canvasRef.current?.setSpecMap(specMap);
@@ -166,11 +167,11 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
   useEffect(() => {
     const constituentMap = partOverrides
       .filter(o => o.partPath.startsWith("constituent:"))
-      .reduce<Map<number, Array<{ specJson: string; sid: number }>>>((acc, o) => {
+      .reduce<Map<number, Array<{ spec: string; sid: number }>>>((acc, o) => {
         const sid = Number(o.sessionId);
         const idx = parseInt(o.partPath.split(":")[1] ?? "0", 10);
         const existing = acc.get(sid) ?? [];
-        existing[idx] = { specJson: o.overrideJson, sid: idx };
+        existing[idx] = { spec: o.overrideJson, sid: idx };
         acc.set(sid, existing);
         return acc;
       }, new Map());
@@ -262,17 +263,17 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     return null;
   }, []);
 
-  const handleSpecProgress = useCallback((genId: string, specJson: string) => {
+  const handleSpecProgress = useCallback((genId: string, spec: string) => {
     const entry = streamingRef.current.get(genId);
     if (!entry) return;
 
-    entry.spec = specJson;
+    entry.spec = spec;
     resolveStreamingSid(entry);
 
     if (entry.sid === null) return;
 
     const specMap = specsRef.current.reduce<Map<number, string>>(
-      (acc, s) => acc.set(Number(s.sessionId), s.specJson),
+      (acc, s) => acc.set(Number(s.sessionId), s.spec),
       new Map(),
     );
     for (const e of streamingRef.current.values()) {
@@ -280,13 +281,13 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     }
     canvasRef.current?.setSpecMap(specMap);
 
-    if (specJson !== entry.lastPushedSpec) {
-      entry.lastPushedSpec = specJson;
-      conn?.reducers.updateFlowerSpec({ sessionId: BigInt(entry.sid), specJson });
+    if (spec !== entry.lastPushedSpec) {
+      entry.lastPushedSpec = spec;
+      conn?.reducers.updateFlowerSpec({ sessionId: BigInt(entry.sid), spec });
     }
   }, [resolveStreamingSid, conn]);
 
-  const handleFlowerGenerated = useCallback((genId: string, specJson: string) => {
+  const handleFlowerGenerated = useCallback((genId: string, spec: string) => {
     const entry = streamingRef.current.get(genId);
     if (entry) {
       // Final SID resolution attempt
@@ -294,14 +295,14 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
 
       // Persist the completed spec to DB — this is the authoritative save
       if (entry.sid !== null) {
-        conn?.reducers.updateFlowerSpec({ sessionId: BigInt(entry.sid), specJson });
+        conn?.reducers.updateFlowerSpec({ sessionId: BigInt(entry.sid), spec });
 
         // Update canvas immediately with the final spec — don't wait for
         // the DB round-trip, otherwise the flower reverts to the last partial
         // streaming spec between delete and subscription update.
-        entry.spec = specJson;
+        entry.spec = spec;
         const specMap = specsRef.current.reduce<Map<number, string>>(
-          (acc, s) => acc.set(Number(s.sessionId), s.specJson),
+          (acc, s) => acc.set(Number(s.sessionId), s.spec),
           new Map(),
         );
         for (const e of streamingRef.current.values()) {
@@ -310,11 +311,11 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
         canvasRef.current?.setSpecMap(specMap);
       } else {
         // SID still unresolved — defer until session appears in subscription
-        entry.spec = specJson;
+        entry.spec = spec;
         setTimeout(() => {
           resolveStreamingSid(entry);
           if (entry.sid !== null) {
-            conn?.reducers.updateFlowerSpec({ sessionId: BigInt(entry.sid), specJson });
+            conn?.reducers.updateFlowerSpec({ sessionId: BigInt(entry.sid), spec });
           }
           streamingRef.current.delete(genId);
         }, 3000);
@@ -506,12 +507,12 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
                 {rightPanel === "parts" && selected && (
                   <PartEditor
                     sessionId={Number(selected.id)}
-                    specJson={selectedSpec?.specJson ?? "{}"}
+                    spec={selectedSpec?.spec ?? ""}
                     constituents={partOverrides
                       .filter(o => o.sessionId === selected.id && o.partPath.startsWith("constituent:"))
                       .map(o => ({
                         index: parseInt(o.partPath.split(":")[1] ?? "0", 10),
-                        specJson: o.overrideJson,
+                        spec: o.overrideJson,
                         forkedFrom: o.forkedFrom,
                       }))
                       .sort((a, b) => a.index - b.index)

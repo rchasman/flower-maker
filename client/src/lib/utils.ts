@@ -1,5 +1,19 @@
+import { parse as parseYaml } from "yaml";
+
 /** Execute a block and return its value. Use instead of IIFEs. */
 export const run = <T>(f: () => T): T => f();
+
+/** Parse a spec string (YAML or JSON) to an object. Returns null on failure. */
+export function parseSpec(raw: string | undefined): Record<string, unknown> | null {
+  if (!raw || raw === "{}" || raw.trim() === "") return null;
+  try {
+    const parsed = parseYaml(raw);
+    return parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
 
 /** Group array elements by a key function. */
 export function groupBy<T, K>(items: T[], keyFn: (item: T) => K): Map<K, T[]> {

@@ -19,12 +19,12 @@ import { setCanvasViewport, getCanvasViewport } from "../spacetime/bridge.ts";
 import { createMergeGlowFilter, createDarkFantasyDitherFilter } from "../canvas/shaders.ts";
 import { createMergeEffect, tickMergeEffect, type MergeEffectState } from "../canvas/MergeEffect.ts";
 
-export type ConstituentEntry = { specJson: string; sid: number };
+export type ConstituentEntry = { spec: string; sid: number };
 
 export interface FlowerCanvasHandle {
   /** Push new render data each frame from the WASM loop. Pool is reused; only first `count` entries are valid. */
   updateFlowers(pool: FlowerRenderData[], count: number): void;
-  /** Update the spec map (sid → specJson) — call when specs change. */
+  /** Update the spec map (sid → spec) — call when specs change. */
   setSpecMap(specs: Map<number, string>): void;
   /** Update the constituent map (sid → array of constituent specs) for arrangements. */
   setConstituentMap(constituents: Map<number, ConstituentEntry[]>): void;
@@ -109,7 +109,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
 
     /** Get or create the cached plan (FlowerPlan or ArrangementPlan) for a given sid. */
     const getPlan = useCallback((sid: number): { plan: FlowerPlan | ArrangementPlan; isArrangement: boolean } => {
-      const specJson = specMapRef.current.get(sid) ?? "";
+      const spec = specMapRef.current.get(sid) ?? "";
       const constituents = constituentMapRef.current.get(sid);
       const meta = arrangementMetaMapRef.current.get(sid);
       const isArrangement = !!constituents && constituents.length > 1;
@@ -117,8 +117,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
       // Cache key includes constituent count + meta so arrangement changes invalidate
       const metaKey = meta ? JSON.stringify(meta) : "";
       const cacheKey = isArrangement
-        ? `arr:${constituents.length}:${constituents.map(c => c.specJson).join("|")}:${metaKey}`
-        : specJson;
+        ? `arr:${constituents.length}:${constituents.map(c => c.spec).join("|")}:${metaKey}`
+        : spec;
 
       const cached = planCacheRef.current.get(sid);
       if (cached && cached.key === cacheKey) {
@@ -132,7 +132,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         return { plan, isArrangement: true };
       }
 
-      const plan = createFlowerPlan(specJson || undefined, sid);
+      const plan = createFlowerPlan(spec || undefined, sid);
       planCacheRef.current.set(sid, { key: cacheKey, plan, isArrangement: false });
       return { plan, isArrangement: false };
     }, []);

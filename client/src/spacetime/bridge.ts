@@ -1,4 +1,4 @@
-import { readStream } from "../lib/utils.ts";
+import { readStream, parseSpec } from "../lib/utils.ts";
 import type { GardenSim } from "../wasm/loader.ts";
 import type { DbConnection, FlowerSession, FlowerSpec } from "./types.ts";
 import { isVariant } from "./types.ts";
@@ -75,13 +75,12 @@ export function wireToWasm(conn: DbConnection, sim: GardenSim) {
     s => isVariant(s.status, "Designing") && isMySession(s),
   );
   const specLookup = [...conn.db.flower_spec.iter()].reduce(
-    (acc, spec) => acc.set(spec.sessionId, spec.specJson),
+    (acc, spec) => acc.set(spec.sessionId, spec.spec),
     new Map<bigint, string>(),
   );
   existing.map((session, i) => {
     const [x, y] = resolvePosition(session, i, existing.length);
-    const specJson = specLookup.get(session.id) ?? "{}";
-    sim.upsert_flower(session.id, specJson, x, y);
+    sim.upsert_flower(session.id, specLookup.get(session.id) ?? "", x, y);
     return session.id;
   });
 
@@ -92,7 +91,7 @@ export function wireToWasm(conn: DbConnection, sim: GardenSim) {
       const spec = [...conn.db.flower_spec.iter()].find(
         s => s.sessionId === session.id,
       );
-      sim.upsert_flower(session.id, spec?.specJson ?? "{}", x, y);
+      sim.upsert_flower(session.id, spec?.spec ?? "", x, y);
     }
   });
 
@@ -106,7 +105,7 @@ export function wireToWasm(conn: DbConnection, sim: GardenSim) {
         const spec = [...conn.db.flower_spec.iter()].find(
           s => s.sessionId === next.id,
         );
-        sim.upsert_flower(next.id, spec?.specJson ?? "{}", x, y);
+        sim.upsert_flower(next.id, spec?.spec ?? "", x, y);
       }
     },
   );
@@ -122,7 +121,7 @@ export function wireToWasm(conn: DbConnection, sim: GardenSim) {
     if (session) {
       const count = sim.flower_count();
       const [x, y] = resolvePosition(session, count, count);
-      sim.upsert_flower(session.id, spec.specJson, x, y);
+      sim.upsert_flower(session.id, spec.spec, x, y);
     }
   });
 
@@ -133,7 +132,7 @@ export function wireToWasm(conn: DbConnection, sim: GardenSim) {
     if (session) {
       const count = sim.flower_count();
       const [x, y] = resolvePosition(session, count, count);
-      sim.upsert_flower(session.id, next.specJson, x, y);
+      sim.upsert_flower(session.id, next.spec, x, y);
     }
   });
 
@@ -180,7 +179,8 @@ export async function handleMerge(
   const parentAdornments: unknown[] = [];
   for (const o of conn.db.part_override.iter()) {
     if (targetSids.has(Number(o.sessionId)) && o.partPath === "arrangement") {
-      try { parentAdornments.push(JSON.parse(o.overrideJson)); } catch { /* skip */ }
+      const parsed = parseSpec(o.overrideJson);
+      if (parsed) parentAdornments.push(parsed);
     }
   }
 
@@ -189,8 +189,8 @@ export async function handleMerge(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        spec_a: JSON.parse(specA.specJson),
-        spec_b: JSON.parse(specB.specJson),
+        spec_a: parseSpec(specA.spec),
+        spec_b: parseSpec(specB.spec),
         total_count: totalCount,
         level,
         parent_adornments: parentAdornments.length > 0 ? parentAdornments : undefined,

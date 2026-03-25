@@ -24,7 +24,7 @@ import type { FlowerSession, FlowerSpec } from "../spacetime/types.ts";
 interface PixiMiniCanvasProps {
   sessions: readonly FlowerSession[];
   specBySessionId: Map<string, FlowerSpec>;
-  constituentMap: Map<string, Array<{ specJson: string; sid: number }>>;
+  constituentMap: Map<string, Array<{ spec: string; sid: number }>>;
   arrangementMetaMap: Map<string, ArrangementMeta>;
 }
 
@@ -111,7 +111,7 @@ function resolvePositions(
 async function renderZoneSnapshot(
   sessions: readonly FlowerSession[],
   specBySessionId: Map<string, FlowerSpec>,
-  constituentMap: Map<string, Array<{ specJson: string; sid: number }>>,
+  constituentMap: Map<string, Array<{ spec: string; sid: number }>>,
   arrangementMetaMap: Map<string, ArrangementMeta>,
 ): Promise<string> {
   const app = await getSharedApp();
@@ -132,8 +132,8 @@ async function renderZoneSnapshot(
       const plan = createArrangementPlan(constituents, level, meta);
       drawArrangementFromPlan(g, plan, radius, 1.0);
     } else {
-      const specJson = specBySessionId.get(p.sessionKey)?.specJson;
-      const plan = createFlowerPlan(specJson, p.sid);
+      const spec = specBySessionId.get(p.sessionKey)?.spec;
+      const plan = createFlowerPlan(spec, p.sid);
       drawFlowerFromPlan(g, plan, radius, 1.0);
     }
 
@@ -201,7 +201,7 @@ export function PixiMiniCanvas({
   const dataKey = useMemo(() => {
     const specKeys = sessions.map(s => {
       const key = String(s.id);
-      const spec = specBySessionId.get(key)?.specJson ?? "";
+      const spec = specBySessionId.get(key)?.spec ?? "";
       const constituents = constituentMap.get(key);
       const meta = arrangementMetaMap.get(key);
       return `${key}:${spec}:${constituents?.length ?? 0}:${meta ? "m" : ""}`;

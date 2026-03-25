@@ -44,8 +44,8 @@ impl GardenSimulation {
     }
 
     /// Add or update a flower from SpacetimeDB data
-    pub fn upsert_flower(&mut self, session_id: u64, spec_json: &str, x: f32, y: f32) {
-        if let Ok(spec) = serde_json::from_str::<FlowerSpec>(spec_json) {
+    pub fn upsert_flower(&mut self, session_id: u64, spec_yaml: &str, x: f32, y: f32) {
+        if let Ok(spec) = serde_yaml::from_str::<FlowerSpec>(spec_yaml) {
             if let Some(flower) = self.flowers.iter_mut().find(|f| f.session_id == session_id) {
                 flower.spec = spec;
                 self.world.set_position(flower.body_handle, x, y);

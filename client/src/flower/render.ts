@@ -6,6 +6,8 @@
  * reproductive system, sepals) drives a unique visual. No more cartoon blobs.
  */
 
+import { parse as parseYaml } from "yaml";
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Types
 // ═══════════════════════════════════════════════════════════════════════════
@@ -622,11 +624,11 @@ function parseSymmetry(raw: any): ParsedSymmetry {
   return { type: raw.type ?? "Radial" };
 }
 
-function parseSpec(specJson: string | undefined): ParsedSpec | null {
-  if (!specJson) return null;
+function parseSpec(spec: string | undefined): ParsedSpec | null {
+  if (!spec) return null;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const spec = JSON.parse(specJson) as any;
+    const spec = parseYaml(spec) as any;
 
     const layers: ParsedLayer[] = (spec.petals?.layers ?? []).map(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -710,17 +712,17 @@ type ParsedParticles = {
   gravity: number;
 };
 
-function parseEffects(specJson: string | undefined): {
+function parseEffects(spec: string | undefined): {
   thorns: ParsedThorns | null;
   dewdrops: ParsedDewdrops[];
   aura: ParsedAura | null;
   particles: ParsedParticles[];
 } {
   const empty = { thorns: null, dewdrops: [], aura: null, particles: [] };
-  if (!specJson) return empty;
+  if (!spec) return empty;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const spec = JSON.parse(specJson) as any;
+    const spec = parseYaml(spec) as any;
 
     // Thorns
     const rawThorns = spec.structure?.stem?.thorns;
@@ -1019,10 +1021,10 @@ function computePetalAngles(
 
 /** Create a complete, scale-independent rendering plan from a flower spec. */
 export function createFlowerPlan(
-  specJson: string | undefined,
+  spec: string | undefined,
   sid: number,
 ): FlowerPlan {
-  const parsed = parseSpec(specJson);
+  const parsed = parseSpec(spec);
 
   if (!parsed) {
     // Unparseable spec — return empty plan.
@@ -1100,12 +1102,12 @@ export function createFlowerPlan(
   });
 
   // ── Stem + leaves (only when spec contains stem/foliage data) ──
-  const stemData = parseSpecStem(specJson);
-  const foliage = parseFoliage(specJson);
+  const stemData = parseSpecStem(spec);
+  const foliage = parseFoliage(spec);
   const stemLen = stemData ? Math.max(0.6, Math.min(1.8, stemData.height * 1.4)) : 0;
 
   // ── Effects ──
-  const effects = parseEffects(specJson);
+  const effects = parseEffects(spec);
 
   // ── Stem + thorns ──
   const thornPlans: ThornPlan[] = stemData && effects.thorns
@@ -1234,9 +1236,9 @@ export type AdornmentSpec = {
 
 /** Parse raw JSON into ArrangementMeta, stripping adornment_spec if it
  *  fails structural validation (legacy records from before Output.object). */
-export function parseArrangementMeta(json: string): ArrangementMeta | undefined {
+export function parseArrangementMeta(raw_str: string): ArrangementMeta | undefined {
   try {
-    const raw = JSON.parse(json) as ArrangementMeta;
+    const raw = parseYaml(raw_str) as ArrangementMeta;
     if (raw.adornment_spec) {
       const s = raw.adornment_spec;
       if (!s.container?.type || !s.container.material || !s.container.color
@@ -1260,11 +1262,11 @@ type ParsedStem = {
   style: string;
 };
 
-function parseSpecStem(specJson: string | undefined): ParsedStem | null {
-  if (!specJson) return null;
+function parseSpecStem(spec: string | undefined): ParsedStem | null {
+  if (!spec) return null;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const spec = JSON.parse(specJson) as any;
+    const spec = parseYaml(spec) as any;
     const stem = spec.structure?.stem;
     if (!stem) return null;
     return {
@@ -1303,11 +1305,11 @@ const DEFAULT_FOLIAGE: ParsedFoliage = {
   ],
 };
 
-function parseFoliage(specJson: string | undefined): ParsedFoliage | null {
-  if (!specJson) return null;
+function parseFoliage(spec: string | undefined): ParsedFoliage | null {
+  if (!spec) return null;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const spec = JSON.parse(specJson) as any;
+    const spec = parseYaml(spec) as any;
     const foliage = spec.foliage;
     if (!foliage) return null;
 
@@ -2301,7 +2303,7 @@ function adornmentForLevel(level: number, baseY: number, colors?: { main: number
 
 /** Create a complete arrangement plan from constituent flower specs. */
 export function createArrangementPlan(
-  constituents: ReadonlyArray<{ specJson: string; sid: number }>,
+  constituents: ReadonlyArray<{ spec: string; sid: number }>,
   level: number,
   meta?: ArrangementMeta,
 ): ArrangementPlan {
@@ -2310,10 +2312,10 @@ export function createArrangementPlan(
   const baseY = 0.9; // stems converge at this Y (below flower heads)
 
   const members: ArrangementMember[] = slots.map((slot, i) => {
-    const { specJson, sid } = constituents[Math.min(i, count - 1)]!;
-    const flowerPlan = createFlowerPlan(specJson, sid);
-    const stemData = parseSpecStem(specJson);
-    const foliage = parseFoliage(specJson);
+    const { spec, sid } = constituents[Math.min(i, count - 1)]!;
+    const flowerPlan = createFlowerPlan(spec, sid);
+    const stemData = parseSpecStem(spec);
+    const foliage = parseFoliage(spec);
 
     // Stem from base to flower head position (use defaults for arrangements since
     // the arrangement layout itself provides structure even when spec is partial)
@@ -2380,21 +2382,21 @@ export function createArrangementPlan(
 // Legacy API — preserved for any transitional callers
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** Resolve flower color from specJson — real spec color or sid-based fallback. */
+/** Resolve flower color from spec — real spec color or sid-based fallback. */
 export function resolveFlowerColor(
   sid: number,
-  specJson: string | undefined,
+  spec: string | undefined,
 ): number {
-  const parsed = parseSpec(specJson);
+  const parsed = parseSpec(spec);
   return parsed?.layers[0]?.color ?? fallbackColor(sid);
 }
 
-/** Resolve petal count from specJson — real spec count or sid-based fallback. */
+/** Resolve petal count from spec — real spec count or sid-based fallback. */
 export function resolveFlowerPetalCount(
   sid: number,
-  specJson: string | undefined,
+  spec: string | undefined,
 ): number {
-  const parsed = parseSpec(specJson);
+  const parsed = parseSpec(spec);
   const count = parsed?.layers[0]?.count ?? 0;
   return count > 0 ? count : 5 + Math.floor(sidHash(sid, 1) * 3);
 }

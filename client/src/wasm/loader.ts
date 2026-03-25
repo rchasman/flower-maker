@@ -6,7 +6,7 @@ let simulation: GardenSim | null = null;
 export interface GardenSim {
   upsert_flower(
     session_id: bigint,
-    spec_json: string,
+    spec_yaml: string,
     x: number,
     y: number,
   ): void;

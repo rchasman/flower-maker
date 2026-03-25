@@ -1,37 +1,18 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { readStreamWithProgress } from "../lib/utils.ts";
-import { parse as parseYaml } from "yaml";
+import { readStreamWithProgress, parseSpec } from "../lib/utils.ts";
 
 interface FlowerChatProps {
   model: string;
   onGenerationStart?: (prompt: string) => string;
-  onSpecProgress?: (genId: string, specJson: string) => void;
-  onFlowerGenerated?: (genId: string, specJson: string) => void;
+  onSpecProgress?: (genId: string, specYaml: string) => void;
+  onFlowerGenerated?: (genId: string, specYaml: string) => void;
   onGenerationFailed?: (genId: string) => void;
 }
 
-function yamlToJson(raw: string): { specJson: string; name: string } {
-  try {
-    const parsed = parseYaml(raw) as { name?: string };
-    return { specJson: JSON.stringify(parsed), name: parsed.name ?? "your flower" };
-  } catch {
-    try {
-      const parsed = JSON.parse(raw) as { name?: string };
-      return { specJson: raw, name: parsed.name ?? "your flower" };
-    } catch {
-      return { specJson: raw, name: "your flower" };
-    }
-  }
-}
-
-function tryParseYamlToJson(raw: string): string | null {
-  try {
-    const parsed = parseYaml(raw);
-    return parsed && typeof parsed === "object" ? JSON.stringify(parsed) : null;
-  } catch {
-    return null;
-  }
+function extractName(raw: string): string {
+  const parsed = parseSpec(raw);
+  return (parsed?.name as string) ?? "your flower";
 }
 
 export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerGenerated, onGenerationFailed }: FlowerChatProps) {
@@ -79,17 +60,23 @@ export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerG
       genId = onGenerationStart?.(text) ?? "";
 
       const raw = await readStreamWithProgress(res, accumulated => {
-        const specJson = tryParseYamlToJson(accumulated);
-        if (specJson) onSpecProgress?.(genId, specJson);
+        if (parseSpec(accumulated)) onSpecProgress?.(genId, accumulated);
       });
 
-      const { specJson, name } = yamlToJson(raw);
+      if (!parseSpec(raw)) {
+        if (genId) onGenerationFailed?.(genId);
+        setMessages(prev => [
+          ...prev,
+          { role: "assistant", content: "[err] failed to parse spec" },
+        ]);
+        return;
+      }
 
       setMessages(prev =>
-        prev.map((m, i) => i === msgIdx.current ? { ...m, content: `[ok] created: ${name}` } : m),
+        prev.map((m, i) => i === msgIdx.current ? { ...m, content: `[ok] created: ${extractName(raw)}` } : m),
       );
 
-      onFlowerGenerated?.(genId, specJson);
+      onFlowerGenerated?.(genId, raw);
     } catch (err) {
       if (genId) onGenerationFailed?.(genId);
       setMessages(prev => [
