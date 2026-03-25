@@ -22,8 +22,8 @@ import { createMergeEffect, tickMergeEffect, type MergeEffectState } from "../ca
 export type ConstituentEntry = { specJson: string; sid: number };
 
 export interface FlowerCanvasHandle {
-  /** Push new render data each frame from the WASM loop. */
-  updateFlowers(data: FlowerRenderData[]): void;
+  /** Push new render data each frame from the WASM loop. Pool is reused; only first `count` entries are valid. */
+  updateFlowers(pool: FlowerRenderData[], count: number): void;
   /** Update the spec map (sid → specJson) — call when specs change. */
   setSpecMap(specs: Map<number, string>): void;
   /** Update the constituent map (sid → array of constituent specs) for arrangements. */
@@ -154,7 +154,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     }, []);
 
     const updateFlowers = useCallback(
-      (data: FlowerRenderData[]) => {
+      (pool: FlowerRenderData[], count: number) => {
+        const data = pool.slice(0, count);
         const stage = stageContainerRef.current;
         if (!stage) return;
 
