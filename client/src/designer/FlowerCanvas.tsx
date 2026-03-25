@@ -157,7 +157,6 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
       (pool: FlowerRenderData[], count: number) => {
         const stage = stageContainerRef.current;
         if (!stage) return;
-
         const graphics = flowerGraphicsRef.current;
 
         _activeSids.clear();

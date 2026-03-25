@@ -45,8 +45,14 @@ impl GardenSimulation {
 
     /// Add or update a flower from SpacetimeDB data
     pub fn upsert_flower(&mut self, session_id: u64, spec_yaml: &str, x: f32, y: f32) {
-        if let Ok(spec) = serde_yaml::from_str::<FlowerSpec>(spec_yaml) {
-            if let Some(flower) = self.flowers.iter_mut().find(|f| f.session_id == session_id) {
+        let spec = match serde_yaml::from_str::<FlowerSpec>(spec_yaml) {
+            Ok(s) => s,
+            Err(e) => {
+                web_sys::console::error_1(&format!("[wasm] spec parse failed for sid={session_id}: {e}").into());
+                return;
+            }
+        };
+        if let Some(flower) = self.flowers.iter_mut().find(|f| f.session_id == session_id) {
                 flower.spec = spec;
                 self.world.set_position(flower.body_handle, x, y);
             } else {
@@ -69,7 +75,6 @@ impl GardenSimulation {
                     body_handle: handle,
                 });
             }
-        }
     }
 
     /// Start wilt-out animation for a flower (it will be removed after animation completes)

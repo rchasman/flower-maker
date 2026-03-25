@@ -624,11 +624,11 @@ function parseSymmetry(raw: any): ParsedSymmetry {
   return { type: raw.type ?? "Radial" };
 }
 
-function parseSpec(spec: string | undefined): ParsedSpec | null {
-  if (!spec) return null;
+function parseSpec(raw: string | undefined): ParsedSpec | null {
+  if (!raw) return null;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const spec = parseYaml(spec) as any;
+    const spec = parseYaml(raw) as any;
 
     const layers: ParsedLayer[] = (spec.petals?.layers ?? []).map(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -712,17 +712,17 @@ type ParsedParticles = {
   gravity: number;
 };
 
-function parseEffects(spec: string | undefined): {
+function parseEffects(raw: string | undefined): {
   thorns: ParsedThorns | null;
   dewdrops: ParsedDewdrops[];
   aura: ParsedAura | null;
   particles: ParsedParticles[];
 } {
   const empty = { thorns: null, dewdrops: [], aura: null, particles: [] };
-  if (!spec) return empty;
+  if (!raw) return empty;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const spec = parseYaml(spec) as any;
+    const spec = parseYaml(raw) as any;
 
     // Thorns
     const rawThorns = spec.structure?.stem?.thorns;
@@ -1262,11 +1262,11 @@ type ParsedStem = {
   style: string;
 };
 
-function parseSpecStem(spec: string | undefined): ParsedStem | null {
-  if (!spec) return null;
+function parseSpecStem(raw: string | undefined): ParsedStem | null {
+  if (!raw) return null;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const spec = parseYaml(spec) as any;
+    const spec = parseYaml(raw) as any;
     const stem = spec.structure?.stem;
     if (!stem) return null;
     return {
@@ -1305,11 +1305,11 @@ const DEFAULT_FOLIAGE: ParsedFoliage = {
   ],
 };
 
-function parseFoliage(spec: string | undefined): ParsedFoliage | null {
-  if (!spec) return null;
+function parseFoliage(raw: string | undefined): ParsedFoliage | null {
+  if (!raw) return null;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const spec = parseYaml(spec) as any;
+    const spec = parseYaml(raw) as any;
     const foliage = spec.foliage;
     if (!foliage) return null;
 
