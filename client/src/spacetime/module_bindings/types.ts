@@ -58,7 +58,7 @@ export type FlowerSession = __Infer<typeof FlowerSession>;
 
 export const FlowerSpec = __t.object("FlowerSpec", {
   sessionId: __t.u64(),
-  specJson: __t.string(),
+  spec: __t.string(),
   version: __t.u32(),
   updatedAt: __t.timestamp(),
 });

@@ -12,7 +12,7 @@ import {
 
 export default __t.row({
   sessionId: __t.u64().primaryKey().name("session_id"),
-  specJson: __t.string().name("spec_json"),
+  spec: __t.string(),
   version: __t.u32(),
   updatedAt: __t.timestamp().name("updated_at"),
 });

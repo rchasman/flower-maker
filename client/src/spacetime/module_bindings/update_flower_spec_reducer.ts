@@ -12,5 +12,5 @@ import {
 
 export default {
   sessionId: __t.u64(),
-  specJson: __t.string(),
+  spec: __t.string(),
 };
