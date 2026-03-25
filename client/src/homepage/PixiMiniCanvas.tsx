@@ -121,8 +121,7 @@ async function renderZoneSnapshot(
   const radius = previewRadius(sessions.length);
   const resolved = resolvePositions(sessions, radius);
 
-  // Draw each flower
-  resolved.map(p => {
+  for (const p of resolved) {
     const g = new Graphics();
     const constituents = constituentMap.get(p.sessionKey);
     const isArrangement = !!constituents && constituents.length > 1;
@@ -140,8 +139,7 @@ async function renderZoneSnapshot(
 
     g.position.set(p.x, p.y);
     container.addChild(g);
-    return null;
-  });
+  }
 
   const bounds = resolved.reduce(
     (acc, p) => ({
@@ -222,7 +220,7 @@ export function PixiMiniCanvas({
       .catch(() => {
         // Silently fail — card will show empty
       });
-  }, [dataKey, sessions, specBySessionId, constituentMap, arrangementMetaMap]);
+  }, [dataKey]);
 
   if (!snapshot) {
     return (
