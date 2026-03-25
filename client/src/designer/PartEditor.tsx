@@ -135,12 +135,12 @@ const TAXONOMY: TaxonomySection[] = [
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export function PartEditor({ sessionId, spec, constituents = [] }: PartEditorProps) {
+export function PartEditor({ sessionId, spec: specRaw, constituents = [] }: PartEditorProps) {
   const { conn } = useSession();
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
-  const spec = parseSpec(spec) ?? {};
+  const spec = parseSpec(specRaw) ?? {};
 
   const toggleSection = (key: string) =>
     setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
