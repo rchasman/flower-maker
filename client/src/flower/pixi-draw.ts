@@ -49,46 +49,40 @@ export function drawCmds(g: Graphics, cmds: readonly DrawCmd[], scale: number, o
 
 // ── Part-level helpers ──
 
-// Light source direction (top-right)
 const LIGHT_ANGLE = -Math.PI / 4;
+const LIGHT_COS = Math.cos(LIGHT_ANGLE);
+const LIGHT_SIN = Math.sin(LIGHT_ANGLE);
 
-/** Draw petal layers with 7-pass rendering: fill, directional highlight,
- *  directional shadow, highlight, midrib glow, midrib core, outline. */
+/** Draw petal layers with 7-pass rendering per petal. */
 export function drawPetals(
   g: Graphics, layers: FlowerPlan["layers"],
   scale: number, alpha: number, ox = 0, oy = 0,
 ) {
-  const lightOffsetX = Math.cos(LIGHT_ANGLE) * scale * 0.012;
-  const lightOffsetY = Math.sin(LIGHT_ANGLE) * scale * 0.012;
+  const lightOffsetX = LIGHT_COS * scale * 0.012;
+  const lightOffsetY = LIGHT_SIN * scale * 0.012;
 
   layers.map((layer) => {
     layer.petals.map((petal) => {
-      // Pass 1: Base fill
       drawCmds(g, petal.cmds, scale, ox, oy);
       g.fill({ color: petal.color, alpha: alpha * layer.opacity });
 
-      // Pass 2: Directional highlight — offset toward light source
       drawCmds(g, petal.cmds, scale, ox + lightOffsetX, oy + lightOffsetY);
-      g.fill({ color: lightenColor(petal.color, 0.15), alpha: alpha * layer.opacity * 0.18 });
+      g.fill({ color: petal.lightColor, alpha: alpha * layer.opacity * 0.18 });
 
-      // Pass 3: Directional shadow — offset away from light source
       drawCmds(g, petal.cmds, scale, ox - lightOffsetX * 0.7, oy - lightOffsetY * 0.7);
-      g.fill({ color: darkenColor(petal.color, 0.8), alpha: alpha * layer.opacity * 0.1 });
+      g.fill({ color: petal.shadowColor, alpha: alpha * layer.opacity * 0.1 });
 
-      // Pass 4: Highlight fill
       drawCmds(g, petal.cmds, scale, ox, oy);
       g.fill({ color: petal.highlightColor, alpha: alpha * 0.15 });
 
-      // Pass 5–6: Midrib glow + core vein
       if (petal.veinCmds.length > 0) {
         drawCmds(g, petal.veinCmds, scale, ox, oy);
-        g.stroke({ color: lightenColor(petal.color, 0.2), width: Math.max(0.8, scale * 0.018), alpha: alpha * 0.12 });
+        g.stroke({ color: petal.midribGlowColor, width: Math.max(0.8, scale * 0.018), alpha: alpha * 0.12 });
 
         drawCmds(g, petal.veinCmds, scale, ox, oy);
         g.stroke({ color: petal.veinColor, width: Math.max(0.3, scale * 0.008), alpha: alpha * 0.25 });
       }
 
-      // Pass 7: Outline stroke
       drawCmds(g, petal.cmds, scale, ox, oy);
       g.stroke({ color: petal.outlineColor, width: Math.max(0.3, scale * 0.006), alpha: alpha * layer.opacity * 0.4 });
 

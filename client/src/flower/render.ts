@@ -96,6 +96,9 @@ export type FlowerPlan = {
       highlightColor: number;
       outlineColor: number;
       veinColor: number;
+      lightColor: number;
+      shadowColor: number;
+      midribGlowColor: number;
     }>;
     opacity: number;
   }>;
@@ -1033,8 +1036,11 @@ function computePetalAngles(
   }
 }
 
-/** Clamp a value between 0 and 1. */
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
+
+/** Linear interpolation within a phase: 0 below start, 1 above end. */
+const phaseProgress = (t: number, start: number, end: number): number =>
+  clamp01((t - start) / (end - start));
 
 /** Create a complete, scale-independent rendering plan from a flower spec. */
 export function createFlowerPlan(
@@ -1050,12 +1056,11 @@ export function createFlowerPlan(
     return { sepals: [], layers: [], center: EMPTY_CENTER, stem: null, leaves: [], dewdrops: [], aura: null, particles: [] };
   }
 
-  // ── Growth progress sub-phases ──
-  const stemProgress = clamp01((growthProgress - 0.1) / 0.2);     // 0@0.1, 1@0.3
-  const leafProgress = clamp01((growthProgress - 0.3) / 0.2);     // 0@0.3, 1@0.5
-  const sepalProgress = clamp01((growthProgress - 0.5) / 0.1);    // 0@0.5, 1@0.6
-  const centerProgress = clamp01((growthProgress - 0.85) / 0.1);  // 0@0.85, 1@0.95
-  const effectProgress = clamp01((growthProgress - 0.95) / 0.05); // 0@0.95, 1@1.0
+  const stemProgress   = phaseProgress(growthProgress, 0.1,  0.3);
+  const leafProgress   = phaseProgress(growthProgress, 0.3,  0.5);
+  const sepalProgress  = phaseProgress(growthProgress, 0.5,  0.6);
+  const centerProgress = phaseProgress(growthProgress, 0.85, 0.95);
+  const effectProgress = phaseProgress(growthProgress, 0.95, 1.0);
 
   const baseColor =
     parsed.layers[0]?.color ?? fallbackColor(sid);
@@ -1065,10 +1070,8 @@ export function createFlowerPlan(
 
   const totalLayers = parsed.layers.length;
   const layers = parsed.layers.map((layer, layerIdx) => {
-    // Outer layers open first: each layer gets a staggered window within 0.6-0.85
     const layerStart = 0.6 + (layerIdx / Math.max(1, totalLayers)) * 0.15;
-    const layerEnd = layerStart + 0.1;
-    const layerProgress = clamp01((growthProgress - layerStart) / (layerEnd - layerStart));
+    const layerProgress = phaseProgress(growthProgress, layerStart, layerStart + 0.1);
 
     const count = Math.max(1, Math.min(55, layer.count));
     cumulativeOffset += layer.angularOffset;
@@ -1082,17 +1085,15 @@ export function createFlowerPlan(
       count, cumulativeOffset, layer.arrangement, parsed.symmetry, sid, layerIdx,
     );
 
-    // Scale petal dimensions by growth: 0.3 (bud) → 1.0 (full)
     const petalLenScale = 0.3 + 0.7 * layerProgress;
-    // Curvature: bud-like (+0.8 cupping) → spec value as petals open
     const budCurvatureBoost = 0.8 * (1 - layerProgress);
 
+    // Skip geometry generation entirely when layer hasn't started opening
     const petals = layerProgress > 0
       ? petalAngles.map(({ angle, radialOffset }, i) => {
           const scattered = scatterColor(layerColor, 0.06, i * 7.3 + layerIdx * 13.1);
           const lit = lightTint(scattered, angle);
 
-          // Per-petal stochastic variation — deterministic jitter breaks machined symmetry
           const lenJitter = 1 + (sidHash(sid, 400 + layerIdx * 100 + i) * 0.08 - 0.04);
           const widJitter = 1 + (sidHash(sid, 500 + layerIdx * 100 + i) * 0.06 - 0.03);
           const curvJitter = sidHash(sid, 600 + layerIdx * 100 + i) * 0.1 - 0.05;
@@ -1121,6 +1122,9 @@ export function createFlowerPlan(
             highlightColor: lightenColor(lit, 0.18),
             outlineColor: darkenColor(lit, 0.55),
             veinColor: darkenColor(lit, 0.6),
+            lightColor: lightenColor(lit, 0.15),
+            shadowColor: darkenColor(lit, 0.8),
+            midribGlowColor: lightenColor(lit, 0.2),
           };
         })
       : [];
@@ -1128,16 +1132,15 @@ export function createFlowerPlan(
     return { petals, opacity: layer.opacity * layerProgress };
   });
 
-  // ── Center (pistil + stamens) — scale by centerProgress ──
-  const fullCenter: CenterPlan = buildCenter(parsed, baseColor, sid);
+  const builtCenter = centerProgress > 0 ? buildCenter(parsed, baseColor, sid) : EMPTY_CENTER;
   const center: CenterPlan = centerProgress <= 0
     ? EMPTY_CENTER
     : {
-        discRadius: fullCenter.discRadius * centerProgress,
-        discColor: fullCenter.discColor,
-        highlightRadius: fullCenter.highlightRadius * centerProgress,
-        highlightColor: fullCenter.highlightColor,
-        stamens: fullCenter.stamens.map(s => ({
+        discRadius: builtCenter.discRadius * centerProgress,
+        discColor: builtCenter.discColor,
+        highlightRadius: builtCenter.highlightRadius * centerProgress,
+        highlightColor: builtCenter.highlightColor,
+        stamens: builtCenter.stamens.map(s => ({
           ...s,
           length: s.length * centerProgress,
           antherRadius: s.antherRadius * centerProgress,
@@ -1214,20 +1217,19 @@ export function createFlowerPlan(
       })
     : [];
 
-  // ── Dewdrops, aura, particles — gated by growth progress ──
-  const allDewdrops = generateDewdrops(effects.dewdrops, layers, sid);
-  const dewdrops = centerProgress > 0
-    ? allDewdrops.slice(0, Math.ceil(allDewdrops.length * centerProgress))
-    : [];
+  const allDewdrops = centerProgress > 0 ? generateDewdrops(effects.dewdrops, layers, sid) : [];
+  const dewdrops = centerProgress >= 1
+    ? allDewdrops
+    : allDewdrops.slice(0, Math.ceil(allDewdrops.length * centerProgress));
 
   const aura: AuraPlan | null = effects.aura && effectProgress > 0
     ? { kind: effects.aura.kind, color: effects.aura.color, opacity: effects.aura.opacity * effectProgress, radius: effects.aura.radius }
     : null;
 
-  const allParticles = generateParticleSeeds(effects.particles, sid);
-  const particles = effectProgress > 0
-    ? allParticles.slice(0, Math.ceil(allParticles.length * effectProgress))
-    : [];
+  const allParticles = effectProgress > 0 ? generateParticleSeeds(effects.particles, sid) : [];
+  const particles = effectProgress >= 1
+    ? allParticles
+    : allParticles.slice(0, Math.ceil(allParticles.length * effectProgress));
 
   return { sepals, layers, center, stem, leaves, dewdrops, aura, particles };
 }
@@ -1404,9 +1406,7 @@ function colonizeLeafPlacements(
   sid: number,
   sizes: readonly number[],
 ): ParsedLeafInstance[] {
-  // 1. Generate attraction points — biased upward and outward from stem
-  const attractorAlive = Array.from({ length: 10 }, () => true);
-  const attractorPositions = Array.from({ length: 10 }, (_, i) => {
+  const attractors = Array.from({ length: 10 }, (_, i) => {
     const t = 0.2 + sidHash(sid, 800 + i) * 0.65;
     const pt = stemPointAt(0, stemLen, 0, 0, curvature, t);
     const spreadAngle = (sidHash(sid, 810 + i) - 0.5) * Math.PI * 1.2;
@@ -1417,28 +1417,30 @@ function colonizeLeafPlacements(
     };
   });
 
-  // 2. For each leaf, find best stem position and growth direction
   const stemSamples = 20;
+  const KILL_RADIUS_SQ = 0.25 * 0.25;
 
-  return Array.from({ length: count }, (_, leafIdx) => {
-    // Sample stem positions, score by nearby alive attractors
+  // Thread a dead-attractor set through each leaf placement
+  const { leaves } = Array.from({ length: count }).reduce<{
+    leaves: ParsedLeafInstance[];
+    dead: Set<number>;
+  }>((acc, _, leafIdx) => {
     const best = Array.from({ length: stemSamples }, (_, si) => {
       const t = 0.2 + (si / (stemSamples - 1)) * 0.65;
       const pt = stemPointAt(0, stemLen, 0, 0, curvature, t);
 
-      // Sum vectors to nearby alive attractors
-      const { vx, vy, score } = attractorPositions.reduce(
-        (acc, a, ai) => {
-          if (!attractorAlive[ai]) return acc;
+      const { vx, vy, score } = attractors.reduce(
+        (sum, a, ai) => {
+          if (acc.dead.has(ai)) return sum;
           const dx = a.x - pt.x;
           const dy = a.y - pt.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist >= 0.5 || dist <= 0.01) return acc;
+          if (dist >= 0.5 || dist <= 0.01) return sum;
           const weight = 1 / (dist * dist);
           return {
-            vx: acc.vx + (dx / dist) * weight,
-            vy: acc.vy + (dy / dist) * weight,
-            score: acc.score + weight,
+            vx: sum.vx + (dx / dist) * weight,
+            vy: sum.vy + (dy / dist) * weight,
+            score: sum.score + weight,
           };
         },
         { vx: 0, vy: 0, score: 0 },
@@ -1448,38 +1450,37 @@ function colonizeLeafPlacements(
     }).reduce((best, cur) => (cur.score > best.score ? cur : best));
 
     const stemPt = stemPointAt(0, stemLen, 0, 0, curvature, best.t);
-
-    // Determine side from growth angle relative to stem tangent
     const relAngle = best.angle - stemPt.angle;
     const side: "left" | "right" = Math.sin(relAngle) > 0 ? "left" : "right";
-
-    // Angular offset from the perpendicular
     const perpAngle = side === "left" ? Math.PI * 0.35 : -Math.PI * 0.35;
     const angleOffset = Math.max(-0.3, Math.min(0.3,
       (best.angle - stemPt.angle - perpAngle) * 0.5,
     ));
 
-    // 3. Remove attractors near this leaf (shadow/claim space)
+    // Kill attractors near this leaf's projected position
     const leafX = stemPt.x + Math.cos(best.angle) * 0.2;
     const leafY = stemPt.y + Math.sin(best.angle) * 0.2;
-    const killRadius = 0.25;
-    attractorPositions.map((a, ai) => {
-      if (!attractorAlive[ai]) return null;
+    const newDead = attractors.reduce<Set<number>>((killed, a, ai) => {
+      if (acc.dead.has(ai)) return killed;
       const dx = a.x - leafX;
       const dy = a.y - leafY;
-      if (dx * dx + dy * dy < killRadius * killRadius) {
-        attractorAlive[ai] = false;
-      }
-      return null;
-    });
+      return dx * dx + dy * dy < KILL_RADIUS_SQ
+        ? new Set([...killed, ai])
+        : killed;
+    }, acc.dead);
 
     return {
-      position: best.t,
-      side,
-      size: sizes[leafIdx] ?? (0.3 + sidHash(sid, 830 + leafIdx) * 0.4),
-      angleOffset,
+      leaves: [...acc.leaves, {
+        position: best.t,
+        side,
+        size: sizes[leafIdx] ?? (0.3 + sidHash(sid, 830 + leafIdx) * 0.4),
+        angleOffset,
+      }],
+      dead: newDead,
     };
-  });
+  }, { leaves: [], dead: new Set<number>() });
+
+  return leaves;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
