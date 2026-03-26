@@ -636,30 +636,245 @@ function generatePetalPartial(
   return cmds;
 }
 
-/** Generate a midrib vein — single line from petal base to ~80% of tip. */
+/**
+ * Compute a point on the petal midrib in flower space.
+ * t ∈ [0,1] maps from base to tip.
+ */
+function midribPoint(
+  t: number, petalLen: number, curvature: number, curl: number,
+  cosA: number, sinA: number,
+): Vec2 {
+  const along = BASE_OFFSET + t * petalLen;
+  const bend = curvature * 0.15 * Math.sin(Math.PI * t);
+  const curlDisp = curl > 0 && t > 0.65
+    ? curl * Math.pow((t - 0.65) / 0.35, 2) * -0.12
+    : 0;
+  const localX = along + curlDisp;
+  const localY = bend;
+  return [
+    cosA * localX - sinA * localY,
+    sinA * localX + cosA * localY,
+  ];
+}
+
+/**
+ * Compute a point offset laterally from the midrib at parameter t.
+ * lateralFrac ∈ [-1,1] controls how far across the petal width.
+ */
+function offsetPoint(
+  t: number, lateralFrac: number, petalLen: number, petalW: number,
+  curvature: number, curl: number, cosA: number, sinA: number,
+): Vec2 {
+  const along = BASE_OFFSET + t * petalLen;
+  const bend = curvature * 0.15 * Math.sin(Math.PI * t);
+  const curlDisp = curl > 0 && t > 0.65
+    ? curl * Math.pow((t - 0.65) / 0.35, 2) * -0.12
+    : 0;
+  const localX = along + curlDisp;
+  const localY = bend + lateralFrac * petalW * 0.7;
+  return [
+    cosA * localX - sinA * localY,
+    sinA * localX + cosA * localY,
+  ];
+}
+
+/** Generate a midrib from 5% to 80% of petal length. */
+function generateMidrib(
+  petalLen: number, curvature: number, curl: number,
+  cosA: number, sinA: number,
+): DrawCmd[] {
+  const pts: Vec2[] = Array.from({ length: 5 }, (_, i) =>
+    midribPoint(0.05 + (i / 4) * 0.75, petalLen, curvature, curl, cosA, sinA),
+  );
+  return smoothCmds(pts);
+}
+
+/**
+ * Generate a single lateral vein branching from the midrib.
+ * branchT = position along midrib [0,1], lateralSign = ±1 for left/right,
+ * branchAngle = angle from midrib in radians, branchLen = fraction of petal width to extend.
+ */
+function generateLateral(
+  branchT: number, lateralSign: number, branchAngle: number, branchLen: number,
+  petalLen: number, petalW: number, curvature: number, curl: number,
+  cosA: number, sinA: number,
+): DrawCmd[] {
+  // 3 points: start on midrib, mid-branch, end near edge
+  const pts: Vec2[] = [0, 0.5, 1].map(frac => {
+    const t = branchT + frac * branchLen * 0.3 * Math.cos(branchAngle);
+    const lateral = lateralSign * frac * branchLen;
+    return offsetPoint(
+      Math.min(0.95, Math.max(0.05, t)), lateral,
+      petalLen, petalW, curvature, curl, cosA, sinA,
+    );
+  });
+  return smoothCmds(pts);
+}
+
+/** Generate vein DrawCmd[] appropriate to the given VeinPattern. */
 function generatePetalVein(
-  angle: number, length: number, curvature: number, curl: number
+  angle: number, length: number, curvature: number, curl: number,
+  veinPattern: string, width: number, seed: number,
 ): DrawCmd[] {
   const petalLen = Math.max(0.18, Math.min(0.7, length * 0.25));
+  const petalW = Math.max(0.05, Math.min(0.3, width * 0.1));
   const cosA = Math.cos(angle);
   const sinA = Math.sin(angle);
 
-  const pts: Vec2[] = Array.from({ length: 5 }, (_, i) => {
-    const t = 0.05 + (i / 4) * 0.75; // 5% to 80% along petal
-    const along = BASE_OFFSET + t * petalLen;
-    const bend = curvature * 0.15 * Math.sin(Math.PI * t);
-    const curlDisp = curl > 0 && t > 0.65
-      ? curl * Math.pow((t - 0.65) / 0.35, 2) * -0.12
-      : 0;
-    const localX = along + curlDisp;
-    const localY = bend;
-    return [
-      cosA * localX - sinA * localY,
-      sinA * localX + cosA * localY,
-    ] as Vec2;
-  });
+  switch (veinPattern) {
+    case "None":
+      return [];
 
-  return smoothCmds(pts);
+    case "Parallel": {
+      // 4-6 parallel veins evenly spaced across petal width
+      const count = 4 + Math.round(sidHash(seed, 71) * 2); // 4-6
+      return Array.from({ length: count }, (_, i) => {
+        const frac = ((i + 1) / (count + 1)) * 2 - 1; // spread from -1 to 1
+        const pts: Vec2[] = Array.from({ length: 5 }, (__, j) => {
+          const t = 0.08 + (j / 4) * 0.72;
+          return offsetPoint(t, frac * 0.6, petalLen, petalW, curvature, curl, cosA, sinA);
+        });
+        return smoothCmds(pts);
+      }).flat();
+    }
+
+    case "Branching": {
+      // Midrib + 3-5 pairs of laterals at ~45°
+      const midrib = generateMidrib(petalLen, curvature, curl, cosA, sinA);
+      const pairCount = 3 + Math.round(sidHash(seed, 72) * 2); // 3-5
+      const laterals = Array.from({ length: pairCount }, (_, i) => {
+        const branchT = 0.15 + (i / (pairCount - 1)) * 0.55; // 15%-70% along midrib
+        const branchLen = 0.8 * (1 - branchT * 0.6); // shorter toward tip
+        const branchAngle = 0.7 + sidHash(seed, 73 + i) * 0.17; // ~40-50°
+        return [
+          ...generateLateral(branchT, 1, branchAngle, branchLen, petalLen, petalW, curvature, curl, cosA, sinA),
+          ...generateLateral(branchT, -1, branchAngle, branchLen, petalLen, petalW, curvature, curl, cosA, sinA),
+        ];
+      }).flat();
+      return [...midrib, ...laterals];
+    }
+
+    case "Palmate": {
+      // 3-5 veins radiating from base, spreading like fingers
+      const count = 3 + Math.round(sidHash(seed, 74) * 2); // 3-5
+      return Array.from({ length: count }, (_, i) => {
+        const spread = ((i / (count - 1)) * 2 - 1) * 0.7; // -0.7 to 0.7
+        const pts: Vec2[] = Array.from({ length: 5 }, (__, j) => {
+          const t = 0.05 + (j / 4) * 0.75;
+          const lateral = spread * t * 1.2; // fan out progressively
+          return offsetPoint(t, lateral, petalLen, petalW, curvature, curl, cosA, sinA);
+        });
+        return smoothCmds(pts);
+      }).flat();
+    }
+
+    case "Reticulate": {
+      // Midrib + laterals + cross-connections
+      const midrib = generateMidrib(petalLen, curvature, curl, cosA, sinA);
+      const pairCount = 4;
+      const lateralTs = Array.from({ length: pairCount }, (_, i) =>
+        0.15 + (i / (pairCount - 1)) * 0.55,
+      );
+      const laterals = lateralTs.map((branchT) => {
+        const branchLen = 0.7 * (1 - branchT * 0.5);
+        return [
+          ...generateLateral(branchT, 1, 0.75, branchLen, petalLen, petalW, curvature, curl, cosA, sinA),
+          ...generateLateral(branchT, -1, 0.75, branchLen, petalLen, petalW, curvature, curl, cosA, sinA),
+        ];
+      }).flat();
+      // Cross-connections between adjacent laterals on each side
+      const crossLinks = lateralTs.slice(0, -1).map((t1, i) => {
+        const t2 = lateralTs[i + 1]!;
+        const midT = (t1 + t2) / 2;
+        return [-1, 1].map(side => {
+          const lateralFrac = side * 0.35;
+          const pts: Vec2[] = [t1, midT, t2].map(t =>
+            offsetPoint(
+              Math.min(0.9, t + 0.05), lateralFrac,
+              petalLen, petalW, curvature, curl, cosA, sinA,
+            ),
+          );
+          return smoothCmds(pts);
+        }).flat();
+      }).flat();
+      return [...midrib, ...laterals, ...crossLinks];
+    }
+
+    case "Dichotomous": {
+      // Y-forking: 1 vein splits into 2 at ~30%, each splits again at ~60%
+      const fork = (startT: number, endT: number, lateral: number, depth: number): DrawCmd[] => {
+        const pts: Vec2[] = Array.from({ length: 3 }, (_, i) => {
+          const t = startT + (i / 2) * (endT - startT);
+          return offsetPoint(t, lateral, petalLen, petalW, curvature, curl, cosA, sinA);
+        });
+        const cmds = smoothCmds(pts);
+        if (depth >= 2) return cmds;
+        const spread = 0.25 * (1 / (depth + 1));
+        return [
+          ...cmds,
+          ...fork(endT, endT + (endT - startT) * 0.7, lateral + spread, depth + 1),
+          ...fork(endT, endT + (endT - startT) * 0.7, lateral - spread, depth + 1),
+        ];
+      };
+      return fork(0.05, 0.3, 0, 0);
+    }
+
+    case "Arcuate": {
+      // 3-4 nested arcs curving from base toward tip along petal edge
+      const count = 3 + Math.round(sidHash(seed, 76) * 1); // 3-4
+      return Array.from({ length: count }, (_, i) => {
+        const arcFrac = 0.3 + (i / count) * 0.5; // how far from center
+        const pts: Vec2[] = Array.from({ length: 6 }, (__, j) => {
+          const t = 0.08 + (j / 5) * 0.7;
+          // Arc bows out toward the edge, stronger for outer arcs
+          const bow = arcFrac * Math.sin(Math.PI * t) * 0.8;
+          return offsetPoint(t, bow, petalLen, petalW, curvature, curl, cosA, sinA);
+        });
+        return smoothCmds(pts);
+      }).flat();
+    }
+
+    case "Pinnate": {
+      // Strong midrib + 6-8 closely spaced alternating laterals at ~60°
+      const midrib = generateMidrib(petalLen, curvature, curl, cosA, sinA);
+      const pairCount = 6 + Math.round(sidHash(seed, 77) * 2); // 6-8
+      const laterals = Array.from({ length: pairCount }, (_, i) => {
+        const branchT = 0.1 + (i / (pairCount - 1)) * 0.65;
+        const branchLen = 0.7 * (1 - branchT * 0.5);
+        const side = i % 2 === 0 ? 1 : -1; // alternating
+        return generateLateral(branchT, side, 1.05, branchLen, petalLen, petalW, curvature, curl, cosA, sinA);
+      }).flat();
+      return [...midrib, ...laterals];
+    }
+
+    case "Anastomosing": {
+      // Like Branching but laterals curve back to reconnect
+      const midrib = generateMidrib(petalLen, curvature, curl, cosA, sinA);
+      const pairCount = 4;
+      const laterals = Array.from({ length: pairCount }, (_, i) => {
+        const branchT = 0.15 + (i / (pairCount - 1)) * 0.5;
+        const nextT = i < pairCount - 1
+          ? 0.15 + ((i + 1) / (pairCount - 1)) * 0.5
+          : branchT + 0.15;
+        const branchLen = 0.6 * (1 - branchT * 0.5);
+        // Each lateral loops out and reconnects to the midrib at the next branch point
+        return [-1, 1].map(side => {
+          const pts: Vec2[] = [0, 0.33, 0.66, 1].map(frac => {
+            const t = branchT + frac * (nextT - branchT);
+            const bow = side * branchLen * Math.sin(Math.PI * frac);
+            return offsetPoint(t, bow, petalLen, petalW, curvature, curl, cosA, sinA);
+          });
+          return smoothCmds(pts);
+        }).flat();
+      }).flat();
+      return [...midrib, ...laterals];
+    }
+
+    default: {
+      // Fallback: simple midrib
+      return generateMidrib(petalLen, curvature, curl, cosA, sinA);
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -681,6 +896,7 @@ type ParsedLayer = {
   angularOffset: number;
   color: number | null;
   gradientStops: Array<{ position: number; color: number }>;
+  veinPattern: string;
 };
 
 type ParsedSymmetry = {
@@ -750,6 +966,7 @@ function parseFlowerSpec(spec: any): ParsedSpec | null {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           .map((s: any) => ({ position: s.position ?? 0, color: colorToHex(s.color) }))
           .filter((s: { color: number | null }) => s.color !== null) as Array<{ position: number; color: number }>,
+        veinPattern: layer.vein_pattern ?? "None",
       }),
     );
 
@@ -1261,7 +1478,7 @@ export function createFlowerPlan(
               radialOffset,
             ),
             angle,
-            veinCmds: generatePetalVein(angle, effLen, effCurv, effCurl),
+            veinCmds: generatePetalVein(angle, effLen, effCurv, effCurl, layer.veinPattern, layer.width, sidHash(sid, 50 + layerIdx * 100 + i)),
             color: lit,
             highlightColor: lightenColor(lit, 0.18),
             outlineColor: darkenColor(lit, 0.55),
