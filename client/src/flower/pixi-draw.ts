@@ -9,6 +9,7 @@ import { Graphics } from "pixi.js";
 import {
   darkenColor,
   lightenColor,
+  lerpColor,
   type FlowerPlan,
   type ArrangementPlan,
   type DrawCmd,
@@ -60,8 +61,20 @@ export function drawPetals(
 ) {
   const lightOffsetX = LIGHT_COS * scale * 0.012;
   const lightOffsetY = LIGHT_SIN * scale * 0.012;
+  const shadowOffX = -lightOffsetX * 1.5;
+  const shadowOffY = -lightOffsetY * 1.5;
 
-  layers.map((layer) => {
+  layers.map((layer, layerIdx) => {
+    // Pass 1: petal overlap depth shadows (inner layers cast onto outer)
+    if (layerIdx > 0) {
+      layer.petals.map((petal) => {
+        drawCmds(g, petal.cmds, scale * 1.02, ox + shadowOffX, oy + shadowOffY);
+        g.fill({ color: 0x000000, alpha: alpha * 0.06 });
+        return null;
+      });
+    }
+
+    // Pass 2: normal petal rendering
     layer.petals.map((petal) => {
       drawCmds(g, petal.cmds, scale, ox, oy);
       g.fill({ color: petal.color, alpha: alpha * layer.opacity });
