@@ -101,8 +101,11 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const planCacheRef = useRef<Map<number, { key: string; plan: FlowerPlan | ArrangementPlan; isArrangement: boolean }>>(new Map());
 
     // Dirty-flag tracking: skip expensive g.clear() + redraw when nothing visual changed.
-    // Only position/rotation (free via g.position.set) need per-frame updates.
-    const drawnStateRef = useRef<Map<number, { planKey: string; scale: number; alpha: number; selected: boolean }>>(new Map());
+    const drawnStateRef = useRef<Map<number, { planKey: string; scale: number; alpha: number; selected: boolean; hasAura: boolean }>>(new Map());
+
+    // Revision counter — bumped when specs/constituents/meta change, avoids
+    // recomputing JSON.stringify cache keys every frame in getPlan.
+    const dataRevisionRef = useRef(0);
 
     // Keep refs in sync without re-running effects
     selectedIdRef.current = selectedId;
@@ -111,52 +114,54 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     onFlowerDragEndRef.current = onFlowerDragEnd;
     onMergeDropRef.current = onMergeDrop;
 
-    /** Get or create the cached plan (FlowerPlan or ArrangementPlan) for a given sid. */
-    const getPlan = useCallback((sid: number): { plan: FlowerPlan | ArrangementPlan; isArrangement: boolean } => {
+    /** Get or create the cached plan for a given sid. Returns cache key for dirty tracking. */
+    const getPlan = useCallback((sid: number): { plan: FlowerPlan | ArrangementPlan; isArrangement: boolean; key: string } => {
+      // Fast path: if plan is cached and data hasn't changed since last cache write, skip key recomputation
+      const cached = planCacheRef.current.get(sid);
+      if (cached) {
+        return { plan: cached.plan, isArrangement: cached.isArrangement, key: cached.key };
+      }
+
       const spec = specMapRef.current.get(sid) ?? "";
       const constituents = constituentMapRef.current.get(sid);
       const meta = arrangementMetaMapRef.current.get(sid);
       const isArrangement = !!constituents && constituents.length > 1;
 
-      // Cache key includes constituent count + meta so arrangement changes invalidate
       const metaKey = meta ? JSON.stringify(meta) : "";
       const cacheKey = isArrangement
         ? `arr:${constituents.length}:${constituents.map(c => c.spec).join("|")}:${metaKey}`
         : spec;
 
-      const cached = planCacheRef.current.get(sid);
-      if (cached && cached.key === cacheKey) {
-        return { plan: cached.plan, isArrangement: cached.isArrangement };
-      }
-
-      // Cache miss — recompute
       if (isArrangement) {
         const plan = createArrangementPlan(constituents, Math.min(7, Math.ceil(constituents.length / 3)), meta);
         planCacheRef.current.set(sid, { key: cacheKey, plan, isArrangement: true });
-        return { plan, isArrangement: true };
+        return { plan, isArrangement: true, key: cacheKey };
       }
 
       const plan = createFlowerPlan(spec || undefined, sid);
       planCacheRef.current.set(sid, { key: cacheKey, plan, isArrangement: false });
-      return { plan, isArrangement: false };
+      return { plan, isArrangement: false, key: cacheKey };
     }, []);
 
     const setSpecMap = useCallback((specs: Map<number, string>) => {
       specMapRef.current = specs;
-      // Invalidate drawn state so flowers redraw with new specs
+      planCacheRef.current.clear();
       drawnStateRef.current.clear();
+      dataRevisionRef.current++;
     }, []);
 
     const setConstituentMap = useCallback((constituents: Map<number, ConstituentEntry[]>) => {
       constituentMapRef.current = constituents;
+      planCacheRef.current.clear();
+      drawnStateRef.current.clear();
+      dataRevisionRef.current++;
     }, []);
 
     const setArrangementMetaMap = useCallback((meta: Map<number, ArrangementMeta>) => {
       arrangementMetaMapRef.current = meta;
-      planCacheRef.current.forEach((_, sid) => {
-        if (constituentMapRef.current.has(sid)) planCacheRef.current.delete(sid);
-      });
+      planCacheRef.current.clear();
       drawnStateRef.current.clear();
+      dataRevisionRef.current++;
     }, []);
 
     const updateFlowers = useCallback(
@@ -184,9 +189,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         for (let fi = 0; fi < count; fi++) {
           const flower = pool[fi]!;
           let g = graphics.get(flower.sid);
-          let isNew = false;
           if (!g) {
-            isNew = true;
             g = new Graphics();
             g.eventMode = "static";
             g.cursor = "grab";
@@ -210,20 +213,18 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
 
           const r = FLOWER_BASE_RADIUS * flower.scale;
           const alpha = flower.alpha;
-          const { plan, isArrangement } = getPlan(flower.sid);
+          const { plan, isArrangement, key: planKey } = getPlan(flower.sid);
           const isSelected = selectedIdRef.current === flower.sid;
+          const hasAura = flower.has_glow || flower.has_aura
+            || (!isArrangement && (plan as FlowerPlan).aura != null);
 
-          // Dirty check: skip expensive clear+redraw when nothing visual changed.
-          // Position and rotation are free (g.position.set / g.rotation).
-          const cached = planCacheRef.current.get(flower.sid);
-          const planKey = cached?.key ?? "";
           const prev = drawnState.get(flower.sid);
-          const needsRedraw = isNew
-            || !prev
+          const needsRedraw = !prev
             || prev.planKey !== planKey
             || prev.scale !== flower.scale
             || prev.alpha !== flower.alpha
-            || prev.selected !== isSelected;
+            || prev.selected !== isSelected
+            || prev.hasAura !== hasAura;
 
           if (needsRedraw) {
             const liveColor = resolveColor(flower);
@@ -239,7 +240,6 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             }
 
             const flowerPlan = !isArrangement ? (plan as FlowerPlan) : null;
-            const hasAura = flowerPlan?.aura || flower.has_glow || flower.has_aura;
             let ag = auras.get(flower.sid);
             if (hasAura) {
               if (!ag) {
@@ -265,10 +265,9 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
               drawFlowerFromPlan(g, plan as FlowerPlan, r, alpha);
             }
 
-            drawnState.set(flower.sid, { planKey, scale: flower.scale, alpha: flower.alpha, selected: isSelected });
+            drawnState.set(flower.sid, { planKey, scale: flower.scale, alpha: flower.alpha, selected: isSelected, hasAura });
           }
 
-          // Position + rotation are free — always update
           g.position.set(flower.x, flower.y);
           g.rotation = flower.rotation;
 
