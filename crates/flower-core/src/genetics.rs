@@ -54,6 +54,7 @@ pub fn cross(parent_a: &FlowerSpec, parent_b: &FlowerSpec, seed: u64) -> FlowerS
     FlowerSpec {
         name: format!("{} × {}", parent_a.name, parent_b.name),
         species: if next() > 0.5 { parent_a.species.clone() } else { parent_b.species.clone() },
+        taxonomy: if next() > 0.5 { parent_a.taxonomy.clone() } else { parent_b.taxonomy.clone() },
         petals: PetalSystem {
             layers: if next() > 0.5 { parent_a.petals.layers.clone() } else { parent_b.petals.layers.clone() },
             bloom_progress: 0.0,

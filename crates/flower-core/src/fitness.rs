@@ -103,6 +103,7 @@ mod tests {
         FlowerSpec {
             name: "Test".into(),
             species: "Testa minima".into(),
+            taxonomy: Taxonomy::default(),
             petals: PetalSystem {
                 layers: vec![],
                 bloom_progress: 1.0,

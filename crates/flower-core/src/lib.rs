@@ -4,4 +4,5 @@ pub mod environment;
 pub mod fitness;
 pub mod genetics;
 pub mod physics;
+pub mod species;
 pub mod templates;

@@ -66,6 +66,13 @@ pub fn rose() -> FlowerTemplate {
         default_spec: FlowerSpec {
             name: "Rose".into(),
             species: "Rosa damascena".into(),
+            taxonomy: Taxonomy {
+                family: FlowerFamily::Rosaceae,
+                genus: "Rosa".into(),
+                species_name: "damascena".into(),
+                common_name: "Damask Rose".into(),
+                botanical_class: BotanicalClass::Dicot,
+            },
             petals: PetalSystem {
                 layers: vec![
                     PetalLayer {
@@ -212,6 +219,13 @@ pub fn sunflower() -> FlowerTemplate {
         default_spec: FlowerSpec {
             name: "Sunflower".into(),
             species: "Helianthus annuus".into(),
+            taxonomy: Taxonomy {
+                family: FlowerFamily::Asteraceae,
+                genus: "Helianthus".into(),
+                species_name: "annuus".into(),
+                common_name: "Common Sunflower".into(),
+                botanical_class: BotanicalClass::Dicot,
+            },
             petals: PetalSystem {
                 layers: vec![PetalLayer {
                     index: 0, count: 21, shape: PetalShape::Lanceolate,
@@ -309,6 +323,13 @@ pub fn daisy() -> FlowerTemplate {
         default_spec: FlowerSpec {
             name: "Daisy".into(),
             species: "Bellis perennis".into(),
+            taxonomy: Taxonomy {
+                family: FlowerFamily::Asteraceae,
+                genus: "Bellis".into(),
+                species_name: "perennis".into(),
+                common_name: "Common Daisy".into(),
+                botanical_class: BotanicalClass::Dicot,
+            },
             petals: PetalSystem {
                 layers: vec![PetalLayer {
                     index: 0, count: 13, shape: PetalShape::Spatulate,
@@ -402,6 +423,13 @@ pub fn orchid() -> FlowerTemplate {
         default_spec: FlowerSpec {
             name: "Orchid".into(),
             species: "Phalaenopsis amabilis".into(),
+            taxonomy: Taxonomy {
+                family: FlowerFamily::Orchidaceae,
+                genus: "Phalaenopsis".into(),
+                species_name: "amabilis".into(),
+                common_name: "Moon Orchid".into(),
+                botanical_class: BotanicalClass::Monocot,
+            },
             petals: PetalSystem {
                 layers: vec![PetalLayer {
                     index: 0, count: 3, shape: PetalShape::Ovate,
@@ -506,6 +534,13 @@ pub fn tulip() -> FlowerTemplate {
         default_spec: FlowerSpec {
             name: "Tulip".into(),
             species: "Tulipa gesneriana".into(),
+            taxonomy: Taxonomy {
+                family: FlowerFamily::Liliaceae,
+                genus: "Tulipa".into(),
+                species_name: "gesneriana".into(),
+                common_name: "Garden Tulip".into(),
+                botanical_class: BotanicalClass::Monocot,
+            },
             petals: PetalSystem {
                 layers: vec![PetalLayer {
                     index: 0, count: 6, shape: PetalShape::Ovate,
@@ -625,6 +660,7 @@ fn base_spec(
     FlowerSpec {
         name: name.into(),
         species: species.into(),
+        taxonomy: Taxonomy::default(),
         petals: PetalSystem {
             layers: vec![PetalLayer {
                 index: 0, count: petal_count, shape: petal_shape,

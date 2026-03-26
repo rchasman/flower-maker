@@ -1,6 +1,75 @@
 use serde::{Deserialize, Serialize};
 
 // ═══════════════════════════════════════════════════════════════════════════
+// BOTANICAL TAXONOMY
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Botanical classification
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Taxonomy {
+    pub family: FlowerFamily,
+    pub genus: String,
+    pub species_name: String,      // specific epithet
+    pub common_name: String,
+    pub botanical_class: BotanicalClass,
+}
+
+impl Default for Taxonomy {
+    fn default() -> Self {
+        Self {
+            family: FlowerFamily::default(),
+            genus: String::new(),
+            species_name: String::new(),
+            common_name: String::new(),
+            botanical_class: BotanicalClass::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum BotanicalClass {
+    #[default]
+    Dicot,       // most flowering plants — 4-5 merous
+    Monocot,     // lilies, orchids, grasses — 3 merous
+    Magnoliid,   // magnolias, water lilies — spiral parts
+    Basal,       // primitive angiosperms
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum FlowerFamily {
+    #[default]
+    Unknown,
+    // Dicots
+    Rosaceae,        // roses, cherries, apples — 5 petals, many stamens
+    Asteraceae,      // daisies, sunflowers — composite heads (ray + disc)
+    Fabaceae,        // peas, beans — papilionaceous, bilateral
+    Lamiaceae,       // mints, lavender — bilateral, tubular
+    Ranunculaceae,   // buttercups, anemones — variable parts, many stamens
+    Solanaceae,      // nightshades, petunias — 5-merous, fused
+    Brassicaceae,    // mustards — 4 petals cruciform
+    Malvaceae,       // hibiscus, hollyhock — 5 petals, column of stamens
+    Caryophyllaceae, // carnations, pinks — 5 notched petals
+    Ericaceae,       // heathers, rhododendrons — bell/urn shaped
+    Papaveraceae,    // poppies — 4 petals, papery
+    Violaceae,       // violets — bilateral, spurred
+    Primulaceae,     // primroses — 5 petals, central eye
+    Geraniaceae,     // geraniums — 5 petals, radial
+    Boraginaceae,    // forget-me-nots — 5 petals, coiled cyme
+    Convolvulaceae,  // morning glories — funnel/trumpet shaped
+    Apiaceae,        // umbels (Queen Anne's lace) — tiny flowers in clusters
+    Caprifoliaceae,  // honeysuckles — tubular, bilateral
+    Hydrangeaceae,   // hydrangeas — 4-5 petal clusters
+    Magnoliaceae,    // magnolias — many tepals, spiral
+    // Monocots
+    Orchidaceae,     // orchids — bilateral, labellum, 3+3 tepals
+    Liliaceae,       // lilies — 6 tepals, 2 whorls, radial
+    Iridaceae,       // iris, crocus — 3+3, often bearded
+    Amaryllidaceae,  // amaryllis, daffodils — 6 tepals, corona
+    Asparagaceae,    // hyacinths, agave — 6 tepals, bell-shaped
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Complete Flower Spec — the top-level structure AI generates
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -8,7 +77,8 @@ use serde::{Deserialize, Serialize};
 #[serde(default)]
 pub struct FlowerSpec {
     pub name: String,
-    pub species: String,
+    pub species: String,          // kept for backward compat
+    pub taxonomy: Taxonomy,       // structured botanical classification
     pub petals: PetalSystem,
     pub reproductive: ReproductiveSystem,
     pub structure: StructureSystem,
@@ -24,6 +94,7 @@ impl Default for FlowerSpec {
         Self {
             name: String::new(),
             species: String::new(),
+            taxonomy: Taxonomy::default(),
             petals: PetalSystem::default(),
             reproductive: ReproductiveSystem::default(),
             structure: StructureSystem::default(),
