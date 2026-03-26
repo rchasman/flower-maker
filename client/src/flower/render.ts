@@ -102,7 +102,7 @@ export type FlowerPlan = {
       texture: string;
       textureHighlight: number;
       textureEdge: number;
-      gradientStops: ReadonlyArray<{ position: number; color: number; cmds: DrawCmd[] }>;
+      gradientStops: ReadonlyArray<{ position: number; color: number; blendedColor: number; cmds: DrawCmd[] }>;
     }>;
     opacity: number;
   }>;
@@ -473,6 +473,14 @@ function smoothCmds(points: Vec2[]): DrawCmd[] {
 const PETAL_SEGMENTS = 14;
 const BASE_OFFSET = 0.08;
 
+/** Normalize spec-space petal dimensions to unit flower space. */
+function normalizePetalDims(length: number, width: number, radialOffset = 1.0) {
+  return {
+    petalLen: Math.max(0.18, Math.min(0.7, length * 0.25)) * radialOffset,
+    petalW: Math.max(0.05, Math.min(0.3, width * 0.1)) * (0.7 + 0.3 * radialOffset),
+  };
+}
+
 /**
  * Generate a petal outline at angle θ, in unit flower space (radius = 1).
  * The outline is a closed path of smooth cubic Bézier curves whose shape
@@ -489,9 +497,7 @@ function generatePetal(
   seed: number,
   radialOffset: number = 1.0, // phyllotaxis: 0..1, scales length + base distance
 ): DrawCmd[] {
-  // Normalize dimensions to unit flower space, scaled by radialOffset
-  const petalLen = Math.max(0.18, Math.min(0.7, length * 0.25)) * radialOffset;
-  const petalW = Math.max(0.05, Math.min(0.3, width * 0.1)) * (0.7 + 0.3 * radialOffset);
+  const { petalLen, petalW } = normalizePetalDims(length, width, radialOffset);
   const baseOff = BASE_OFFSET * radialOffset;
 
   // Combine spec edge with any intrinsic edge from shape
@@ -577,8 +583,7 @@ function generatePetalPartial(
   radialOffset: number,
   startT: number,
 ): DrawCmd[] {
-  const petalLen = Math.max(0.18, Math.min(0.7, length * 0.25)) * radialOffset;
-  const petalW = Math.max(0.05, Math.min(0.3, width * 0.1)) * (0.7 + 0.3 * radialOffset);
+  const { petalLen, petalW } = normalizePetalDims(length, width, radialOffset);
   const baseOff = BASE_OFFSET * radialOffset;
   const effectiveEdge = edge !== "Smooth" ? edge : (intrinsicEdge(shape) ?? "Smooth");
 
@@ -657,24 +662,16 @@ function midribPoint(
   ];
 }
 
-/**
- * Compute a point offset laterally from the midrib at parameter t.
- * lateralFrac ∈ [-1,1] controls how far across the petal width.
- */
+/** Compute a point offset laterally from the midrib at parameter t. */
 function offsetPoint(
   t: number, lateralFrac: number, petalLen: number, petalW: number,
   curvature: number, curl: number, cosA: number, sinA: number,
 ): Vec2 {
-  const along = BASE_OFFSET + t * petalLen;
-  const bend = curvature * 0.15 * Math.sin(Math.PI * t);
-  const curlDisp = curl > 0 && t > 0.65
-    ? curl * Math.pow((t - 0.65) / 0.35, 2) * -0.12
-    : 0;
-  const localX = along + curlDisp;
-  const localY = bend + lateralFrac * petalW * 0.7;
+  const [mx, my] = midribPoint(t, petalLen, curvature, curl, cosA, sinA);
+  const offset = lateralFrac * petalW * 0.7;
   return [
-    cosA * localX - sinA * localY,
-    sinA * localX + cosA * localY,
+    mx - sinA * offset,
+    my + cosA * offset,
   ];
 }
 
@@ -716,8 +713,7 @@ function generatePetalVein(
   angle: number, length: number, curvature: number, curl: number,
   veinPattern: string, width: number, seed: number,
 ): DrawCmd[] {
-  const petalLen = Math.max(0.18, Math.min(0.7, length * 0.25));
-  const petalW = Math.max(0.05, Math.min(0.3, width * 0.1));
+  const { petalLen, petalW } = normalizePetalDims(length, width);
   const cosA = Math.cos(angle);
   const sinA = Math.sin(angle);
 
@@ -1451,16 +1447,18 @@ export function createFlowerPlan(
             ? layer.gradientStops.map((stop, si) => {
                 const stopScattered = scatterColor(stop.color, 0.04, i * 5.1 + si * 3.7);
                 const stopLit = lightTint(stopScattered, angle);
+                const cmds = si === 0
+                  ? [] as DrawCmd[]
+                  : generatePetalPartial(
+                      angle, layer.shape, layer.edgeStyle,
+                      effLen, effWid, effCurv, effCurl,
+                      petalSeed, radialOffset, stop.position,
+                    );
                 return {
                   position: stop.position,
                   color: stopLit,
-                  cmds: si === 0
-                    ? [] as DrawCmd[] // base stop uses the full petal cmds
-                    : generatePetalPartial(
-                        angle, layer.shape, layer.edgeStyle,
-                        effLen, effWid, effCurv, effCurl,
-                        petalSeed, radialOffset, stop.position,
-                      ),
+                  blendedColor: si === 0 ? stopLit : lerpColor(lit, stopLit, 0.5 + (si - 1) * 0.15),
+                  cmds,
                 };
               })
             : [];

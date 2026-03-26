@@ -9,7 +9,6 @@ import { Graphics } from "pixi.js";
 import {
   darkenColor,
   lightenColor,
-  lerpColor,
   type FlowerPlan,
   type ArrangementPlan,
   type DrawCmd,
@@ -79,21 +78,12 @@ export function drawPetals(
       drawCmds(g, petal.cmds, scale, ox, oy);
       g.fill({ color: petal.color, alpha: alpha * layer.opacity });
 
-      // Gradient overlays: for each stop beyond the first, draw its partial
-      // sub-path filled with a blended color at decreasing alpha so the
-      // base-to-tip transition looks smooth and organic
-      if (petal.gradientStops.length >= 2) {
-        petal.gradientStops.slice(1).map((stop, si) => {
-          if (stop.cmds.length === 0) return null;
-          // Blend toward the stop color; earlier stops are more subtle
-          const blendT = 0.5 + si * 0.15;
-          const blended = lerpColor(petal.color, stop.color, blendT);
-          // Alpha fades: closer-to-tip stops are more transparent for a natural taper
-          const stopAlpha = alpha * layer.opacity * (0.65 - si * 0.1);
-          drawCmds(g, stop.cmds, scale, ox, oy);
-          g.fill({ color: blended, alpha: Math.max(0.15, stopAlpha) });
-          return null;
-        });
+      for (let si = 1; si < petal.gradientStops.length; si++) {
+        const stop = petal.gradientStops[si]!;
+        if (stop.cmds.length === 0) continue;
+        const stopAlpha = alpha * layer.opacity * (0.65 - (si - 1) * 0.1);
+        drawCmds(g, stop.cmds, scale, ox, oy);
+        g.fill({ color: stop.blendedColor, alpha: Math.max(0.15, stopAlpha) });
       }
 
       drawCmds(g, petal.cmds, scale, ox + lightOffsetX, oy + lightOffsetY);

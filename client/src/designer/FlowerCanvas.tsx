@@ -101,11 +101,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const planCacheRef = useRef<Map<number, { key: string; plan: FlowerPlan | ArrangementPlan; isArrangement: boolean }>>(new Map());
 
     // Dirty-flag tracking: skip expensive g.clear() + redraw when nothing visual changed.
-    const drawnStateRef = useRef<Map<number, { planKey: string; scale: number; alpha: number; selected: boolean; hasAura: boolean }>>(new Map());
-
-    // Revision counter — bumped when specs/constituents/meta change, avoids
-    // recomputing JSON.stringify cache keys every frame in getPlan.
-    const dataRevisionRef = useRef(0);
+    const drawnStateRef = useRef<Map<number, { scale: number; alpha: number; selected: boolean; hasAura: boolean }>>(new Map());
 
     // Keep refs in sync without re-running effects
     selectedIdRef.current = selectedId;
@@ -147,21 +143,21 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
       specMapRef.current = specs;
       planCacheRef.current.clear();
       drawnStateRef.current.clear();
-      dataRevisionRef.current++;
+
     }, []);
 
     const setConstituentMap = useCallback((constituents: Map<number, ConstituentEntry[]>) => {
       constituentMapRef.current = constituents;
       planCacheRef.current.clear();
       drawnStateRef.current.clear();
-      dataRevisionRef.current++;
+
     }, []);
 
     const setArrangementMetaMap = useCallback((meta: Map<number, ArrangementMeta>) => {
       arrangementMetaMapRef.current = meta;
       planCacheRef.current.clear();
       drawnStateRef.current.clear();
-      dataRevisionRef.current++;
+
     }, []);
 
     const updateFlowers = useCallback(
@@ -213,20 +209,18 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
 
           const r = FLOWER_BASE_RADIUS * flower.scale;
           const alpha = flower.alpha;
-          const { plan, isArrangement, key: planKey } = getPlan(flower.sid);
+          const { plan, isArrangement } = getPlan(flower.sid);
           const isSelected = selectedIdRef.current === flower.sid;
-          const hasAura = flower.has_glow || flower.has_aura
-            || (!isArrangement && (plan as FlowerPlan).aura != null);
 
           const prev = drawnState.get(flower.sid);
           const needsRedraw = !prev
-            || prev.planKey !== planKey
             || prev.scale !== flower.scale
             || prev.alpha !== flower.alpha
-            || prev.selected !== isSelected
-            || prev.hasAura !== hasAura;
+            || prev.selected !== isSelected;
 
           if (needsRedraw) {
+            const hasAura = flower.has_glow || flower.has_aura
+              || (!isArrangement && (plan as FlowerPlan).aura != null);
             const liveColor = resolveColor(flower);
             const hitRadius = isArrangement ? r * 2.5 : r * 1.8;
             g.hitArea = new Circle(0, 0, hitRadius);
@@ -265,7 +259,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
               drawFlowerFromPlan(g, plan as FlowerPlan, r, alpha);
             }
 
-            drawnState.set(flower.sid, { planKey, scale: flower.scale, alpha: flower.alpha, selected: isSelected, hasAura });
+            drawnState.set(flower.sid, { scale: flower.scale, alpha: flower.alpha, selected: isSelected, hasAura });
           }
 
           g.position.set(flower.x, flower.y);
