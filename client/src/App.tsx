@@ -4,6 +4,7 @@ import { SessionProvider } from "./session/SessionProvider.tsx";
 import { NameGate } from "./session/NameGate.tsx";
 import { FlowerGrid } from "./homepage/FlowerGrid.tsx";
 import { DesignerView } from "./designer/DesignerView.tsx";
+import { ChatPinup } from "./social/ChatPinup.tsx";
 
 type View = "grid" | "designer";
 
@@ -42,6 +43,8 @@ export function App() {
 
           {/* Atmosphere — single compositing layer for dot grid, vignette, scanlines */}
           <div className="tui-atmosphere" />
+
+          <ChatPinup />
         </div>
       </NameGate>
     </SessionProvider>
