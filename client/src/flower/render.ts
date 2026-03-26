@@ -1022,10 +1022,14 @@ function computePetalAngles(
   }
 }
 
+/** Clamp a value between 0 and 1. */
+const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
+
 /** Create a complete, scale-independent rendering plan from a flower spec. */
 export function createFlowerPlan(
   spec: string | undefined,
   sid: number,
+  growthProgress = 1.0,
 ): FlowerPlan {
   const raw = parseRawSpec(spec);
   const parsed = parseFlowerSpec(raw);
@@ -1035,13 +1039,26 @@ export function createFlowerPlan(
     return { sepals: [], layers: [], center: EMPTY_CENTER, stem: null, leaves: [], dewdrops: [], aura: null, particles: [] };
   }
 
+  // ── Growth progress sub-phases ──
+  const stemProgress = clamp01((growthProgress - 0.1) / 0.2);     // 0@0.1, 1@0.3
+  const leafProgress = clamp01((growthProgress - 0.3) / 0.2);     // 0@0.3, 1@0.5
+  const sepalProgress = clamp01((growthProgress - 0.5) / 0.1);    // 0@0.5, 1@0.6
+  const centerProgress = clamp01((growthProgress - 0.85) / 0.1);  // 0@0.85, 1@0.95
+  const effectProgress = clamp01((growthProgress - 0.95) / 0.05); // 0@0.95, 1@1.0
+
   const baseColor =
     parsed.layers[0]?.color ?? fallbackColor(sid);
 
   // ── Petal layers (outer first for correct z-order) ──
   let cumulativeOffset = sidHash(sid, 5) * Math.PI * 2;
 
+  const totalLayers = parsed.layers.length;
   const layers = parsed.layers.map((layer, layerIdx) => {
+    // Outer layers open first: each layer gets a staggered window within 0.6-0.85
+    const layerStart = 0.6 + (layerIdx / Math.max(1, totalLayers)) * 0.15;
+    const layerEnd = layerStart + 0.1;
+    const layerProgress = clamp01((growthProgress - layerStart) / (layerEnd - layerStart));
+
     const count = Math.max(1, Math.min(55, layer.count));
     cumulativeOffset += layer.angularOffset;
 
@@ -1054,70 +1071,92 @@ export function createFlowerPlan(
       count, cumulativeOffset, layer.arrangement, parsed.symmetry, sid, layerIdx,
     );
 
-    const petals = petalAngles.map((angle, i) => {
-      const scattered = scatterColor(layerColor, 0.06, i * 7.3 + layerIdx * 13.1);
-      const lit = lightTint(scattered, angle);
-      return {
-        cmds: generatePetal(
-          angle,
-          layer.shape,
-          layer.edgeStyle,
-          layer.length,
-          layer.width,
-          layer.curvature + layer.droop * 0.3,
-          layer.curl,
-          sidHash(sid, 10 + layerIdx * 100 + i),
-        ),
-        angle,
-        veinCmds: generatePetalVein(angle, layer.length, layer.curvature + layer.droop * 0.3, layer.curl),
-        color: lit,
-        highlightColor: lightenColor(lit, 0.18),
-        outlineColor: darkenColor(lit, 0.55),
-        veinColor: darkenColor(lit, 0.6),
+    // Scale petal dimensions by growth: 0.3 (bud) → 1.0 (full)
+    const petalLenScale = 0.3 + 0.7 * layerProgress;
+    // Curvature: bud-like (+0.8 cupping) → spec value as petals open
+    const budCurvatureBoost = 0.8 * (1 - layerProgress);
+
+    const petals = layerProgress > 0
+      ? petalAngles.map((angle, i) => {
+          const scattered = scatterColor(layerColor, 0.06, i * 7.3 + layerIdx * 13.1);
+          const lit = lightTint(scattered, angle);
+          return {
+            cmds: generatePetal(
+              angle,
+              layer.shape,
+              layer.edgeStyle,
+              layer.length * petalLenScale,
+              layer.width * petalLenScale,
+              layer.curvature + layer.droop * 0.3 + budCurvatureBoost,
+              layer.curl,
+              sidHash(sid, 10 + layerIdx * 100 + i),
+            ),
+            angle,
+            veinCmds: generatePetalVein(angle, layer.length * petalLenScale, layer.curvature + layer.droop * 0.3 + budCurvatureBoost, layer.curl),
+            color: lit,
+            highlightColor: lightenColor(lit, 0.18),
+            outlineColor: darkenColor(lit, 0.55),
+            veinColor: darkenColor(lit, 0.6),
+          };
+        })
+      : [];
+
+    return { petals, opacity: layer.opacity * layerProgress };
+  });
+
+  // ── Center (pistil + stamens) — scale by centerProgress ──
+  const fullCenter: CenterPlan = buildCenter(parsed, baseColor, sid);
+  const center: CenterPlan = centerProgress <= 0
+    ? EMPTY_CENTER
+    : {
+        discRadius: fullCenter.discRadius * centerProgress,
+        discColor: fullCenter.discColor,
+        highlightRadius: fullCenter.highlightRadius * centerProgress,
+        highlightColor: fullCenter.highlightColor,
+        stamens: fullCenter.stamens.map(s => ({
+          ...s,
+          length: s.length * centerProgress,
+          antherRadius: s.antherRadius * centerProgress,
+        })),
       };
-    });
 
-    return { petals, opacity: layer.opacity };
-  });
-
-  // ── Center (pistil + stamens) ──
-  // Skip center when no petals yet (mid-stream: only stem/foliage so far)
-  const center: CenterPlan = buildCenter(parsed, baseColor, sid);
-
-  // ── Sepals (behind petals) ──
+  // ── Sepals (behind petals) — fade in with sepalProgress ──
   const sepalCount = parsed.sepals.length;
-  const sepals = parsed.sepals.map((s, i) => {
-    const angle =
-      (i / Math.max(1, sepalCount)) * Math.PI * 2 + cumulativeOffset * 0.5;
-    const sepalLen = 0.3 + s.length * 0.6;
-    return {
-      cmds: generatePetal(
-        angle,
-        "Lanceolate",
-        "Smooth",
-        sepalLen,
-        0.3,
-        0.1,
-        0,
-        sidHash(sid, 50 + i),
-      ),
-      color: s.color ?? 0x2d5a27,
-    };
-  });
+  const sepals = sepalProgress > 0
+    ? parsed.sepals.map((s, i) => {
+        const angle =
+          (i / Math.max(1, sepalCount)) * Math.PI * 2 + cumulativeOffset * 0.5;
+        const sepalLen = 0.3 + s.length * 0.6;
+        return {
+          cmds: generatePetal(
+            angle,
+            "Lanceolate",
+            "Smooth",
+            sepalLen,
+            0.3,
+            0.1,
+            0,
+            sidHash(sid, 50 + i),
+          ),
+          color: s.color ?? 0x2d5a27,
+        };
+      })
+    : [];
 
   // ── Stem + leaves (only when spec contains stem/foliage data) ──
   const stemData = parseSpecStem(raw);
   const foliage = parseFoliage(raw);
-  const stemLen = stemData ? Math.max(0.6, Math.min(1.8, stemData.height * 1.4)) : 0;
+  const fullStemLen = stemData ? Math.max(0.6, Math.min(1.8, stemData.height * 1.4)) : 0;
+  const stemLen = fullStemLen * stemProgress;
 
   const effects = parseEffects(raw);
 
-  // ── Stem + thorns ──
-  const thornPlans: ThornPlan[] = stemData && effects.thorns
+  // ── Stem + thorns — only visible when stem is growing ──
+  const thornPlans: ThornPlan[] = stemData && effects.thorns && stemProgress > 0
     ? generateThorns(0, stemLen, 0, 0, stemData.curvature, effects.thorns)
     : [];
 
-  const stem: StemPlan | null = stemData
+  const stem: StemPlan | null = stemData && stemProgress > 0
     ? {
         cmds: generateStem(0, stemLen, 0, 0, stemData.curvature ?? 0.1, Math.max(0.03, Math.min(0.08, (stemData.thickness ?? 0.3) * 0.08)), stemData.color ?? 0x2d5a27, stemData.style),
         color: stemData.color ?? 0x2d5a27,
@@ -1125,24 +1164,32 @@ export function createFlowerPlan(
       }
     : null;
 
-  // Place leaves only when both stem and foliage data exist
-  const leaves: LeafPlan[] = stemData && foliage
+  // Place leaves only when both stem and foliage data exist, scaled by leafProgress
+  const leaves: LeafPlan[] = stemData && foliage && leafProgress > 0
     ? foliage.leaves.map(l => {
         const pt = stemPointAt(0, stemLen, 0, 0, stemData.curvature, l.position);
         const side = l.side === "right" ? -1 : 1;
         const leafAngle = pt.angle + side * (Math.PI * 0.35) + l.angleOffset;
-        const scale = 0.3 + l.size * 0.25;
+        const scale = (0.3 + l.size * 0.25) * leafProgress;
         const leaf = generateLeaf(pt.x, pt.y, leafAngle, scale, foliage);
         return { cmds: leaf.outline, veins: leaf.veins, color: foliage.color };
       })
     : [];
 
-  // ── Dewdrops, aura, particles ──
-  const dewdrops = generateDewdrops(effects.dewdrops, layers, sid);
-  const aura: AuraPlan | null = effects.aura
-    ? { kind: effects.aura.kind, color: effects.aura.color, opacity: effects.aura.opacity, radius: effects.aura.radius }
+  // ── Dewdrops, aura, particles — gated by growth progress ──
+  const allDewdrops = generateDewdrops(effects.dewdrops, layers, sid);
+  const dewdrops = centerProgress > 0
+    ? allDewdrops.slice(0, Math.ceil(allDewdrops.length * centerProgress))
+    : [];
+
+  const aura: AuraPlan | null = effects.aura && effectProgress > 0
+    ? { kind: effects.aura.kind, color: effects.aura.color, opacity: effects.aura.opacity * effectProgress, radius: effects.aura.radius }
     : null;
-  const particles = generateParticleSeeds(effects.particles, sid);
+
+  const allParticles = generateParticleSeeds(effects.particles, sid);
+  const particles = effectProgress > 0
+    ? allParticles.slice(0, Math.ceil(allParticles.length * effectProgress))
+    : [];
 
   return { sepals, layers, center, stem, leaves, dewdrops, aura, particles };
 }
