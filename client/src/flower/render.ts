@@ -482,6 +482,77 @@ function normalizePetalDims(length: number, width: number, radialOffset = 1.0) {
 }
 
 /**
+ * Generate left/right edge points for a petal (or partial petal) in flower space.
+ * Shared by generatePetal and generatePetalPartial.
+ */
+function generatePetalPoints(
+  angle: number, shape: string, edge: string,
+  length: number, width: number, curvature: number, curl: number,
+  seed: number, radialOffset: number = 1.0, startIdx: number = 0,
+): { leftPts: Vec2[]; rightPts: Vec2[] } {
+  const { petalLen, petalW } = normalizePetalDims(length, width, radialOffset);
+  const baseOff = BASE_OFFSET * radialOffset;
+  const effectiveEdge = edge !== "Smooth" ? edge : (intrinsicEdge(shape) ?? "Smooth");
+
+  const cosA = Math.cos(angle);
+  const sinA = Math.sin(angle);
+
+  const leftPts: Vec2[] = [];
+  const rightPts: Vec2[] = [];
+
+  for (let i = startIdx; i <= PETAL_SEGMENTS; i++) {
+    const t = i / PETAL_SEGMENTS;
+    const along = baseOff + t * petalLen;
+    const bend = curvature * 0.15 * Math.sin(Math.PI * t);
+    const curlDisp =
+      curl > 0 && t > 0.65
+        ? curl * Math.pow((t - 0.65) / 0.35, 2) * -0.12
+        : 0;
+
+    const localX = along + curlDisp;
+    const localY = bend;
+    const baseW =
+      petalW * shapeProfile(shape, t) * edgeModifier(effectiveEdge, t, seed);
+    const asym = shape === "Falcate" ? 0.3 * Math.sin(Math.PI * t) : 0;
+    const lw = baseW * (1 + asym);
+    const rw = baseW * (1 - asym);
+
+    leftPts.push([
+      cosA * localX - sinA * (localY + lw),
+      sinA * localX + cosA * (localY + lw),
+    ]);
+    rightPts.push([
+      cosA * localX - sinA * (localY - rw),
+      sinA * localX + cosA * (localY - rw),
+    ]);
+  }
+
+  return { leftPts, rightPts };
+}
+
+/**
+ * Assemble a closed petal outline from left/right edge points.
+ * Left edge runs base→tip, right edge runs tip→base, then close.
+ */
+function assembleOutline(leftPts: Vec2[], rightPts: Vec2[]): DrawCmd[] {
+  const leftCmds = smoothCmds(leftPts);
+  const rightCmds = smoothCmds(rightPts.toReversed());
+
+  const cmds: DrawCmd[] = [...leftCmds];
+
+  if (rightCmds.length > 0 && rightCmds[0]!.op === "M") {
+    const m = rightCmds[0]!;
+    cmds.push({ op: "L", x: m.x, y: m.y });
+    cmds.push(...rightCmds.slice(1));
+  } else {
+    cmds.push(...rightCmds);
+  }
+
+  cmds.push({ op: "Z" });
+  return cmds;
+}
+
+/**
  * Generate a petal outline at angle θ, in unit flower space (radius = 1).
  * The outline is a closed path of smooth cubic Bézier curves whose shape
  * is driven by the botanical PetalShape and EdgeStyle enums.
@@ -497,73 +568,10 @@ function generatePetal(
   seed: number,
   radialOffset: number = 1.0, // phyllotaxis: 0..1, scales length + base distance
 ): DrawCmd[] {
-  const { petalLen, petalW } = normalizePetalDims(length, width, radialOffset);
-  const baseOff = BASE_OFFSET * radialOffset;
-
-  // Combine spec edge with any intrinsic edge from shape
-  const effectiveEdge = edge !== "Smooth" ? edge : (intrinsicEdge(shape) ?? "Smooth");
-
-  const cosA = Math.cos(angle);
-  const sinA = Math.sin(angle);
-
-  const leftPts: Vec2[] = [];
-  const rightPts: Vec2[] = [];
-
-  for (let i = 0; i <= PETAL_SEGMENTS; i++) {
-    const t = i / PETAL_SEGMENTS;
-
-    // Position along centerline (local petal space, +X = outward)
-    const along = baseOff + t * petalLen;
-
-    // Curvature: lateral bend of the centerline (cupped = +, recurved = -)
-    const bend = curvature * 0.15 * Math.sin(Math.PI * t);
-
-    // Curl: tip bends backward (inward toward center)
-    const curlDisp =
-      curl > 0 && t > 0.65
-        ? curl * Math.pow((t - 0.65) / 0.35, 2) * -0.12
-        : 0;
-
-    const localX = along + curlDisp;
-    const localY = bend;
-
-    // Width at this position
-    const baseW =
-      petalW * shapeProfile(shape, t) * edgeModifier(effectiveEdge, t, seed);
-
-    // Falcate asymmetry — one side bulges
-    const asym = shape === "Falcate" ? 0.3 * Math.sin(Math.PI * t) : 0;
-    const lw = baseW * (1 + asym);
-    const rw = baseW * (1 - asym);
-
-    // Rotate from local petal space to flower space
-    leftPts.push([
-      cosA * localX - sinA * (localY + lw),
-      sinA * localX + cosA * (localY + lw),
-    ]);
-    rightPts.push([
-      cosA * localX - sinA * (localY - rw),
-      sinA * localX + cosA * (localY - rw),
-    ]);
-  }
-
-  // Outline: left edge (base→tip), connect to right edge (tip→base), close
-  const leftCmds = smoothCmds(leftPts);
-  const rightCmds = smoothCmds(rightPts.toReversed());
-
-  const cmds: DrawCmd[] = [...leftCmds];
-
-  // Bridge left tip → right tip (skip the MoveTo of right side)
-  if (rightCmds.length > 0 && rightCmds[0]!.op === "M") {
-    const m = rightCmds[0]!;
-    cmds.push({ op: "L", x: m.x, y: m.y });
-    cmds.push(...rightCmds.slice(1));
-  } else {
-    cmds.push(...rightCmds);
-  }
-
-  cmds.push({ op: "Z" });
-  return cmds;
+  const { leftPts, rightPts } = generatePetalPoints(
+    angle, shape, edge, length, width, curvature, curl, seed, radialOffset,
+  );
+  return assembleOutline(leftPts, rightPts);
 }
 
 /**
@@ -583,62 +591,11 @@ function generatePetalPartial(
   radialOffset: number,
   startT: number,
 ): DrawCmd[] {
-  const { petalLen, petalW } = normalizePetalDims(length, width, radialOffset);
-  const baseOff = BASE_OFFSET * radialOffset;
-  const effectiveEdge = edge !== "Smooth" ? edge : (intrinsicEdge(shape) ?? "Smooth");
-
-  const cosA = Math.cos(angle);
-  const sinA = Math.sin(angle);
-
-  // Find the first segment index at or past startT
   const startIdx = Math.max(0, Math.floor(startT * PETAL_SEGMENTS));
-
-  const leftPts: Vec2[] = [];
-  const rightPts: Vec2[] = [];
-
-  Array.from({ length: PETAL_SEGMENTS - startIdx + 1 }, (_, j) => {
-    const i = startIdx + j;
-    const t = i / PETAL_SEGMENTS;
-    const along = baseOff + t * petalLen;
-    const bend = curvature * 0.15 * Math.sin(Math.PI * t);
-    const curlDisp =
-      curl > 0 && t > 0.65
-        ? curl * Math.pow((t - 0.65) / 0.35, 2) * -0.12
-        : 0;
-
-    const localX = along + curlDisp;
-    const localY = bend;
-    const baseW = petalW * shapeProfile(shape, t) * edgeModifier(effectiveEdge, t, seed);
-    const asym = shape === "Falcate" ? 0.3 * Math.sin(Math.PI * t) : 0;
-    const lw = baseW * (1 + asym);
-    const rw = baseW * (1 - asym);
-
-    leftPts.push([
-      cosA * localX - sinA * (localY + lw),
-      sinA * localX + cosA * (localY + lw),
-    ]);
-    rightPts.push([
-      cosA * localX - sinA * (localY - rw),
-      sinA * localX + cosA * (localY - rw),
-    ]);
-    return null;
-  });
-
-  const leftCmds = smoothCmds(leftPts);
-  const rightCmds = smoothCmds(rightPts.toReversed());
-
-  const cmds: DrawCmd[] = [...leftCmds];
-
-  if (rightCmds.length > 0 && rightCmds[0]!.op === "M") {
-    const m = rightCmds[0]!;
-    cmds.push({ op: "L", x: m.x, y: m.y });
-    cmds.push(...rightCmds.slice(1));
-  } else {
-    cmds.push(...rightCmds);
-  }
-
-  cmds.push({ op: "Z" });
-  return cmds;
+  const { leftPts, rightPts } = generatePetalPoints(
+    angle, shape, edge, length, width, curvature, curl, seed, radialOffset, startIdx,
+  );
+  return assembleOutline(leftPts, rightPts);
 }
 
 /**
@@ -712,8 +669,9 @@ function generateLateral(
 function generatePetalVein(
   angle: number, length: number, curvature: number, curl: number,
   veinPattern: string, width: number, seed: number,
+  radialOffset: number = 1.0,
 ): DrawCmd[] {
-  const { petalLen, petalW } = normalizePetalDims(length, width);
+  const { petalLen, petalW } = normalizePetalDims(length, width, radialOffset);
   const cosA = Math.cos(angle);
   const sinA = Math.sin(angle);
 
@@ -1476,7 +1434,7 @@ export function createFlowerPlan(
               radialOffset,
             ),
             angle,
-            veinCmds: generatePetalVein(angle, effLen, effCurv, effCurl, layer.veinPattern, layer.width, sidHash(sid, 50 + layerIdx * 100 + i)),
+            veinCmds: generatePetalVein(angle, effLen, effCurv, effCurl, layer.veinPattern, layer.width, sidHash(sid, 50 + layerIdx * 100 + i), radialOffset),
             color: lit,
             highlightColor: lightenColor(lit, 0.18),
             outlineColor: darkenColor(lit, 0.55),
