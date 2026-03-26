@@ -79,6 +79,23 @@ export function drawPetals(
       drawCmds(g, petal.cmds, scale, ox, oy);
       g.fill({ color: petal.color, alpha: alpha * layer.opacity });
 
+      // Gradient overlays: for each stop beyond the first, draw its partial
+      // sub-path filled with a blended color at decreasing alpha so the
+      // base-to-tip transition looks smooth and organic
+      if (petal.gradientStops.length >= 2) {
+        petal.gradientStops.slice(1).map((stop, si) => {
+          if (stop.cmds.length === 0) return null;
+          // Blend toward the stop color; earlier stops are more subtle
+          const blendT = 0.5 + si * 0.15;
+          const blended = lerpColor(petal.color, stop.color, blendT);
+          // Alpha fades: closer-to-tip stops are more transparent for a natural taper
+          const stopAlpha = alpha * layer.opacity * (0.65 - si * 0.1);
+          drawCmds(g, stop.cmds, scale, ox, oy);
+          g.fill({ color: blended, alpha: Math.max(0.15, stopAlpha) });
+          return null;
+        });
+      }
+
       drawCmds(g, petal.cmds, scale, ox + lightOffsetX, oy + lightOffsetY);
       g.fill({ color: petal.lightColor, alpha: alpha * layer.opacity * 0.18 });
 
@@ -87,6 +104,64 @@ export function drawPetals(
 
       drawCmds(g, petal.cmds, scale, ox, oy);
       g.fill({ color: petal.highlightColor, alpha: alpha * 0.15 });
+
+      // Texture pass — material-specific visual treatment
+      switch (petal.texture) {
+        case "Velvet": {
+          // Edge darkening — thick inner stroke for soft absorbed-light look
+          drawCmds(g, petal.cmds, scale, ox, oy);
+          g.stroke({ color: petal.textureEdge, width: Math.max(1.5, scale * 0.025), alpha: alpha * 0.2 });
+          break;
+        }
+        case "Silk": {
+          // Bright specular band — thin highlight stripe across petal center
+          drawCmds(g, petal.cmds, scale, ox + lightOffsetX * 2, oy + lightOffsetY * 2);
+          g.fill({ color: petal.textureHighlight, alpha: alpha * 0.12 });
+          break;
+        }
+        case "Waxy": {
+          // Sharp specular — bright highlight near petal base
+          drawCmds(g, petal.cmds, scale, ox + lightOffsetX * 1.5, oy + lightOffsetY * 1.5);
+          g.fill({ color: petal.textureHighlight, alpha: alpha * 0.15 });
+          break;
+        }
+        case "Metallic": {
+          // Color-shift: warm/cool offset fills for metallic sheen
+          drawCmds(g, petal.cmds, scale, ox + lightOffsetX, oy + lightOffsetY);
+          g.fill({ color: petal.textureHighlight, alpha: alpha * 0.2 });
+          drawCmds(g, petal.cmds, scale, ox - lightOffsetX, oy - lightOffsetY);
+          g.fill({ color: petal.textureEdge, alpha: alpha * 0.12 });
+          break;
+        }
+        case "Papery": {
+          // Desaturated overlay — muted, translucent look
+          drawCmds(g, petal.cmds, scale, ox, oy);
+          g.fill({ color: petal.textureHighlight, alpha: alpha * 0.08 });
+          break;
+        }
+        case "Glassy":
+        case "Crystalline": {
+          // Sharp specular point — bright white highlight
+          drawCmds(g, petal.cmds, scale, ox + lightOffsetX * 2.5, oy + lightOffsetY * 2.5);
+          g.fill({ color: 0xffffff, alpha: alpha * 0.18 });
+          break;
+        }
+        case "Pearlescent": {
+          // Warm and cool offset fills for rainbow sheen
+          drawCmds(g, petal.cmds, scale, ox + lightOffsetX * 0.8, oy + lightOffsetY * 0.8);
+          g.fill({ color: petal.textureHighlight, alpha: alpha * 0.1 });
+          drawCmds(g, petal.cmds, scale, ox - lightOffsetX * 0.5, oy - lightOffsetY * 0.5);
+          g.fill({ color: petal.textureEdge, alpha: alpha * 0.08 });
+          break;
+        }
+        case "Frosted": {
+          // White edge frost
+          drawCmds(g, petal.cmds, scale, ox, oy);
+          g.stroke({ color: 0xffffff, width: Math.max(1, scale * 0.02), alpha: alpha * 0.15 });
+          break;
+        }
+        // Smooth, Rough, Hairy, Fuzzy, Scaled, Leathery, Powdery — no extra pass
+      }
 
       if (petal.veinCmds.length > 0) {
         drawCmds(g, petal.veinCmds, scale, ox, oy);

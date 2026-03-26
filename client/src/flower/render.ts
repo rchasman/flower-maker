@@ -99,6 +99,10 @@ export type FlowerPlan = {
       lightColor: number;
       shadowColor: number;
       midribGlowColor: number;
+      texture: string;
+      textureHighlight: number;
+      textureEdge: number;
+      gradientStops: ReadonlyArray<{ position: number; color: number; cmds: DrawCmd[] }>;
     }>;
     opacity: number;
   }>;
@@ -151,6 +155,15 @@ export function lightenColor(color: number, amount: number): number {
   const g = Math.min(255, Math.floor(((color >> 8) & 0xff) + 255 * amount));
   const b = Math.min(255, Math.floor((color & 0xff) + 255 * amount));
   return (r << 16) | (g << 8) | b;
+}
+
+/** Linearly interpolate between two packed-int colors. t=0 → a, t=1 → b. */
+export function lerpColor(a: number, b: number, t: number): number {
+  const t1 = Math.max(0, Math.min(1, t));
+  const r = Math.round(((a >> 16) & 0xff) * (1 - t1) + ((b >> 16) & 0xff) * t1);
+  const g = Math.round(((a >> 8) & 0xff) * (1 - t1) + ((b >> 8) & 0xff) * t1);
+  const bl = Math.round((a & 0xff) * (1 - t1) + (b & 0xff) * t1);
+  return (r << 16) | (g << 8) | bl;
 }
 
 /** Per-petal color scatter — deterministic hue/brightness jitter for organic variation. */
@@ -547,6 +560,82 @@ function generatePetal(
   return cmds;
 }
 
+/**
+ * Generate a partial petal path covering [startT, 1.0] along the petal length.
+ * Used for gradient overlays — each stop beyond the first gets rendered as a
+ * sub-path from that stop's position to the tip, layered on top of the base fill.
+ */
+function generatePetalPartial(
+  angle: number,
+  shape: string,
+  edge: string,
+  length: number,
+  width: number,
+  curvature: number,
+  curl: number,
+  seed: number,
+  radialOffset: number,
+  startT: number,
+): DrawCmd[] {
+  const petalLen = Math.max(0.18, Math.min(0.7, length * 0.25)) * radialOffset;
+  const petalW = Math.max(0.05, Math.min(0.3, width * 0.1)) * (0.7 + 0.3 * radialOffset);
+  const baseOff = BASE_OFFSET * radialOffset;
+  const effectiveEdge = edge !== "Smooth" ? edge : (intrinsicEdge(shape) ?? "Smooth");
+
+  const cosA = Math.cos(angle);
+  const sinA = Math.sin(angle);
+
+  // Find the first segment index at or past startT
+  const startIdx = Math.max(0, Math.floor(startT * PETAL_SEGMENTS));
+
+  const leftPts: Vec2[] = [];
+  const rightPts: Vec2[] = [];
+
+  Array.from({ length: PETAL_SEGMENTS - startIdx + 1 }, (_, j) => {
+    const i = startIdx + j;
+    const t = i / PETAL_SEGMENTS;
+    const along = baseOff + t * petalLen;
+    const bend = curvature * 0.15 * Math.sin(Math.PI * t);
+    const curlDisp =
+      curl > 0 && t > 0.65
+        ? curl * Math.pow((t - 0.65) / 0.35, 2) * -0.12
+        : 0;
+
+    const localX = along + curlDisp;
+    const localY = bend;
+    const baseW = petalW * shapeProfile(shape, t) * edgeModifier(effectiveEdge, t, seed);
+    const asym = shape === "Falcate" ? 0.3 * Math.sin(Math.PI * t) : 0;
+    const lw = baseW * (1 + asym);
+    const rw = baseW * (1 - asym);
+
+    leftPts.push([
+      cosA * localX - sinA * (localY + lw),
+      sinA * localX + cosA * (localY + lw),
+    ]);
+    rightPts.push([
+      cosA * localX - sinA * (localY - rw),
+      sinA * localX + cosA * (localY - rw),
+    ]);
+    return null;
+  });
+
+  const leftCmds = smoothCmds(leftPts);
+  const rightCmds = smoothCmds(rightPts.toReversed());
+
+  const cmds: DrawCmd[] = [...leftCmds];
+
+  if (rightCmds.length > 0 && rightCmds[0]!.op === "M") {
+    const m = rightCmds[0]!;
+    cmds.push({ op: "L", x: m.x, y: m.y });
+    cmds.push(...rightCmds.slice(1));
+  } else {
+    cmds.push(...rightCmds);
+  }
+
+  cmds.push({ op: "Z" });
+  return cmds;
+}
+
 /** Generate a midrib vein — single line from petal base to ~80% of tip. */
 function generatePetalVein(
   angle: number, length: number, curvature: number, curl: number
@@ -582,6 +671,7 @@ type ParsedLayer = {
   shape: string;
   arrangement: string;
   edgeStyle: string;
+  texture: string;
   width: number;
   length: number;
   curvature: number;
@@ -590,6 +680,7 @@ type ParsedLayer = {
   opacity: number;
   angularOffset: number;
   color: number | null;
+  gradientStops: Array<{ position: number; color: number }>;
 };
 
 type ParsedSymmetry = {
@@ -646,6 +737,7 @@ function parseFlowerSpec(spec: any): ParsedSpec | null {
         shape: layer.shape ?? "Ovate",
         arrangement: layer.arrangement ?? "Radial",
         edgeStyle: layer.edge_style ?? "Smooth",
+        texture: layer.texture ?? "Smooth",
         width: layer.width ?? 0.5,
         length: layer.length ?? 0.5,
         curvature: layer.curvature ?? 0,
@@ -654,6 +746,10 @@ function parseFlowerSpec(spec: any): ParsedSpec | null {
         opacity: layer.opacity ?? 1,
         angularOffset: ((layer.angular_offset ?? 0) * Math.PI) / 180,
         color: colorToHex(layer.color?.stops?.[0]?.color),
+        gradientStops: (layer.color?.stops ?? [])
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .map((s: any) => ({ position: s.position ?? 0, color: colorToHex(s.color) }))
+          .filter((s: { color: number | null }) => s.color !== null) as Array<{ position: number; color: number }>,
       }),
     );
 
@@ -1038,6 +1134,32 @@ function computePetalAngles(
 
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
 
+/** Compute texture-specific highlight and edge colors for a petal. */
+function textureColors(texture: string, color: number): { textureHighlight: number; textureEdge: number } {
+  switch (texture) {
+    case "Velvet":
+      return { textureHighlight: color, textureEdge: darkenColor(color, 0.3) };
+    case "Silk":
+      return { textureHighlight: lightenColor(color, 0.3), textureEdge: color };
+    case "Waxy":
+      return { textureHighlight: lightenColor(color, 0.4), textureEdge: darkenColor(color, 0.6) };
+    case "Metallic":
+      return { textureHighlight: lightenColor(color, 0.45), textureEdge: darkenColor(coolShift(color), 0.8) };
+    case "Papery":
+      return { textureHighlight: desaturate(color, 0.3), textureEdge: lightenColor(color, 0.1) };
+    case "Glassy":
+      return { textureHighlight: 0xffffff, textureEdge: color };
+    case "Crystalline":
+      return { textureHighlight: 0xffffff, textureEdge: lightenColor(color, 0.2) };
+    case "Pearlescent":
+      return { textureHighlight: warmShift(lightenColor(color, 0.2)), textureEdge: coolShift(color) };
+    case "Frosted":
+      return { textureHighlight: 0xffffff, textureEdge: lightenColor(color, 0.3) };
+    default:
+      return { textureHighlight: color, textureEdge: color };
+  }
+}
+
 /** Linear interpolation within a phase: 0 below start, 1 above end. */
 const phaseProgress = (t: number, start: number, end: number): number =>
   clamp01((t - start) / (end - start));
@@ -1104,6 +1226,28 @@ export function createFlowerPlan(
           const effCurv = layer.curvature + layer.droop * 0.3 + curvJitter + budCurvatureBoost;
           const effCurl = layer.curl + curlJitter;
 
+          const petalSeed = sidHash(sid, 10 + layerIdx * 100 + i);
+
+          // Build gradient stops with scatter+lightTint applied per-petal,
+          // and generate partial sub-paths for each stop beyond the first
+          const gradientStops = layer.gradientStops.length >= 2
+            ? layer.gradientStops.map((stop, si) => {
+                const stopScattered = scatterColor(stop.color, 0.04, i * 5.1 + si * 3.7);
+                const stopLit = lightTint(stopScattered, angle);
+                return {
+                  position: stop.position,
+                  color: stopLit,
+                  cmds: si === 0
+                    ? [] as DrawCmd[] // base stop uses the full petal cmds
+                    : generatePetalPartial(
+                        angle, layer.shape, layer.edgeStyle,
+                        effLen, effWid, effCurv, effCurl,
+                        petalSeed, radialOffset, stop.position,
+                      ),
+                };
+              })
+            : [];
+
           return {
             cmds: generatePetal(
               angle,
@@ -1113,7 +1257,7 @@ export function createFlowerPlan(
               effWid,
               effCurv,
               effCurl,
-              sidHash(sid, 10 + layerIdx * 100 + i),
+              petalSeed,
               radialOffset,
             ),
             angle,
@@ -1125,6 +1269,9 @@ export function createFlowerPlan(
             lightColor: lightenColor(lit, 0.15),
             shadowColor: darkenColor(lit, 0.8),
             midribGlowColor: lightenColor(lit, 0.2),
+            texture: layer.texture,
+            ...textureColors(layer.texture, lit),
+            gradientStops,
           };
         })
       : [];
