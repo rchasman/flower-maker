@@ -101,7 +101,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const planCacheRef = useRef<Map<number, { key: string; plan: FlowerPlan | ArrangementPlan; isArrangement: boolean }>>(new Map());
 
     // Dirty-flag tracking: skip expensive g.clear() + redraw when nothing visual changed.
-    const drawnStateRef = useRef<Map<number, { scale: number; alpha: number; selected: boolean; hasAura: boolean }>>(new Map());
+    const drawnStateRef = useRef<Map<number, { scale: number; alpha: number; selected: boolean }>>(new Map());
 
     // Keep refs in sync without re-running effects
     selectedIdRef.current = selectedId;
@@ -212,16 +212,19 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           const { plan, isArrangement } = getPlan(flower.sid);
           const isSelected = selectedIdRef.current === flower.sid;
 
+          const flowerPlan = !isArrangement ? (plan as FlowerPlan) : null;
+          const hasParticles = flowerPlan != null && flowerPlan.particles.length > 0;
+          const hasAura = flower.has_glow || flower.has_aura
+            || (flowerPlan != null && flowerPlan.aura != null);
+
           const prev = drawnState.get(flower.sid);
           const needsRedraw = !prev
             || prev.scale !== flower.scale
             || prev.alpha !== flower.alpha
-            || prev.selected !== isSelected;
+            || prev.selected !== isSelected
+            || hasParticles; // particles animate every frame
 
           if (needsRedraw) {
-            const hasAura = flower.has_glow || flower.has_aura
-              || (!isArrangement && (plan as FlowerPlan).aura != null);
-            const liveColor = resolveColor(flower);
             const hitRadius = isArrangement ? r * 2.5 : r * 1.8;
             g.hitArea = new Circle(0, 0, hitRadius);
 
@@ -233,7 +236,17 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
               g.stroke({ color: 0xffffff, width: 2, alpha: 0.7 });
             }
 
-            const flowerPlan = !isArrangement ? (plan as FlowerPlan) : null;
+            if (isArrangement) {
+              drawArrangementFromPlan(g, plan as ArrangementPlan, r, alpha);
+            } else {
+              drawFlowerFromPlan(g, plan as FlowerPlan, r, alpha);
+            }
+
+            drawnState.set(flower.sid, { scale: flower.scale, alpha: flower.alpha, selected: isSelected });
+          }
+
+          // Auras render every frame (they use performance.now() for pulsing animation)
+          {
             let ag = auras.get(flower.sid);
             if (hasAura) {
               if (!ag) {
@@ -246,30 +259,25 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
               if (flowerPlan?.aura) {
                 drawAura(ag, flowerPlan, r, alpha);
               } else {
+                const liveColor = resolveColor(flower);
                 ag.circle(0, 0, r + 4);
                 ag.fill({ color: liveColor, alpha: 0.15 * alpha });
               }
             } else if (ag) {
               ag.clear();
             }
-
-            if (isArrangement) {
-              drawArrangementFromPlan(g, plan as ArrangementPlan, r, alpha);
-            } else {
-              drawFlowerFromPlan(g, plan as FlowerPlan, r, alpha);
-            }
-
-            drawnState.set(flower.sid, { scale: flower.scale, alpha: flower.alpha, selected: isSelected, hasAura });
           }
 
           g.position.set(flower.x, flower.y);
           g.rotation = flower.rotation;
 
-          // Aura position tracks the flower even without redraw
-          const ag = auras.get(flower.sid);
-          if (ag) {
-            ag.position.set(flower.x, flower.y);
-            ag.rotation = flower.rotation;
+          // Aura position tracks the flower
+          {
+            const ag = auras.get(flower.sid);
+            if (ag) {
+              ag.position.set(flower.x, flower.y);
+              ag.rotation = flower.rotation;
+            }
           }
 
           const bloomStart = mergeBloomRef.current.get(flower.sid);
