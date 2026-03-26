@@ -503,6 +503,7 @@ function generatePetalPoints(
   for (let i = startIdx; i <= PETAL_SEGMENTS; i++) {
     const t = i / PETAL_SEGMENTS;
     const along = baseOff + t * petalLen;
+    // +curvature = cupped, -curvature = recurved
     const bend = curvature * 0.15 * Math.sin(Math.PI * t);
     const curlDisp =
       curl > 0 && t > 0.65
@@ -1922,16 +1923,7 @@ function generateStem(
 
     const left = pts.map((p, i) => [p[0] + nx * ws[i]!, p[1] + ny * ws[i]!] as Vec2);
     const right = pts.map((p, i) => [p[0] - nx * ws[i]!, p[1] - ny * ws[i]!] as Vec2);
-    const leftCmds = smoothCmds(left);
-    const rightCmds = smoothCmds(right.toReversed());
-
-    const cmds: DrawCmd[] = [...leftCmds];
-    if (rightCmds.length > 0 && rightCmds[0]!.op === "M") {
-      cmds.push({ op: "L", x: rightCmds[0]!.x, y: rightCmds[0]!.y });
-      cmds.push(...rightCmds.slice(1));
-    }
-    cmds.push({ op: "Z" });
-    return cmds;
+    return assembleOutline(left, right);
   }
 
   // ── Zigzag: angular segments ──
