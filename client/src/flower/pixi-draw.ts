@@ -63,18 +63,17 @@ export function drawPetals(
   const shadowOffX = -lightOffsetX * 1.5;
   const shadowOffY = -lightOffsetY * 1.5;
 
-  layers.map((layer, layerIdx) => {
+  for (const [layerIdx, layer] of layers.entries()) {
     // Pass 1: petal overlap depth shadows (inner layers cast onto outer)
     if (layerIdx > 0) {
-      layer.petals.map((petal) => {
+      for (const petal of layer.petals) {
         drawCmds(g, petal.cmds, scale * 1.02, ox + shadowOffX, oy + shadowOffY);
         g.fill({ color: 0x000000, alpha: alpha * 0.06 });
-        return null;
-      });
+      }
     }
 
     // Pass 2: normal petal rendering
-    layer.petals.map((petal) => {
+    for (const petal of layer.petals) {
       drawCmds(g, petal.cmds, scale, ox, oy);
       g.fill({ color: petal.color, alpha: alpha * layer.opacity });
 
@@ -163,11 +162,8 @@ export function drawPetals(
 
       drawCmds(g, petal.cmds, scale, ox, oy);
       g.stroke({ color: petal.outlineColor, width: Math.max(0.3, scale * 0.006), alpha: alpha * layer.opacity * 0.4 });
-
-      return null;
-    });
-    return null;
-  });
+    }
+  }
 }
 
 /** Draw stamens with curved filaments and anther highlights. */
@@ -175,7 +171,7 @@ export function drawStamens(
   g: Graphics, stamens: FlowerPlan["center"]["stamens"],
   scale: number, alpha: number, ox = 0, oy = 0,
 ) {
-  stamens.map((s, i) => {
+  for (const [i, s] of stamens.entries()) {
     const sx = ox + Math.cos(s.angle) * s.length * scale;
     const sy = oy + Math.sin(s.angle) * s.length * scale;
     const midX = ox + (sx - ox) * 0.5;
@@ -199,8 +195,7 @@ export function drawStamens(
     g.stroke({ color: darkenColor(s.antherColor, 0.5), width: Math.max(0.2, scale * 0.004), alpha: alpha * 0.4 });
     g.circle(sx - ar * 0.25, sy - ar * 0.25, ar * 0.35);
     g.fill({ color: 0xffffff, alpha: alpha * 0.25 });
-    return null;
-  });
+  }
 }
 
 /** Draw center disc with outline, radial depth, stippling, and pistil highlight. */
@@ -222,7 +217,7 @@ export function drawCenterDisc(
   g.fill({ color: lightenColor(discColor, 0.15), alpha: alpha * 0.25 });
 
   const stippleCount = Math.max(5, Math.min(16, Math.round(discR * 4)));
-  Array.from({ length: stippleCount }, (_, i) => {
+  for (let i = 0; i < stippleCount; i++) {
     const t = (i + 1) / (stippleCount + 1);
     const r2 = discR * t * 0.85;
     const theta = i * GOLDEN_ANGLE;
@@ -232,8 +227,7 @@ export function drawCenterDisc(
     const dotColor = i % 2 === 0 ? darkenColor(discColor, 0.6) : lightenColor(discColor, 0.1);
     g.circle(dotX, dotY, dotR);
     g.fill({ color: dotColor, alpha: alpha * (0.35 + t * 0.2) });
-    return null;
-  });
+  }
 
   const hlR = center.highlightRadius * scale;
   g.circle(ox + discR * 0.08, oy - discR * 0.12, hlR);
@@ -252,25 +246,23 @@ export function drawAura(g: Graphics, plan: FlowerPlan, r: number, alpha: number
   switch (plan.aura.kind) {
     case "Prismatic":
     case "Rainbow": {
-      [0.6, 0.8, 1.0].map((f, i) => {
+      for (const [i, f] of [0.6, 0.8, 1.0].entries()) {
         const hueShift = [0xff6b9d, 0x67e8f9, 0xc084fc][i]!;
         g.circle(0, 0, auraR * f);
         g.fill({ color: hueShift, alpha: auraAlpha * 0.3 });
-        return null;
-      });
+      }
       break;
     }
     case "Crystal": {
       const sides = 6;
-      Array.from({ length: sides }, (_, i) => {
+      for (let i = 0; i < sides; i++) {
         const a1 = (i / sides) * Math.PI * 2 + now / 3000;
         const a2 = ((i + 1) / sides) * Math.PI * 2 + now / 3000;
         g.moveTo(0, 0);
         g.lineTo(Math.cos(a1) * auraR, Math.sin(a1) * auraR);
         g.lineTo(Math.cos(a2) * auraR, Math.sin(a2) * auraR);
         g.fill({ color: plan.aura!.color, alpha: auraAlpha * (0.3 + 0.1 * Math.sin(now / 400 + i)) });
-        return null;
-      });
+      }
       break;
     }
     case "Flame":
@@ -339,39 +331,36 @@ export function drawFlowerFromPlan(
     drawCmds(g, plan.stem.cmds, scale);
     g.stroke({ color: darkenColor(plan.stem.color, 0.5), width: Math.max(0.4, scale * 0.008), alpha: alpha * 0.45 });
 
-    plan.stem.thorns.map((thorn) => {
+    for (const thorn of plan.stem.thorns) {
       drawCmds(g, thorn.cmds, scale);
       g.fill({ color: thorn.color, alpha: alpha * 0.85 });
       drawCmds(g, thorn.cmds, scale);
       g.stroke({ color: darkenColor(thorn.color, 0.4), width: Math.max(0.3, scale * 0.005), alpha: alpha * 0.5 });
-      return null;
-    });
+    }
   }
 
   // Leaves
-  plan.leaves.map((leaf) => {
+  for (const leaf of plan.leaves) {
     drawCmds(g, leaf.cmds, scale);
     g.fill({ color: leaf.color, alpha: alpha * 0.9 });
     drawCmds(g, leaf.cmds, scale);
     g.stroke({ color: darkenColor(leaf.color, 0.45), width: Math.max(0.3, scale * 0.006), alpha: alpha * 0.4 });
     drawCmds(g, leaf.veins, scale);
     g.stroke({ color: darkenColor(leaf.color, 0.5), width: Math.max(0.4, scale * 0.012), alpha: alpha * 0.65 });
-    return null;
-  });
+  }
 
   // Sepals
-  plan.sepals.map((sepal) => {
+  for (const sepal of plan.sepals) {
     drawCmds(g, sepal.cmds, scale);
     g.fill({ color: sepal.color, alpha: alpha * 0.85 });
     drawCmds(g, sepal.cmds, scale);
     g.stroke({ color: darkenColor(sepal.color, 0.5), width: Math.max(0.3, scale * 0.005), alpha: alpha * 0.35 });
-    return null;
-  });
+  }
 
   // Petal layers, dewdrops, stamens, center disc
   drawPetals(g, plan.layers, scale, alpha);
 
-  plan.dewdrops.map((dd) => {
+  for (const dd of plan.dewdrops) {
     const dx = dd.x * scale;
     const dy = dd.y * scale;
     const dr = dd.radius * scale;
@@ -379,14 +368,13 @@ export function drawFlowerFromPlan(
     g.fill({ color: 0xffffff, alpha: alpha * 0.45 });
     g.circle(dx - dr * 0.3, dy - dr * 0.3, dr * 0.4);
     g.fill({ color: 0xffffff, alpha: alpha * 0.7 });
-    return null;
-  });
+  }
 
   drawStamens(g, plan.center.stamens, scale, alpha);
   drawCenterDisc(g, plan.center, scale, alpha);
 
   // Particles (on top of everything, time-animated)
-  plan.particles.map((p) => {
+  for (const p of plan.particles) {
     const t = now / 1000;
     const drift = p.speed * 0.15;
     const px = (p.x + Math.sin(t * drift * 3 + p.y * 10) * drift) * scale;
@@ -425,8 +413,7 @@ export function drawFlowerFromPlan(
         g.fill({ color: p.color, alpha: alpha * 0.5 });
       }
     }
-    return null;
-  });
+  }
 }
 
 /** Draw a multi-flower arrangement from its pre-computed plan. */
@@ -439,13 +426,12 @@ export function drawArrangementFromPlan(
   const scale = r;
 
   // Pass 1: All stems
-  plan.members.map((member) => {
+  for (const member of plan.members) {
     drawCmds(g, member.stem.cmds, scale);
     g.fill({ color: member.stem.color, alpha: alpha * 0.9 });
     drawCmds(g, member.stem.cmds, scale);
     g.stroke({ color: darkenColor(member.stem.color, 0.5), width: Math.max(0.4, scale * 0.008), alpha: alpha * 0.45 });
-    return null;
-  });
+  }
 
   // Pass 2: Adornment
   if (plan.adornment) {
@@ -463,35 +449,30 @@ export function drawArrangementFromPlan(
   }
 
   // Pass 3: All leaves
-  plan.members.map((member) => {
-    member.leaves.map((leaf) => {
+  for (const member of plan.members) {
+    for (const leaf of member.leaves) {
       drawCmds(g, leaf.cmds, scale);
       g.fill({ color: leaf.color, alpha: alpha * 0.85 });
       drawCmds(g, leaf.cmds, scale);
       g.stroke({ color: darkenColor(leaf.color, 0.45), width: Math.max(0.3, scale * 0.006), alpha: alpha * 0.4 });
-      return null;
-    });
-    return null;
-  });
+    }
+  }
 
   // Pass 4: Flower heads (back to front — hero last so it's on top)
-  plan.members.toReversed().map((member) => {
+  for (const member of plan.members.toReversed()) {
     const flowerScale = scale * member.scale;
     const ox = member.offsetX * scale;
     const oy = member.offsetY * scale;
 
-    member.flowerPlan.sepals.map((sepal) => {
+    for (const sepal of member.flowerPlan.sepals) {
       drawCmds(g, sepal.cmds, flowerScale, ox, oy);
       g.fill({ color: sepal.color, alpha: alpha * 0.85 });
       drawCmds(g, sepal.cmds, flowerScale, ox, oy);
       g.stroke({ color: darkenColor(sepal.color, 0.5), width: Math.max(0.3, flowerScale * 0.005), alpha: alpha * 0.35 });
-      return null;
-    });
+    }
 
     drawPetals(g, member.flowerPlan.layers, flowerScale, alpha, ox, oy);
     drawStamens(g, member.flowerPlan.center.stamens, flowerScale, alpha, ox, oy);
     drawCenterDisc(g, member.flowerPlan.center, flowerScale, alpha, ox, oy);
-
-    return null;
-  });
+  }
 }
