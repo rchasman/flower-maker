@@ -1144,9 +1144,22 @@ export function createFlowerPlan(
       }
     : null;
 
-  // Place leaves only when both stem and foliage data exist
+  // Place leaves — use space colonization for organic arrangement when the
+  // spec doesn't provide explicit positions (the common AI-generated case).
+  const leafInstances: ParsedLeafInstance[] = stemData && foliage
+    ? (foliage.hasExplicitPositions
+        ? foliage.leaves
+        : colonizeLeafPlacements(
+            stemLen,
+            stemData.curvature,
+            foliage.leaves.length,
+            sid,
+            foliage.leaves.map(l => l.size),
+          ))
+    : [];
+
   const leaves: LeafPlan[] = stemData && foliage
-    ? foliage.leaves.map(l => {
+    ? leafInstances.map(l => {
         const pt = stemPointAt(0, stemLen, 0, 0, stemData.curvature, l.position);
         const side = l.side === "right" ? -1 : 1;
         const leafAngle = pt.angle + side * (Math.PI * 0.35) + l.angleOffset;
@@ -1315,6 +1328,7 @@ type ParsedFoliage = {
   serration: string;
   droop: number;
   leaves: ParsedLeafInstance[];
+  hasExplicitPositions: boolean;
 };
 
 const DEFAULT_FOLIAGE: ParsedFoliage = {
@@ -1324,7 +1338,96 @@ const DEFAULT_FOLIAGE: ParsedFoliage = {
     { position: 0.35, side: "left", size: 0.5, angleOffset: 0.05 },
     { position: 0.6, side: "right", size: 0.42, angleOffset: -0.08 },
   ],
+  hasExplicitPositions: true,
 };
+
+/** Space colonization for organic leaf placement.
+ *  Scatters attraction points (representing light) around the stem,
+ *  then greedily assigns leaves to stem positions with most nearby light. */
+function colonizeLeafPlacements(
+  stemLen: number,
+  curvature: number,
+  count: number,
+  sid: number,
+  sizes: readonly number[],
+): ParsedLeafInstance[] {
+  // 1. Generate attraction points — biased upward and outward from stem
+  const attractorAlive = Array.from({ length: 10 }, () => true);
+  const attractorPositions = Array.from({ length: 10 }, (_, i) => {
+    const t = 0.2 + sidHash(sid, 800 + i) * 0.65;
+    const pt = stemPointAt(0, stemLen, 0, 0, curvature, t);
+    const spreadAngle = (sidHash(sid, 810 + i) - 0.5) * Math.PI * 1.2;
+    const spreadDist = 0.15 + sidHash(sid, 820 + i) * 0.35;
+    return {
+      x: pt.x + Math.cos(spreadAngle) * spreadDist,
+      y: pt.y + Math.sin(spreadAngle) * spreadDist,
+    };
+  });
+
+  // 2. For each leaf, find best stem position and growth direction
+  const stemSamples = 20;
+
+  return Array.from({ length: count }, (_, leafIdx) => {
+    // Sample stem positions, score by nearby alive attractors
+    const best = Array.from({ length: stemSamples }, (_, si) => {
+      const t = 0.2 + (si / (stemSamples - 1)) * 0.65;
+      const pt = stemPointAt(0, stemLen, 0, 0, curvature, t);
+
+      // Sum vectors to nearby alive attractors
+      const { vx, vy, score } = attractorPositions.reduce(
+        (acc, a, ai) => {
+          if (!attractorAlive[ai]) return acc;
+          const dx = a.x - pt.x;
+          const dy = a.y - pt.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist >= 0.5 || dist <= 0.01) return acc;
+          const weight = 1 / (dist * dist);
+          return {
+            vx: acc.vx + (dx / dist) * weight,
+            vy: acc.vy + (dy / dist) * weight,
+            score: acc.score + weight,
+          };
+        },
+        { vx: 0, vy: 0, score: 0 },
+      );
+
+      return { t, score, angle: Math.atan2(vy, vx) };
+    }).reduce((best, cur) => (cur.score > best.score ? cur : best));
+
+    const stemPt = stemPointAt(0, stemLen, 0, 0, curvature, best.t);
+
+    // Determine side from growth angle relative to stem tangent
+    const relAngle = best.angle - stemPt.angle;
+    const side: "left" | "right" = Math.sin(relAngle) > 0 ? "left" : "right";
+
+    // Angular offset from the perpendicular
+    const perpAngle = side === "left" ? Math.PI * 0.35 : -Math.PI * 0.35;
+    const angleOffset = Math.max(-0.3, Math.min(0.3,
+      (best.angle - stemPt.angle - perpAngle) * 0.5,
+    ));
+
+    // 3. Remove attractors near this leaf (shadow/claim space)
+    const leafX = stemPt.x + Math.cos(best.angle) * 0.2;
+    const leafY = stemPt.y + Math.sin(best.angle) * 0.2;
+    const killRadius = 0.25;
+    attractorPositions.map((a, ai) => {
+      if (!attractorAlive[ai]) return null;
+      const dx = a.x - leafX;
+      const dy = a.y - leafY;
+      if (dx * dx + dy * dy < killRadius * killRadius) {
+        attractorAlive[ai] = false;
+      }
+      return null;
+    });
+
+    return {
+      position: best.t,
+      side,
+      size: sizes[leafIdx] ?? (0.3 + sidHash(sid, 830 + leafIdx) * 0.4),
+      angleOffset,
+    };
+  });
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseFoliage(spec: any): ParsedFoliage | null {
@@ -1335,9 +1438,11 @@ function parseFoliage(spec: any): ParsedFoliage | null {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rawLeaves = Array.isArray(foliage.leaves) ? foliage.leaves : [];
-    // Handle both AI-generated format (position/side) and Rust-serialized format
-    // (shape/size without position/side). Alternate sides and spread evenly when
-    // position/side are missing.
+    // Detect whether spec provides explicit leaf positions (AI format with
+    // position/side) vs Rust-serialized format (shape/size only). When positions
+    // are missing, createFlowerPlan will use space colonization instead.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const hasExplicitPositions = rawLeaves.some((l: any) => l.position != null && l.side != null);
     const count = Math.min(rawLeaves.length, 6);
     const leaves: ParsedLeafInstance[] = rawLeaves.slice(0, 6).map((l: any, i: number) => ({
       position: Math.max(0.25, Math.min(0.85,
@@ -1366,6 +1471,7 @@ function parseFoliage(spec: any): ParsedFoliage | null {
       serration: foliage.serration ?? firstLeaf?.serration ?? "None",
       droop: foliage.droop ?? firstLeaf?.droop ?? 0.15,
       leaves: leaves.length > 0 ? leaves : DEFAULT_FOLIAGE.leaves,
+      hasExplicitPositions: leaves.length > 0 ? hasExplicitPositions : true,
     };
   } catch {
     return null;
