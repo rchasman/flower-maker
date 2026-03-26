@@ -100,6 +100,10 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const arrangementMetaMapRef = useRef<Map<number, ArrangementMeta>>(new Map());
     const planCacheRef = useRef<Map<number, { key: string; plan: FlowerPlan | ArrangementPlan; isArrangement: boolean }>>(new Map());
 
+    // Dirty-flag tracking: skip expensive g.clear() + redraw when nothing visual changed.
+    // Only position/rotation (free via g.position.set) need per-frame updates.
+    const drawnStateRef = useRef<Map<number, { planKey: string; scale: number; alpha: number; selected: boolean }>>(new Map());
+
     // Keep refs in sync without re-running effects
     selectedIdRef.current = selectedId;
     onFlowerClickRef.current = onFlowerClick;
@@ -139,6 +143,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
 
     const setSpecMap = useCallback((specs: Map<number, string>) => {
       specMapRef.current = specs;
+      // Invalidate drawn state so flowers redraw with new specs
+      drawnStateRef.current.clear();
     }, []);
 
     const setConstituentMap = useCallback((constituents: Map<number, ConstituentEntry[]>) => {
@@ -147,10 +153,10 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
 
     const setArrangementMetaMap = useCallback((meta: Map<number, ArrangementMeta>) => {
       arrangementMetaMapRef.current = meta;
-      // Invalidate cached arrangement plans so they pick up new meta
       planCacheRef.current.forEach((_, sid) => {
         if (constituentMapRef.current.has(sid)) planCacheRef.current.delete(sid);
       });
+      drawnStateRef.current.clear();
     }, []);
 
     const updateFlowers = useCallback(
@@ -162,23 +168,25 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         _activeSids.clear();
         for (let i = 0; i < count; i++) _activeSids.add(pool[i]!.sid);
 
-        // Remove flowers no longer present — direct Map iteration, no intermediate array
         const auras = auraGraphicsRef.current;
+        const drawnState = drawnStateRef.current;
         graphics.forEach((g, sid) => {
           if (_activeSids.has(sid)) return;
           stage.removeChild(g);
           g.destroy();
           graphics.delete(sid);
           planCacheRef.current.delete(sid);
+          drawnState.delete(sid);
           const ag = auras.get(sid);
           if (ag) { stage.removeChild(ag); ag.destroy(); auras.delete(sid); }
         });
 
-        // Update or create flower graphics
         for (let fi = 0; fi < count; fi++) {
           const flower = pool[fi]!;
           let g = graphics.get(flower.sid);
+          let isNew = false;
           if (!g) {
+            isNew = true;
             g = new Graphics();
             g.eventMode = "static";
             g.cursor = "grab";
@@ -203,60 +211,73 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           const r = FLOWER_BASE_RADIUS * flower.scale;
           const alpha = flower.alpha;
           const { plan, isArrangement } = getPlan(flower.sid);
-
-          // Override plan layer colors with live WASM color data
-          // (WASM extracts petal_color from spec and passes it in the render buffer)
-          const liveColor = resolveColor(flower);
-
-          // Expand hit area to cover stem + head
-          const hitRadius = isArrangement ? r * 2.5 : r * 1.8;
-          g.hitArea = new Circle(0, 0, hitRadius);
-
-          g.clear();
-
-          // Selection ring
           const isSelected = selectedIdRef.current === flower.sid;
-          if (isSelected) {
-            const ringR = isArrangement ? r * 1.2 + SELECTION_RING_PAD : r * 0.55 + SELECTION_RING_PAD;
-            g.circle(0, 0, ringR);
-            g.stroke({ color: 0xffffff, width: 2, alpha: 0.7 });
-          }
 
-          // Aura — drawn on a separate Graphics to avoid rectangular bounding-box clipping
-          const flowerPlan = !isArrangement ? (plan as FlowerPlan) : null;
-          const hasAura = flowerPlan?.aura || flower.has_glow || flower.has_aura;
-          let ag = auras.get(flower.sid);
-          if (hasAura) {
-            if (!ag) {
-              ag = new Graphics();
-              auras.set(flower.sid, ag);
-              // Insert aura BEHIND the flower in the stage
-              const flowerIdx = stage.getChildIndex(g);
-              stage.addChildAt(ag, flowerIdx);
+          // Dirty check: skip expensive clear+redraw when nothing visual changed.
+          // Position and rotation are free (g.position.set / g.rotation).
+          const cached = planCacheRef.current.get(flower.sid);
+          const planKey = cached?.key ?? "";
+          const prev = drawnState.get(flower.sid);
+          const needsRedraw = isNew
+            || !prev
+            || prev.planKey !== planKey
+            || prev.scale !== flower.scale
+            || prev.alpha !== flower.alpha
+            || prev.selected !== isSelected;
+
+          if (needsRedraw) {
+            const liveColor = resolveColor(flower);
+            const hitRadius = isArrangement ? r * 2.5 : r * 1.8;
+            g.hitArea = new Circle(0, 0, hitRadius);
+
+            g.clear();
+
+            if (isSelected) {
+              const ringR = isArrangement ? r * 1.2 + SELECTION_RING_PAD : r * 0.55 + SELECTION_RING_PAD;
+              g.circle(0, 0, ringR);
+              g.stroke({ color: 0xffffff, width: 2, alpha: 0.7 });
             }
-            ag.clear();
-            if (flowerPlan?.aura) {
-              drawAura(ag, flowerPlan, r, alpha);
+
+            const flowerPlan = !isArrangement ? (plan as FlowerPlan) : null;
+            const hasAura = flowerPlan?.aura || flower.has_glow || flower.has_aura;
+            let ag = auras.get(flower.sid);
+            if (hasAura) {
+              if (!ag) {
+                ag = new Graphics();
+                auras.set(flower.sid, ag);
+                const flowerIdx = stage.getChildIndex(g);
+                stage.addChildAt(ag, flowerIdx);
+              }
+              ag.clear();
+              if (flowerPlan?.aura) {
+                drawAura(ag, flowerPlan, r, alpha);
+              } else {
+                ag.circle(0, 0, r + 4);
+                ag.fill({ color: liveColor, alpha: 0.15 * alpha });
+              }
+            } else if (ag) {
+              ag.clear();
+            }
+
+            if (isArrangement) {
+              drawArrangementFromPlan(g, plan as ArrangementPlan, r, alpha);
             } else {
-              // Fallback glow
-              ag.circle(0, 0, r + 4);
-              ag.fill({ color: liveColor, alpha: 0.15 * alpha });
+              drawFlowerFromPlan(g, plan as FlowerPlan, r, alpha);
             }
-            ag.position.set(flower.x, flower.y);
-            ag.rotation = flower.rotation;
-          } else if (ag) {
-            ag.clear();
+
+            drawnState.set(flower.sid, { planKey, scale: flower.scale, alpha: flower.alpha, selected: isSelected });
           }
 
-          // Draw the flower or arrangement from its spec-driven plan
-          if (isArrangement) {
-            drawArrangementFromPlan(g, plan as ArrangementPlan, r, alpha);
-          } else {
-            drawFlowerFromPlan(g, plan as FlowerPlan, r, alpha);
-          }
-
+          // Position + rotation are free — always update
           g.position.set(flower.x, flower.y);
           g.rotation = flower.rotation;
+
+          // Aura position tracks the flower even without redraw
+          const ag = auras.get(flower.sid);
+          if (ag) {
+            ag.position.set(flower.x, flower.y);
+            ag.rotation = flower.rotation;
+          }
 
           const bloomStart = mergeBloomRef.current.get(flower.sid);
           if (bloomStart) {
@@ -555,6 +576,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         flowerGraphicsRef.current.clear();
         auraGraphicsRef.current.clear();
         planCacheRef.current.clear();
+        drawnStateRef.current.clear();
         mergeOverlayRef.current = null;
         mergeBloomRef.current.clear();
         mergeParticleGfxRef.current = null;
