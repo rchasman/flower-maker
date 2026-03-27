@@ -514,7 +514,7 @@ function generatePetalPoints(
     const localY = bend;
     // Cupped petals foreshorten — appear narrower toward the tip when viewed from above
     const cupNarrow = curvature > 0
-      ? 1 - curvature * 0.35 * Math.pow(t, 1.5)
+      ? Math.max(0.1, 1 - curvature * 0.35 * Math.pow(t, 1.5))
       : 1;
     const baseW =
       petalW * shapeProfile(shape, t) * edgeModifier(effectiveEdge, t, seed) * cupNarrow;
