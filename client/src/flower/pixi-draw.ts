@@ -72,8 +72,14 @@ export function drawPetals(
       }
     }
 
-    // Pass 2: normal petal rendering
-    for (const petal of layer.petals) {
+    // Pass 2: normal petal rendering (with intra-layer overlap shadows)
+    for (const [petalIdx, petal] of layer.petals.entries()) {
+      // Intra-layer depth: each petal casts a subtle shadow on the one behind it
+      if (petalIdx > 0) {
+        drawCmds(g, petal.cmds, scale * 1.01, ox + shadowOffX * 0.5, oy + shadowOffY * 0.5);
+        g.fill({ color: 0x000000, alpha: alpha * 0.04 });
+      }
+
       drawCmds(g, petal.cmds, scale, ox, oy);
       g.fill({ color: petal.color, alpha: alpha * layer.opacity });
 
