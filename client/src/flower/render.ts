@@ -507,13 +507,17 @@ function generatePetalPoints(
     const bend = curvature * 0.15 * Math.sin(Math.PI * t);
     const curlDisp =
       curl > 0 && t > 0.65
-        ? curl * Math.pow((t - 0.65) / 0.35, 2) * -0.12
+        ? curl * Math.pow((t - 0.65) / 0.35, 2) * -0.3
         : 0;
 
     const localX = along + curlDisp;
     const localY = bend;
+    // Cupped petals foreshorten — appear narrower toward the tip when viewed from above
+    const cupNarrow = curvature > 0
+      ? 1 - curvature * 0.35 * Math.pow(t, 1.5)
+      : 1;
     const baseW =
-      petalW * shapeProfile(shape, t) * edgeModifier(effectiveEdge, t, seed);
+      petalW * shapeProfile(shape, t) * edgeModifier(effectiveEdge, t, seed) * cupNarrow;
     const asym = shape === "Falcate" ? 0.3 * Math.sin(Math.PI * t) : 0;
     const lw = baseW * (1 + asym);
     const rw = baseW * (1 - asym);
@@ -1202,12 +1206,13 @@ function computePetalAngles(
   switch (arrangement) {
     case "Spiral": {
       // Fibonacci spiral — each petal offset by the golden angle (~137.5°)
-      // Phyllotaxis: r_n = c × sqrt(n), normalized so outermost petal = 1.0
+      // Compress radial spread to [0.65, 1.0] so within-layer petals stay similar
+      // size (rose-like concentric rings) rather than sunflower-like tiny→large gradient
       const divergence = (symmetry.divergenceAngle ?? 137.5) * (Math.PI / 180);
       const sqrtCount = Math.sqrt(count);
       return Array.from({ length: count }, (_, i) => ({
         angle: baseOffset + i * divergence,
-        radialOffset: Math.sqrt(i + 1) / sqrtCount,
+        radialOffset: 0.65 + 0.35 * Math.sqrt(i + 1) / sqrtCount,
       }));
     }
 
