@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "../session/SessionProvider.tsx";
 import { useFlowerSessions, useFlowerSpecs, usePartOverrides } from "../spacetime/hooks.ts";
+import { PanelPopout } from "../ui/PanelPopout.tsx";
 import { TemplatePicker } from "./TemplatePicker.tsx";
 import { FlowerChat } from "../ai/FlowerChat.tsx";
 import { OrderFlow } from "../orders/OrderFlow.tsx";
 import { ActivityFeed } from "../orders/ActivityFeed.tsx";
-import { Chat } from "../social/Chat.tsx";
-import { ConnectedUsers } from "../social/ConnectedUsers.tsx";
 import { PartEditor } from "./PartEditor.tsx";
 import { ModelPicker, DEFAULT_MODEL } from "../settings/ModelPicker.tsx";
 import { FlowerCanvas } from "./FlowerCanvas.tsx";
@@ -39,7 +38,7 @@ interface DesignerViewProps {
   onBackToGrid: () => void;
 }
 
-type RightPanel = "order" | "parts" | "chat";
+type RightPanel = "order" | "parts";
 
 export function DesignerView({ onBackToGrid }: DesignerViewProps) {
   const { conn } = useSession();
@@ -50,34 +49,11 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
   const [rightPanel, setRightPanel] = useState<RightPanel>("order");
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [flowerCount, setFlowerCount] = useState(0);
-  const [leftCollapsed, setLeftCollapsed] = useState(() => {
-    try { return localStorage.getItem("sidebar-left-collapsed") === "true"; } catch { return false; }
-  });
-  const [rightCollapsed, setRightCollapsed] = useState(() => {
-    try {
-      const saved = localStorage.getItem("sidebar-right-collapsed");
-      if (saved !== null) return saved === "true";
-      return window.innerWidth < 900;
-    } catch { return false; }
-  });
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [canvasOpen, setCanvasOpen] = useState(false);
   const wasmInitialized = useRef(false);
   const canvasRef = useRef<FlowerCanvasHandle>(null);
   const simRef = useRef<GardenSim | null>(null);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("sidebar-left-collapsed", String(leftCollapsed));
-      localStorage.setItem("sidebar-right-collapsed", String(rightCollapsed));
-    } catch { /* storage unavailable */ }
-  }, [leftCollapsed, rightCollapsed]);
-
-  useEffect(() => {
-    const handleResize = () => {
-      setRightCollapsed(prev => prev || window.innerWidth < 900);
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
 
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
@@ -376,181 +352,90 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
         </span>
       </div>
 
-      {/* ── Main workspace ── */}
-      <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-        {/* Left sidebar — templates + AI chat */}
-        <aside
-          style={{
-            width: leftCollapsed ? "40px" : "clamp(220px, 18vw, 320px)",
-            borderRight: "1px solid var(--tui-border)",
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            background: "var(--tui-bg-1)",
-            transition: "width 0.2s ease",
-          }}
-        >
-          <button
-            onClick={() => setLeftCollapsed(c => !c)}
-            className="tui-btn"
-            style={{
-              padding: "0.125rem 0.5ch",
-              fontSize: "var(--tui-font-size-2xs)",
-              alignSelf: "flex-end",
-              margin: "0.25rem 0.25rem 0 0",
-            }}
-            title={leftCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {leftCollapsed ? "\u00BB" : "\u00AB"}
-          </button>
-          {!leftCollapsed && (
-            <>
-              <div style={{ flex: "0 0 auto", maxHeight: "40%", overflow: "auto" }}>
-                <TemplatePicker conn={conn} model={model} onGenerationStart={handleGenerationStart} onSpecProgress={handleSpecProgress} onFlowerGenerated={handleFlowerGenerated} onGenerationFailed={handleGenerationFailed} />
-              </div>
-              <div style={{ flex: 1, minHeight: 0, borderTop: "1px solid var(--tui-border)" }}>
-                <FlowerChat model={model} onGenerationStart={handleGenerationStart} onSpecProgress={handleSpecProgress} onFlowerGenerated={handleFlowerGenerated} onGenerationFailed={handleGenerationFailed} />
-              </div>
-            </>
-          )}
-        </aside>
-
-        {/* Center — canvas area */}
-        <main
-          style={{
-            flex: 1,
-            minWidth: 0,
-            display: "flex",
-            flexDirection: "column",
-            position: "relative",
-            background: "var(--tui-bg-0)",
-          }}
-        >
-          <div style={{ flex: 1, position: "relative" }}>
-            <FlowerCanvas
-              ref={canvasRef}
-              selectedId={selectedId}
-              onFlowerClick={setSelectedId}
-              onFlowerDrag={handleFlowerDrag}
-              onFlowerDragEnd={handleFlowerDragEnd}
-              onMergeDrop={handleMergeDrop}
-            />
-          </div>
-
-        </main>
-
-        {/* Right sidebar — contextual panels */}
-        <aside
-          style={{
-            width: rightCollapsed ? "40px" : "clamp(220px, 18vw, 320px)",
-            borderLeft: "1px solid var(--tui-border)",
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            background: "var(--tui-bg-1)",
-            transition: "width 0.2s ease",
-          }}
-        >
-          <button
-            onClick={() => setRightCollapsed(c => !c)}
-            className="tui-btn"
-            style={{
-              padding: "0.125rem 0.5ch",
-              fontSize: "var(--tui-font-size-2xs)",
-              alignSelf: "flex-start",
-              margin: "0.25rem 0 0 0.25rem",
-            }}
-            title={rightCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {rightCollapsed ? "\u00AB" : "\u00BB"}
-          </button>
-          {!rightCollapsed && (
-            <>
-              {/* Canvas flower list */}
-              <div
-                style={{
-                  flex: "0 1 auto",
-                  maxHeight: "50%",
-                  overflow: "auto",
-                }}
-              >
-                <ActivityFeed
-                  onMerge={handleMergeDrop}
-                  onSelect={setSelectedId}
-                  selectedId={selectedId}
-                />
-              </div>
-
-              {/* Panel tabs */}
-              <div className="tui-tabs">
-                {(
-                  [
-                    ["order", "ORDER"],
-                    ["parts", "TAXONOMY"],
-                    ["chat", "CHAT"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <button
-                    key={key}
-                    onClick={() => setRightPanel(key)}
-                    className="tui-tab"
-                    data-active={rightPanel === key ? "true" : undefined}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Panel content */}
-              <div style={{ flex: 1, overflow: "auto", padding: "0.75rem 1ch" }}>
-                {rightPanel === "order" && <OrderFlow session={selected} />}
-                {rightPanel === "parts" && selected && (
-                  <PartEditor
-                    sessionId={Number(selected.id)}
-                    spec={selectedSpec?.spec ?? ""}
-                    constituents={partOverrides
-                      .filter(o => o.sessionId === selected.id && o.partPath.startsWith("constituent:"))
-                      .map(o => ({
-                        index: parseInt(o.partPath.split(":")[1] ?? "0", 10),
-                        spec: o.overrideJson,
-                        forkedFrom: o.forkedFrom,
-                      }))
-                      .sort((a, b) => a.index - b.index)
-                    }
-                  />
-                )}
-                {rightPanel === "parts" && !selected && (
-                  <div style={{ color: "var(--tui-fg-4)", fontSize: "var(--tui-font-size-sm)" }}>
-                    select a flower to edit parts.
-                  </div>
-                )}
-                {rightPanel === "chat" && (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "0.75rem",
-                      height: "100%",
-                    }}
-                  >
-                    <ConnectedUsers />
-                    <div
-                      style={{
-                        flex: 1,
-                        minHeight: 0,
-                        borderTop: "1px solid var(--tui-border-dim)",
-                        paddingTop: "0.5rem",
-                      }}
-                    >
-                      <Chat />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </aside>
+      {/* ── Full-width canvas ── */}
+      <div style={{ flex: 1, minHeight: 0, position: "relative", background: "var(--tui-bg-0)" }}>
+        <FlowerCanvas
+          ref={canvasRef}
+          selectedId={selectedId}
+          onFlowerClick={setSelectedId}
+          onFlowerDrag={handleFlowerDrag}
+          onFlowerDragEnd={handleFlowerDragEnd}
+          onMergeDrop={handleMergeDrop}
+        />
       </div>
+
+      {/* ── COMPOSE popout (templates + AI generator) ── */}
+      <PanelPopout
+        label="COMPOSE"
+        open={composeOpen}
+        onToggle={() => setComposeOpen(o => !o)}
+        position="bottom-left"
+        panelClassName="popout-panel--tall"
+      >
+        <div style={{ flex: "0 0 auto", maxHeight: "40%", overflow: "auto" }}>
+          <TemplatePicker conn={conn} model={model} onGenerationStart={handleGenerationStart} onSpecProgress={handleSpecProgress} onFlowerGenerated={handleFlowerGenerated} onGenerationFailed={handleGenerationFailed} />
+        </div>
+        <div style={{ flex: 1, minHeight: 0, borderTop: "1px solid var(--tui-border)" }}>
+          <FlowerChat model={model} onGenerationStart={handleGenerationStart} onSpecProgress={handleSpecProgress} onFlowerGenerated={handleFlowerGenerated} onGenerationFailed={handleGenerationFailed} />
+        </div>
+      </PanelPopout>
+
+      {/* ── CANVAS popout (activity feed + order/taxonomy) ── */}
+      <PanelPopout
+        label="CANVAS"
+        open={canvasOpen}
+        onToggle={() => setCanvasOpen(o => !o)}
+        position="top-right"
+        panelClassName="popout-panel--tall"
+      >
+        <div style={{ flex: "0 1 auto", maxHeight: "45%", overflow: "auto" }}>
+          <ActivityFeed
+            onMerge={handleMergeDrop}
+            onSelect={setSelectedId}
+            selectedId={selectedId}
+          />
+        </div>
+        <div className="tui-tabs">
+          {(
+            [
+              ["order", "ORDER"],
+              ["parts", "TAXONOMY"],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setRightPanel(key)}
+              className="tui-tab"
+              data-active={rightPanel === key ? "true" : undefined}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="popout-body popout-body--padded">
+          {rightPanel === "order" && <OrderFlow session={selected} />}
+          {rightPanel === "parts" && selected && (
+            <PartEditor
+              sessionId={Number(selected.id)}
+              spec={selectedSpec?.spec ?? ""}
+              constituents={partOverrides
+                .filter(o => o.sessionId === selected.id && o.partPath.startsWith("constituent:"))
+                .map(o => ({
+                  index: parseInt(o.partPath.split(":")[1] ?? "0", 10),
+                  spec: o.overrideJson,
+                  forkedFrom: o.forkedFrom,
+                }))
+                .sort((a, b) => a.index - b.index)
+              }
+            />
+          )}
+          {rightPanel === "parts" && !selected && (
+            <div style={{ color: "var(--tui-fg-4)", fontSize: "var(--tui-font-size-sm)" }}>
+              select a flower to edit parts.
+            </div>
+          )}
+        </div>
+      </PanelPopout>
 
     </div>
   );
