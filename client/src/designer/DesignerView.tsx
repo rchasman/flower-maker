@@ -49,7 +49,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
   const [rightPanel, setRightPanel] = useState<RightPanel>("order");
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [flowerCount, setFlowerCount] = useState(0);
-  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(true);
   const [canvasOpen, setCanvasOpen] = useState(false);
   const wasmInitialized = useRef(false);
   const canvasRef = useRef<FlowerCanvasHandle>(null);
@@ -372,12 +372,10 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
         position="bottom-left"
         panelClassName="popout-panel--tall"
       >
-        <div style={{ flex: "0 0 auto", maxHeight: "40%", overflow: "auto" }}>
+        <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
           <TemplatePicker conn={conn} model={model} onGenerationStart={handleGenerationStart} onSpecProgress={handleSpecProgress} onFlowerGenerated={handleFlowerGenerated} onGenerationFailed={handleGenerationFailed} />
         </div>
-        <div style={{ flex: 1, minHeight: 0, borderTop: "1px solid var(--tui-border)" }}>
-          <FlowerChat model={model} onGenerationStart={handleGenerationStart} onSpecProgress={handleSpecProgress} onFlowerGenerated={handleFlowerGenerated} onGenerationFailed={handleGenerationFailed} />
-        </div>
+        <FlowerChat model={model} onGenerationStart={handleGenerationStart} onSpecProgress={handleSpecProgress} onFlowerGenerated={handleFlowerGenerated} onGenerationFailed={handleGenerationFailed} compact />
       </PanelPopout>
 
       {/* ── CANVAS popout (activity feed + order/taxonomy) ── */}

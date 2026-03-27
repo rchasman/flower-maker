@@ -8,6 +8,7 @@ interface FlowerChatProps {
   onSpecProgress?: (genId: string, specYaml: string) => void;
   onFlowerGenerated?: (genId: string, specYaml: string) => void;
   onGenerationFailed?: (genId: string) => void;
+  compact?: boolean;
 }
 
 function extractName(raw: string): string {
@@ -15,7 +16,7 @@ function extractName(raw: string): string {
   return (parsed?.name as string) ?? "your flower";
 }
 
-export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerGenerated, onGenerationFailed }: FlowerChatProps) {
+export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerGenerated, onGenerationFailed, compact }: FlowerChatProps) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [activeCount, setActiveCount] = useState(0);
@@ -87,6 +88,43 @@ export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerG
       setActiveCount(c => c - 1);
     }
   };
+
+  if (compact) {
+    return (
+      <div
+        style={{
+          padding: "0.375rem 0.5ch",
+          borderTop: "1px solid var(--tui-border)",
+          display: "flex",
+          gap: "0.5ch",
+          alignItems: "center",
+        }}
+      >
+        <span style={{ color: "var(--tui-fg-4)", fontSize: "var(--tui-font-size-2xs)", whiteSpace: "nowrap" }}>AI</span>
+        <div className="tui-input-wrap" style={{ flex: 1 }}>
+          <input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void handleSubmit();
+              }
+            }}
+            placeholder="describe a flower..."
+            className="tui-input"
+          />
+        </div>
+        <button
+          onClick={handleSubmit}
+          disabled={!input.trim()}
+          className={`tui-btn ${input.trim() ? "tui-btn-primary" : ""}`}
+        >
+          {activeCount > 0 ? `GEN(${activeCount})` : "GEN"}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div
