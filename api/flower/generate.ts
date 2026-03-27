@@ -97,7 +97,7 @@ ENUM VALUES (use exact strings):
 
 RULES:
 - Colors use flow syntax: { r: 0.0-1.0, g: 0.0-1.0, b: 0.0-1.0, a: 1.0 }
-- Roses: 3 layers (5 outer, 8 middle, 13 inner) with Spiral arrangement, increasing curvature inward
+- Roses: 3 layers (5 outer, 8 middle, 13 inner) with Spiral arrangement — outer petals recurved (curvature: -0.3, curl: 0.5), middle slightly cupped (0.3), inner tightly cupped (0.7, curl: 0.0)
 - Daisies: 1 layer of 13-21 Ligulate or Spatulate petals, large receptacle (size: 0.7+)
 - Sunflowers: 1 layer of 21-34 Ligulate petals, very large receptacle (size: 0.8+)
 - Orchids: 2 layers — 3 Falcate + 3 Orbicular with angular_offset: 60

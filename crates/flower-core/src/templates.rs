@@ -78,7 +78,7 @@ pub fn rose() -> FlowerTemplate {
                     PetalLayer {
                         index: 0, count: 5, shape: PetalShape::Ovate,
                         arrangement: PetalArrangement::Spiral,
-                        curvature: 0.6, curl: 0.3, texture: SurfaceTexture::Velvet,
+                        curvature: -0.3, curl: 0.5, texture: SurfaceTexture::Velvet,
                         color: ColorGradient { stops: vec![
                             ColorStop { position: 0.0, color: Color::hex("#dc2626") },
                             ColorStop { position: 1.0, color: Color::hex("#991b1b") },
@@ -90,7 +90,7 @@ pub fn rose() -> FlowerTemplate {
                     PetalLayer {
                         index: 1, count: 8, shape: PetalShape::Ovate,
                         arrangement: PetalArrangement::Spiral,
-                        curvature: 0.4, curl: 0.2, texture: SurfaceTexture::Velvet,
+                        curvature: 0.3, curl: 0.2, texture: SurfaceTexture::Velvet,
                         color: ColorGradient { stops: vec![
                             ColorStop { position: 0.0, color: Color::hex("#ef4444") },
                             ColorStop { position: 1.0, color: Color::hex("#dc2626") },
@@ -102,7 +102,7 @@ pub fn rose() -> FlowerTemplate {
                     PetalLayer {
                         index: 2, count: 13, shape: PetalShape::Ovate,
                         arrangement: PetalArrangement::Spiral,
-                        curvature: 0.2, curl: 0.1, texture: SurfaceTexture::Velvet,
+                        curvature: 0.7, curl: 0.0, texture: SurfaceTexture::Velvet,
                         color: ColorGradient { stops: vec![
                             ColorStop { position: 0.0, color: Color::hex("#f87171") },
                             ColorStop { position: 1.0, color: Color::hex("#ef4444") },
