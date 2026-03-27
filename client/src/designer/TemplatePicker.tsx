@@ -74,68 +74,42 @@ export function TemplatePicker({ conn, model, onGenerationStart, onSpecProgress,
         overflow: "hidden",
       }}
     >
-      {/* Header */}
-      <div
-        style={{
-          padding: "0.375rem 1ch",
-          borderBottom: "1px solid var(--tui-border)",
-          fontSize: "var(--tui-font-size-xs)",
-          color: "var(--tui-green)",
-        }}
-      >
-        ── TEMPLATES
-      </div>
-
       {/* Search */}
       <div style={{ padding: "0.375rem 0.5ch", borderBottom: "1px solid var(--tui-border-dim)" }}>
         <div className="tui-input-wrap">
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="search 46 templates..."
+            placeholder="search templates..."
             className="tui-input"
           />
         </div>
       </div>
 
-      {/* Template list */}
+      {/* Template grid */}
       <div
         style={{
           flex: 1,
           overflow: "auto",
-          padding: "0.25rem 0.5ch",
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.375rem",
+          padding: "0.375rem 0.5ch",
         }}
       >
-        {filteredGroups.map(group => (
-          <div key={group.category}>
-            <div
-              style={{
-                fontSize: "var(--tui-font-size-2xs)",
-                fontWeight: 600,
-                color: "var(--tui-fg-3)",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                padding: "0.375rem 0 0.125rem",
-              }}
-            >
-              {group.label} ({group.templates.length})
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
-              {group.templates.map(t => (
-                <TemplateRow
-                  key={t.name}
-                  template={t}
-                  disabled={!conn}
-                  generating={generatingSet.has(t.name)}
-                  onClick={() => { void handleTemplateClick(t); }}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
+        <div className="tui-template-grid">
+          {filteredGroups.map(group => [
+            <div key={`cat-${group.category}`} className="tui-template-category">
+              {group.label}
+            </div>,
+            ...group.templates.map(t => (
+              <TemplateTile
+                key={t.name}
+                template={t}
+                disabled={!conn}
+                generating={generatingSet.has(t.name)}
+                onClick={() => { void handleTemplateClick(t); }}
+              />
+            )),
+          ])}
+        </div>
 
         {filteredGroups.length === 0 && (
           <div
@@ -154,7 +128,7 @@ export function TemplatePicker({ conn, model, onGenerationStart, onSpecProgress,
   );
 }
 
-function TemplateRow({
+function TemplateTile({
   template: t,
   disabled,
   generating,
@@ -165,57 +139,56 @@ function TemplateRow({
   generating: boolean;
   onClick: () => void;
 }) {
+  const gradient = buildGradient(t.colors);
+
   return (
     <motion.button
       onClick={onClick}
       disabled={disabled}
-      className="tui-template-row"
+      className="tui-template-tile"
       data-generating={generating ? "true" : undefined}
-      whileHover={{ x: 2 }}
+      whileHover={{ scale: 1.04 }}
+      whileTap={{ scale: 0.97 }}
       transition={{ duration: 0.1 }}
     >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: "var(--tui-font-size-sm)", fontWeight: 500 }}>
-          {generating ? (
-            <span style={{ color: "var(--tui-purple)" }}>
-              generating {t.name}<span className="tui-generating" />
-            </span>
-          ) : (
-            t.name
-          )}
-        </div>
-        <div
-          style={{
-            fontSize: "var(--tui-font-size-2xs)",
-            color: "var(--tui-fg-4)",
-            fontStyle: "italic",
-          }}
-        >
-          {t.scientific}
-        </div>
-      </div>
-      <div style={{ display: "flex", gap: "2px", flexShrink: 0 }}>
-        {t.colors.slice(0, 4).map(c => (
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: gradient,
+          opacity: 0.18,
+          transition: "opacity 0.15s ease",
+          zIndex: 0,
+        }}
+        className="tui-template-tile__bg"
+      />
+      <span className="tui-template-tile__name">
+        {generating ? (
+          <span style={{ color: "var(--tui-purple)" }}>
+            <span className="tui-generating" />
+          </span>
+        ) : (
+          t.name
+        )}
+      </span>
+      <div className="tui-template-tile__colors">
+        {t.colors.slice(0, 5).map(c => (
           <span
             key={c}
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: colorToHex(c),
-              border: "1px solid var(--tui-border)",
-              display: "inline-block",
-            }}
+            className="tui-template-tile__swatch"
+            style={{ background: colorToHex(c) }}
           />
         ))}
-        {t.colors.length > 4 && (
-          <span style={{ fontSize: "0.5rem", color: "var(--tui-fg-4)", lineHeight: "6px" }}>
-            +{t.colors.length - 4}
-          </span>
-        )}
       </div>
     </motion.button>
   );
+}
+
+function buildGradient(colors: string[]): string {
+  const hexes = colors.slice(0, 3).map(colorToHex);
+  if (hexes.length === 1) return hexes[0]!;
+  if (hexes.length === 2) return `linear-gradient(135deg, ${hexes[0]}, ${hexes[1]})`;
+  return `linear-gradient(135deg, ${hexes[0]}, ${hexes[1]}, ${hexes[2]})`;
 }
 
 function colorToHex(name: string): string {

@@ -741,39 +741,96 @@ body {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   TEMPLATE ROW
+   TEMPLATE GRID — Botanical specimen catalog
    ══════════════════════════════════════════════════════════════════════════ */
 
-.tui-template-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5ch;
-  padding: 0.25rem 0.5ch;
-  background: transparent;
-  border: 1px solid transparent;
+.tui-template-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+}
+
+.tui-template-tile {
+  position: relative;
+  aspect-ratio: 1;
+  border: 1px solid var(--tui-border-dim);
+  border-radius: 2px;
   cursor: pointer;
-  text-align: left;
-  color: var(--tui-fg-1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 4px 5px;
   font-family: var(--tui-font);
-  font-size: var(--tui-font-size-sm);
-  transition: all 0.15s;
-  width: 100%;
+  background: var(--tui-bg-2);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
-.tui-template-row:hover {
-  border-color: var(--tui-border);
-  background: var(--tui-bg-3);
+.tui-template-tile:hover {
+  border-color: var(--tui-border-bright);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
-.tui-template-row[data-generating="true"] {
+.tui-template-tile:hover .tui-template-tile__bg {
+  opacity: 0.32 !important;
+}
+
+.tui-template-tile[data-generating="true"] {
   border-color: var(--tui-purple-dim);
-  color: var(--tui-purple);
-  box-shadow: inset 0 0 12px rgba(196, 181, 253, 0.04);
+  box-shadow: inset 0 0 16px rgba(196, 181, 253, 0.06);
+  animation: tui-tile-pulse 1.8s ease-in-out infinite;
 }
 
-.tui-template-row:disabled {
+@keyframes tui-tile-pulse {
+  0%, 100% { border-color: var(--tui-purple-dim); }
+  50% { border-color: var(--tui-purple); }
+}
+
+.tui-template-tile:disabled {
   opacity: 0.35;
   cursor: default;
+}
+
+.tui-template-tile__name {
+  position: relative;
+  z-index: 1;
+  font-size: var(--tui-font-size-2xs);
+  font-weight: 600;
+  color: var(--tui-fg-0);
+  line-height: 1.15;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.tui-template-tile__colors {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.tui-template-tile__swatch {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+}
+
+.tui-template-category {
+  grid-column: 1 / -1;
+  font-size: var(--tui-font-size-2xs);
+  font-weight: 600;
+  color: var(--tui-fg-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.5rem 0 0.125rem;
+  border-top: 1px solid var(--tui-border-dim);
+}
+
+.tui-template-category:first-child {
+  border-top: none;
+  padding-top: 0.125rem;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -886,6 +943,11 @@ body {
 
 .popout-panel--tall {
   height: clamp(340px, 50vh, 520px);
+}
+
+.popout-panel--compose {
+  width: clamp(300px, 28vw, 420px);
+  height: clamp(340px, 55vh, 560px);
 }
 
 /* ── Header bar ────────────────────────────────────────────────────────── */

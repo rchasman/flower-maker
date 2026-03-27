@@ -370,7 +370,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
         open={composeOpen}
         onToggle={() => setComposeOpen(o => !o)}
         position="bottom-left"
-        panelClassName="popout-panel--tall"
+        panelClassName="popout-panel--compose"
       >
         <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
           <TemplatePicker conn={conn} model={model} onGenerationStart={handleGenerationStart} onSpecProgress={handleSpecProgress} onFlowerGenerated={handleFlowerGenerated} onGenerationFailed={handleGenerationFailed} />
