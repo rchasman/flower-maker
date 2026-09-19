@@ -20,6 +20,7 @@ import {
   wireToWasm,
   handleMerge,
   getCanvasViewport,
+  isMySession,
 } from "../spacetime/bridge.ts";
 import type { FlowerSession, FlowerPartOverride } from "../spacetime/types.ts";
 import { isVariant } from "../spacetime/types.ts";
@@ -94,7 +95,9 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [conn]);
 
-  const mySessions = sessions.filter(s => isVariant(s.status, "Designing"));
+  const mySessions = sessions.filter(
+    s => isVariant(s.status, "Designing") && isMySession(s),
+  );
   const selected: FlowerSession | null =
     mySessions.find(s => Number(s.id) === selectedId) ?? null;
 
@@ -115,41 +118,54 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
       {
         sid: number | null;
         spec: string | null;
-        preCount: number;
+        prompt: string;
+        preExisting: Set<number>;
         lastPushedSpec: string | null;
       }
     >
   >(new Map());
   const genCounter = useRef(0);
+  const claimedSidsRef = useRef(new Set<number>());
+
+  // A generation cannot learn the id of the session its createSession call
+  // made, so it claims the newest own session with the same prompt that did
+  // not exist when it started and that no other generation has claimed.
+  const resolveStreamingSid = useCallback(
+    (entry: {
+      sid: number | null;
+      prompt: string;
+      preExisting: Set<number>;
+    }) => {
+      if (entry.sid !== null) return entry.sid;
+      const candidates = sessionsRef.current.filter(
+        s =>
+          s.prompt === entry.prompt &&
+          !entry.preExisting.has(Number(s.id)) &&
+          !claimedSidsRef.current.has(Number(s.id)),
+      );
+      const newest = candidates[candidates.length - 1];
+      if (!newest) return null;
+      const sid = Number(newest.id);
+      claimedSidsRef.current.add(sid);
+      entry.sid = sid;
+      return sid;
+    },
+    [],
+  );
 
   // Push spec data to canvas whenever specs update, merging any streaming specs.
   // Also persist specs to DB when SIDs are resolved here (fixes race condition).
   useEffect(() => {
-    const currentSessions = sessionsRef.current;
     for (const entry of streamingRef.current.values()) {
-      if (entry.sid === null && entry.spec) {
-        if (currentSessions.length > entry.preCount) {
-          const claimedSids = new Set(
-            [...streamingRef.current.values()]
-              .filter(e => e.sid !== null)
-              .map(e => e.sid!),
-          );
-          const unclaimed = currentSessions.filter(
-            s => Number(s.id) > 0 && !claimedSids.has(Number(s.id)),
-          );
-          if (unclaimed.length > 0) {
-            const resolvedSid = Number(unclaimed[unclaimed.length - 1]!.id);
-            entry.sid = resolvedSid;
-            // SID just resolved — persist the spec to DB
-            if (entry.spec && entry.spec !== entry.lastPushedSpec) {
-              entry.lastPushedSpec = entry.spec;
-              void conn?.reducers.updateFlowerSpec({
-                sessionId: BigInt(resolvedSid),
-                spec: entry.spec,
-              });
-            }
-          }
-        }
+      if (entry.sid !== null || !entry.spec) continue;
+      const resolvedSid = resolveStreamingSid(entry);
+      if (resolvedSid === null) continue;
+      if (entry.spec !== entry.lastPushedSpec) {
+        entry.lastPushedSpec = entry.spec;
+        void conn?.reducers.updateFlowerSpec({
+          sessionId: BigInt(resolvedSid),
+          spec: entry.spec,
+        });
       }
     }
 
@@ -264,34 +280,14 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
       streamingRef.current.set(genId, {
         sid: null,
         spec: null,
-        preCount: sessionsRef.current.length,
+        prompt,
+        preExisting: new Set(sessionsRef.current.map(s => Number(s.id))),
         lastPushedSpec: null,
       });
       void conn?.reducers.createSession({ prompt });
       return genId;
     },
     [conn],
-  );
-
-  const resolveStreamingSid = useCallback(
-    (entry: { sid: number | null; preCount: number }) => {
-      if (entry.sid !== null) return entry.sid;
-      const claimedSids = new Set(
-        [...streamingRef.current.values()]
-          .filter(e => e.sid !== null)
-          .map(e => e.sid!),
-      );
-      const unclaimed = sessionsRef.current.filter(
-        s => !claimedSids.has(Number(s.id)),
-      );
-      if (unclaimed.length > 0 && sessionsRef.current.length > entry.preCount) {
-        const sid = Number(unclaimed[unclaimed.length - 1]!.id);
-        entry.sid = sid;
-        return sid;
-      }
-      return null;
-    },
-    [],
   );
 
   const handleSpecProgress = useCallback(
@@ -375,19 +371,16 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     (genId: string) => {
       const entry = streamingRef.current.get(genId);
       if (!entry) return;
-      resolveStreamingSid(entry);
-      if (entry.sid !== null) {
-        void conn?.reducers.deleteSession({ sessionId: BigInt(entry.sid) });
+      const discard = () => {
+        const sid = resolveStreamingSid(entry);
+        const stillExists = sessionsRef.current.some(s => Number(s.id) === sid);
+        if (sid !== null && stillExists) {
+          void conn?.reducers.deleteSession({ sessionId: BigInt(sid) });
+        }
         streamingRef.current.delete(genId);
-      } else {
-        setTimeout(() => {
-          resolveStreamingSid(entry);
-          if (entry.sid !== null) {
-            void conn?.reducers.deleteSession({ sessionId: BigInt(entry.sid) });
-          }
-          streamingRef.current.delete(genId);
-        }, 2000);
-      }
+      };
+      if (resolveStreamingSid(entry) !== null) discard();
+      else setTimeout(discard, 2000);
     },
     [conn, resolveStreamingSid],
   );
