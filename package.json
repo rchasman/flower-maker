@@ -27,7 +27,7 @@
     "db:publish": "bun scripts/publish.ts --server maincloud",
     "db:publish:local": "bun scripts/publish.ts",
     "db:publish:clear": "bun scripts/publish.ts --server maincloud --clear",
-    "db:generate": "spacetime generate --lang typescript --out-dir client/src/spacetime/module_bindings --module-path server/spacetimedb",
+    "db:generate": "bun scripts/generate.ts",
     "db:deploy": "bun run db:publish && bun run db:generate",
     "db:logs": "spacetime logs flower-picker --server maincloud",
     "build": "bun run --filter '*' build",
