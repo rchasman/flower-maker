@@ -20,6 +20,7 @@ export type PartialAnswers = Record<string, string | boolean>;
 export type AnswerSource = (
   questions: Questions,
   state: { request: string },
+  signal: AbortSignal,
 ) => AsyncIterable<PartialAnswers>;
 
 type Entry = [string, string | boolean];
@@ -38,8 +39,13 @@ function answerValue(
 }
 
 export function jevSource(model: EvaluationModel): AnswerSource {
-  return async function* (questions, state) {
-    const result = await evaluate({ model, state, questions });
+  return async function* (questions, state, signal) {
+    const result = await evaluate({
+      model,
+      state,
+      questions,
+      abortSignal: signal,
+    });
     yield Object.fromEntries(
       Object.entries(result.answers).flatMap(([id, answer]) =>
         answerValue(id, answer),
@@ -157,12 +163,13 @@ async function completeAnswers<T>(output: PromiseLike<T>): Promise<T> {
 }
 
 export function textModelSource(model: LanguageModel): AnswerSource {
-  return async function* (questions, state) {
+  return async function* (questions, state, signal) {
     const result = streamText({
       model,
       instructions: floristInstructions(questions),
       prompt: state.request,
       output: Output.object({ schema: buildAnswerSchema(questions) }),
+      abortSignal: signal,
     });
     for await (const partial of result.partialOutputStream) {
       yield filterPartial(questions, partial);

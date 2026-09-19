@@ -306,6 +306,21 @@ describe("answers", () => {
     expect(first(invented.petals.layers, "layers").shape).toBe(foreign);
   });
 
+  test("the skeleton narrows the open lists: composite outer rings stay Ligulate, bells never Free", () => {
+    const daisy = assemble(FAMILIES.Asteraceae, "invented", {
+      outer_shape: "Ovate",
+    });
+    expect(first(daisy.petals.layers, "layers").shape).toBe("Ligulate");
+    const heather = assemble(FAMILIES.Ericaceae, "invented", {
+      fusion_kind: "Free",
+    });
+    expect(first(heather.petals.layers, "layers").fusion.kind).toBe("Bell");
+    const urn = assemble(FAMILIES.Ericaceae, "invented", {
+      fusion_kind: "Urn",
+    });
+    expect(first(urn.petals.layers, "layers").fusion.kind).toBe("Urn");
+  });
+
   test("an answer changes only the parts it names", () => {
     const plain = assemble(rose, "stylized", {});
     const spotted = assemble(rose, "stylized", { pattern_kind: "Spots" });
@@ -415,13 +430,45 @@ describe("answers", () => {
     });
     expect(spec.name).toBe("Storm Delphinium");
     expect(spec.taxonomy.common_name).toBe("Storm Delphinium");
-    expect(spec.taxonomy.genus).toBe(
-      first(delphinium.scientific.split(" "), "scientific"),
-    );
+    expect(spec.taxonomy.genus).toBe(delphinium.genus);
+    expect(spec.taxonomy.species_name).toBe(delphinium.epithet);
+    expect(spec.species).toBe("Delphinium elatum");
     expect(spec.inflorescence.kind).toBe(
       delphinium.inflorescence ?? "Solitary",
     );
     expect(spec.inflorescence.head_count).toBeGreaterThan(1);
+  });
+
+  const withTemplate = (name: string) => {
+    const template = TEMPLATES.find(t => t.name === name);
+    if (template === undefined) throw new Error(`no ${name} template`);
+    return assembleSpec({
+      profile: FAMILIES[template.family],
+      strangeness: "faithful",
+      answers: {},
+      stageOne: {
+        family: template.family,
+        template: template.name,
+        strangeness: "faithful",
+        mood: "Solar",
+      },
+      seed: 1,
+      template,
+    });
+  };
+
+  test("a hybrid genus keeps its name, not the hybrid marker", () => {
+    const spec = withTemplate("Solidaster");
+    expect(spec.taxonomy.genus).toBe("Solidaster");
+    expect(spec.taxonomy.species_name).toBe("luteus");
+    expect(spec.species).toBe("Solidaster luteus");
+  });
+
+  test("a template with no single species is named by its genus alone", () => {
+    const spec = withTemplate("Spray Rose");
+    expect(spec.taxonomy.genus).toBe("Rosa");
+    expect(spec.taxonomy.species_name).toBe("");
+    expect(spec.species).toBe("Rosa");
   });
 
   test("without a template the name is mood plus noun and the epithet is invented", () => {

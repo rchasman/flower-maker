@@ -74,6 +74,31 @@ describe("handleGenerateWith", () => {
     expect(parsed[1]).toEqual({ error: "model went away" });
   });
 
+  test("cancelling the response aborts the signal the source holds", async () => {
+    const seen = mock((_signal: AbortSignal) => {});
+    const aborted = () => seen.mock.calls.map(([signal]) => signal.aborted);
+    const source: AnswerSource = async function* (questions, _state, signal) {
+      seen(signal);
+      if ("mood" in questions) {
+        yield { family: "Liliaceae", strangeness: "faithful", mood: "Dawn" };
+        return;
+      }
+      await new Promise<void>(resolve =>
+        signal.addEventListener("abort", () => resolve(), { once: true }),
+      );
+    };
+    const response = await handleGenerateWith(() => source)(
+      post({ prompt: "a lily" }),
+    );
+    const reader = response.body?.getReader();
+    if (reader === undefined) throw new Error("no body");
+    const head = await reader.read();
+    expect(head.done).toBe(false);
+    expect(aborted()).toEqual([false, false]);
+    await reader.cancel();
+    expect(aborted()).toEqual([true, true]);
+  });
+
   test("a failure before the first line is a 502", async () => {
     const source: AnswerSource = () => {
       throw new Error("no model");

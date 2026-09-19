@@ -57,6 +57,21 @@ describe("templates", () => {
     },
   );
 
+  test.each(TEMPLATES.map(t => [t.name, t.genus, t.epithet] as const))(
+    "%s has a capitalised one word genus and a lowercase or empty epithet",
+    (_, genus, epithet) => {
+      expect(genus).toMatch(/^[A-Z][a-z]+$/);
+      expect(epithet).toMatch(/^[a-z]*$/);
+    },
+  );
+
+  test.each(TEMPLATES.map(t => [t.name, t.scientific, t.genus] as const))(
+    "%s shows its genus in the scientific display name",
+    (_, scientific, genus) => {
+      expect(scientific.split(" ")).toContain(genus);
+    },
+  );
+
   test.each(
     TEMPLATES.filter(t => t.inflorescence !== undefined).map(
       t => [t.name, t.inflorescence] as const,

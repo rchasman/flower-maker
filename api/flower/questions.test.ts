@@ -85,6 +85,34 @@ describe("stageTwoQuestions", () => {
     expect(options).not.toContain("Bell");
   });
 
+  test("a composite family is never asked its outer shape", () => {
+    STRANGENESS.map(strangeness =>
+      expect(
+        stageTwoQuestions(FAMILIES.Asteraceae, strangeness).outer_shape,
+        strangeness,
+      ).toBeUndefined(),
+    );
+    expect(
+      optionsOf(stageTwoQuestions(FAMILIES.Asteraceae, "invented").inner_shape)
+        .length,
+    ).toBeGreaterThan(1);
+  });
+
+  test("a bell family is never offered a Free corolla", () => {
+    [FAMILIES.Ericaceae, FAMILIES.Campanulaceae].map(profile =>
+      STRANGENESS.map(strangeness => {
+        const options = optionsOf(
+          stageTwoQuestions(profile, strangeness).fusion_kind,
+        );
+        expect(options, `${profile.key} ${strangeness}`).not.toContain("Free");
+        expect(options, `${profile.key} ${strangeness}`).toContain("Bell");
+      }),
+    );
+    expect(
+      optionsOf(stageTwoQuestions(FAMILIES.Rosaceae, "invented").fusion_kind),
+    ).toContain("Free");
+  });
+
   test("a question whose legal list has one option is not asked", () => {
     expect(iris.serrations).toHaveLength(1);
     expect(stageTwoQuestions(iris, "faithful").serration).toBeUndefined();

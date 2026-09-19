@@ -31,6 +31,7 @@ import {
   STEM_HEIGHT_DESCRIPTIONS,
   STEM_THICKNESS_DESCRIPTIONS,
   WIDTH_CLASS_DESCRIPTIONS,
+  legalOptions,
   type StageTwoAnswers,
   type StageTwoId,
 } from "./assemble.ts";
@@ -413,10 +414,13 @@ function choiceOptions(
   hint: string | undefined,
 ): readonly string[] {
   const listName = PROFILE_LIST_FOR_ANSWER[id];
-  const legal =
+  const legal = legalOptions(
+    profile,
+    id,
     listName === undefined
       ? STAGE_TWO_FIELDS[id].options
-      : legalList(profile, strangeness, listName);
+      : legalList(profile, strangeness, listName),
+  );
   return hint === undefined
     ? legal
     : [hint, ...legal.filter(option => option !== hint)];

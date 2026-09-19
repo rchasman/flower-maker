@@ -1,7 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import { parse as parseYaml } from "yaml";
 import { TEMPLATES } from "../../client/src/data/templates.ts";
-import { jevSource } from "./answering.ts";
+import { jevSource, type AnswerSource } from "./answering.ts";
 import { generateFlower, type Snapshot } from "./pipeline.ts";
 import { FlowerSpecSchema } from "./specSchema.ts";
 import {
@@ -17,6 +17,7 @@ const parsedSpec = (snapshot: Snapshot | undefined) => {
   if (snapshot === undefined) throw new Error("expected a snapshot");
   return FlowerSpecSchema.parse(parseYaml(snapshot.spec));
 };
+const signal = new AbortController().signal;
 
 describe("generateFlower with a one shot source", () => {
   const run = (
@@ -29,6 +30,7 @@ describe("generateFlower with a one shot source", () => {
         prompt: "a frosty iris",
         templateName,
         templates: TEMPLATES,
+        signal,
       }),
     );
 
@@ -114,7 +116,12 @@ describe("generateFlower with a streaming source", () => {
       ],
     );
     const snapshots = await Array.fromAsync(
-      generateFlower({ source, prompt: "a sunny daisy", templates: TEMPLATES }),
+      generateFlower({
+        source,
+        prompt: "a sunny daisy",
+        templates: TEMPLATES,
+        signal,
+      }),
     );
     expect(snapshots.map(s => [s.stage, s.done])).toEqual([
       [1, false],
@@ -142,15 +149,79 @@ describe("generateFlower with a streaming source", () => {
     );
   });
 
+  test("a partial that changes no answer yields no snapshot", async () => {
+    const source = stagedSource(
+      [{ family: "Rosaceae" }, { family: "Rosaceae" }],
+      [
+        {},
+        { pose: "open" },
+        { pose: "open" },
+        { pose: "open", has_thorns: true },
+        { has_thorns: true },
+        { pose: "cupped" },
+        { pose: "cupped", has_thorns: true },
+      ],
+    );
+    const snapshots = await Array.fromAsync(
+      generateFlower({
+        source,
+        prompt: "a rose",
+        templates: TEMPLATES,
+        signal,
+      }),
+    );
+    expect(snapshots.map(s => [s.stage, s.done])).toEqual([
+      [1, false],
+      [2, false],
+      [2, false],
+      [2, true],
+    ]);
+    const stageTwo = snapshots
+      .slice(1)
+      .map(s =>
+        s.answers.filter(a => a.id === "pose" || a.id === "has_thorns"),
+      );
+    expect(stageTwo).toEqual([
+      [{ id: "pose", value: "open" }],
+      [
+        { id: "pose", value: "open" },
+        { id: "has_thorns", value: true },
+      ],
+      [
+        { id: "pose", value: "cupped" },
+        { id: "has_thorns", value: true },
+      ],
+    ]);
+  });
+
   test("a source that answers nothing still renders the family archetype", async () => {
     const snapshots = await Array.fromAsync(
       generateFlower({
         source: stagedSource([], []),
         prompt: "",
         templates: TEMPLATES,
+        signal,
       }),
     );
     expect(snapshots.map(s => s.done)).toEqual([false, true]);
     expect(parsedSpec(snapshots[1]).taxonomy.family).toBe("Invented");
+  });
+
+  test("the signal reaches the source for both stages", async () => {
+    const controller = new AbortController();
+    const seen = mock((_signal: AbortSignal) => {});
+    const source: AnswerSource = async function* (_questions, _state, s) {
+      seen(s);
+      yield* [];
+    };
+    await Array.fromAsync(
+      generateFlower({
+        source,
+        prompt: "",
+        templates: TEMPLATES,
+        signal: controller.signal,
+      }),
+    );
+    expect(seen.mock.calls).toEqual([[controller.signal], [controller.signal]]);
   });
 });

@@ -48,12 +48,26 @@ describe("FAMILIES", () => {
     );
   });
 
-  test("structural lists always keep the unfused, unpatterned, single head", () => {
+  test("structural lists always keep the unpatterned single head, and the unfused corolla outside bell families", () => {
     profiles.map(profile => {
       expect(profile.patterns, profile.key).toContain("None");
-      expect(profile.fusions, profile.key).toContain("Free");
       expect(profile.inflorescences, profile.key).toContain("Solitary");
+      if (profile.special === "Bell") {
+        expect(profile.fusions, profile.key).not.toContain("Free");
+      } else {
+        expect(profile.fusions, profile.key).toContain("Free");
+      }
     });
+  });
+
+  test("a composite family's only outer shape is Ligulate", () => {
+    const composites = profiles.filter(
+      profile => profile.special === "Composite",
+    );
+    expect(composites.map(profile => profile.key)).toEqual(["Asteraceae"]);
+    composites.map(profile =>
+      expect(profile.shapes, profile.key).toEqual(["Ligulate"]),
+    );
   });
 
   test("petal counts agree with the radial symmetry order", () => {

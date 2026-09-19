@@ -884,6 +884,35 @@ function defaultAnswers(
   };
 }
 
+type Narrowing = <T extends string>(
+  profile: FamilyProfile,
+  options: readonly T[],
+) => readonly T[];
+
+// Spec 4.5: a composite head's outer ring is always Ligulate and a bell
+// corolla is never Free. The questions and the assembler both read the
+// narrowed list, so the answer trace never contradicts the spec.
+const SKELETON_NARROWING: Partial<Record<StageTwoId, Narrowing>> = {
+  outer_shape: (profile, options) =>
+    profile.special === "Composite"
+      ? options.filter(option => option === "Ligulate")
+      : options,
+  fusion_kind: (profile, options) =>
+    profile.special === "Bell"
+      ? options.filter(option => option !== "Free")
+      : options,
+};
+
+/** The options the family skeleton leaves open for one answer. */
+export function legalOptions<T extends string>(
+  profile: FamilyProfile,
+  id: StageTwoId,
+  options: readonly T[],
+): readonly T[] {
+  const narrow = SKELETON_NARROWING[id];
+  return narrow === undefined ? options : narrow(profile, options);
+}
+
 // A value that is not an option, or is outside the family's legal list, is
 // treated as unanswered so the skeleton holds even when a streamed partial
 // answer is a prefix of a real option.
@@ -896,9 +925,12 @@ function legalAnswer<K extends StageTwoId>(
   const parsed = STAGE_TWO_FIELDS[id].parse(value);
   const listName = PROFILE_LIST_FOR_ANSWER[id];
   if (parsed === undefined || listName === undefined) return parsed;
-  return isVariant(legalList(profile, strangeness, listName), parsed)
-    ? parsed
-    : undefined;
+  const legal = legalOptions(
+    profile,
+    id,
+    legalList(profile, strangeness, listName),
+  );
+  return isVariant(legal, parsed) ? parsed : undefined;
 }
 
 function resolveAnswers(
@@ -1006,28 +1038,6 @@ function layerCounts(ctx: Context, outer: number, layers: number): number[] {
   );
 }
 
-function bellFusion(ctx: Context): FusionKind {
-  const answered = ctx.answers.fusion_kind;
-  if (answered !== "Free") return answered;
-  return (
-    legalList(ctx.profile, ctx.strangeness, "fusions").find(
-      kind => kind !== "Free",
-    ) ?? "Bell"
-  );
-}
-
-function outerFusion(ctx: Context): FusionKind {
-  return ctx.profile.special === "Bell"
-    ? bellFusion(ctx)
-    : ctx.answers.fusion_kind;
-}
-
-function outerShape(ctx: Context): PetalShape {
-  return ctx.profile.special === "Composite"
-    ? "Ligulate"
-    : ctx.answers.outer_shape;
-}
-
 function petalLayer(
   ctx: Context,
   index: number,
@@ -1051,7 +1061,7 @@ function petalLayer(
   return {
     index,
     count,
-    shape: outer ? outerShape(ctx) : answers.inner_shape,
+    shape: outer ? answers.outer_shape : answers.inner_shape,
     arrangement: first(profile.arrangements, `${profile.key}.arrangements`),
     curvature: round3(clamp(-1, 0.85, pose.curvature + index * 0.25)),
     curl: round3(Math.max(0, pose.curl - index * 0.2)),
@@ -1077,7 +1087,7 @@ function petalLayer(
       extent: round3(clamp(0.2, 0.9, 0.5 + jit(draw.patternExtent, 0.2))),
     },
     fusion: {
-      kind: outer ? outerFusion(ctx) : "Free",
+      kind: outer ? answers.fusion_kind : "Free",
       depth: round3(clamp(0.2, 0.8, 0.5 + jit(draw.fusionDepth, 0.15))),
     },
   };
@@ -1113,7 +1123,7 @@ function labellumPattern(ctx: Context): PatternKind {
 
 // Spec 4.5: Labellum gives the inner layer a different shape and a pattern,
 // Corona forces the inner layer to Trumpet, Spur adds a Tube layer of count 1.
-// Composite and Bell act on the outer layer inside petalLayer.
+// Composite and Bell act through SKELETON_NARROWING on the answers instead.
 const SPECIAL_LAYERS: Record<
   SpecialStructure,
   (layers: Layers, ctx: Context) => Layers
@@ -1541,17 +1551,19 @@ function taxonomy(
   epithetDraw: number,
   commonName: string,
 ): FlowerSpecJson["taxonomy"] {
-  const scientific = template?.scientific.split(" ") ?? [];
   return {
     family: profile.key,
-    genus: scientific[0] ?? profile.typicalGenus,
+    genus: template?.genus ?? profile.typicalGenus,
     species_name:
-      scientific[1] ??
+      template?.epithet ??
       `${noun.toLowerCase()}${pickUnit(EPITHET_SUFFIXES, epithetDraw, "EPITHET_SUFFIXES")}`,
     common_name: commonName,
     botanical_class: profile.botanicalClass,
   };
 }
+
+const speciesOf = (tax: FlowerSpecJson["taxonomy"]): string =>
+  tax.species_name === "" ? tax.genus : `${tax.genus} ${tax.species_name}`;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Entry point
@@ -1593,7 +1605,7 @@ export function assembleSpec(input: AssembleInput): FlowerSpecJson {
 
   const spec: FlowerSpecJson = {
     name,
-    species: `${tax.genus} ${tax.species_name}`,
+    species: speciesOf(tax),
     taxonomy: tax,
     petals: {
       layers: [...layers],

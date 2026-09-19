@@ -37,15 +37,25 @@ export type GenerateInput = {
   prompt: string;
   templateName?: string;
   templates: readonly TemplateInfo[];
+  /** Aborting it stops the model calls in flight. */
+  signal: AbortSignal;
 };
 
+const addsNothing = (merged: PartialAnswers, partial: PartialAnswers) =>
+  Object.entries(partial).every(([id, value]) => merged[id] === value);
+
 // Later partials win per id; an id keeps the position of its first arrival.
+// A partial that changes no answer yields nothing, so a token streaming
+// model does not produce one snapshot per token.
 async function* accumulate(
   partials: AsyncIterator<PartialAnswers>,
   merged: PartialAnswers = {},
 ): AsyncGenerator<PartialAnswers, PartialAnswers> {
   const next = await partials.next();
   if (next.done) return merged;
+  if (addsNothing(merged, next.value)) {
+    return yield* accumulate(partials, merged);
+  }
   const answers = { ...merged, ...next.value };
   yield answers;
   return yield* accumulate(partials, answers);
@@ -55,8 +65,9 @@ const answersOf = (
   source: AnswerSource,
   questions: Questions,
   request: string,
+  signal: AbortSignal,
 ): AsyncGenerator<PartialAnswers, PartialAnswers> =>
-  accumulate(source(questions, { request })[Symbol.asyncIterator]());
+  accumulate(source(questions, { request }, signal)[Symbol.asyncIterator]());
 
 async function finalAnswers(
   merged: AsyncGenerator<PartialAnswers, PartialAnswers>,
@@ -145,13 +156,18 @@ const stageOneList = (stageOne: StageOneAnswers): Answer[] =>
 export async function* generateFlower(
   input: GenerateInput,
 ): AsyncIterable<Snapshot> {
-  const { source, prompt, templates } = input;
+  const { source, prompt, templates, signal } = input;
   const requested = requestedTemplate(templates, input.templateName);
   const seed = seedFromPrompt(prompt);
 
   const { stageOne, template } = resolveLineage(
     await finalAnswers(
-      answersOf(source, stageOneQuestions(templates, requested), prompt),
+      answersOf(
+        source,
+        stageOneQuestions(templates, requested),
+        prompt,
+        signal,
+      ),
     ),
     templates,
     requested,
@@ -176,7 +192,7 @@ export async function* generateFlower(
 
   const questions = stageTwoQuestions(profile, strangeness, template);
   yield* stageTwoSnapshots(
-    answersOf(source, questions, prompt),
+    answersOf(source, questions, prompt, signal),
     (answers, done) => snapshot(2, answers, done),
   );
 }

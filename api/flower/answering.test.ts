@@ -14,6 +14,8 @@ import {
   rejection,
 } from "./test-helpers.ts";
 
+const signal = new AbortController().signal;
+
 const questions: Questions = {
   pose: {
     type: "choice",
@@ -35,11 +37,12 @@ describe("jevSource", () => {
       fakeEvaluationModel({ pose: "cupped", has_thorns: 0.9 }, onCall),
     );
     const yielded = await Array.fromAsync(
-      source(questions, { request: "a thorny cup" }),
+      source(questions, { request: "a thorny cup" }, signal),
     );
     expect(yielded).toEqual([{ pose: "cupped", has_thorns: true }]);
     const options = onCall.mock.calls[0]?.[0];
     expect(options?.state).toEqual({ request: "a thorny cup" });
+    expect(options?.abortSignal).toBe(signal);
     expect(Object.keys(options?.questions ?? {})).toEqual([
       "pose",
       "has_thorns",
@@ -48,7 +51,9 @@ describe("jevSource", () => {
 
   test("a low probability is false", async () => {
     const source = jevSource(fakeEvaluationModel({ has_thorns: 0.2 }));
-    const [answers] = await Array.fromAsync(source(questions, { request: "" }));
+    const [answers] = await Array.fromAsync(
+      source(questions, { request: "" }, signal),
+    );
     expect(answers).toEqual({ pose: "recurved", has_thorns: false });
   });
 });
@@ -114,7 +119,7 @@ describe("textModelSource", () => {
       fakeTextModel(['{"pose":"cup', 'ped","has_thorns":tr', "ue}"]),
     );
     const yielded = await Array.fromAsync(
-      source(questions, { request: "a thorny cup" }),
+      source(questions, { request: "a thorny cup" }, signal),
     );
     expect(yielded.at(-1)).toEqual({ pose: "cupped", has_thorns: true });
     expect(yielded.length).toBeGreaterThan(1);
@@ -141,7 +146,7 @@ describe("textModelSource", () => {
   test("a model that never closes its JSON fails with a clear error", async () => {
     const source = textModelSource(fakeTextModel(['{"pose":"cupp']));
     const failure = await rejection(
-      Array.fromAsync(source(questions, { request: "" })),
+      Array.fromAsync(source(questions, { request: "" }, signal)),
     );
     expect(String(failure)).toContain("did not return a complete answer set");
   });
@@ -149,9 +154,10 @@ describe("textModelSource", () => {
   test("the model is told to answer as a florist about the request", async () => {
     const model = fakeTextModel(['{"pose":"open","has_thorns":false}']);
     await Array.fromAsync(
-      textModelSource(model)(questions, { request: "a plain flower" }),
+      textModelSource(model)(questions, { request: "a plain flower" }, signal),
     );
     const call = model.doStreamCalls[0];
+    expect(call?.abortSignal).toBe(signal);
     const system = call?.prompt.find(message => message.role === "system");
     expect(system?.content).toContain("florist");
     expect(system?.content).toContain("- pose:");

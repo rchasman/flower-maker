@@ -29,9 +29,11 @@ const encoder = new TextEncoder();
 const line = (value: unknown): Uint8Array =>
   encoder.encode(`${JSON.stringify(value)}\n`);
 
+// Cancelling the response aborts the model calls as well as the iterator.
 function ndjsonStream(
   head: Snapshot,
   rest: AsyncIterator<Snapshot>,
+  abort: AbortController,
 ): ReadableStream<Uint8Array> {
   return new ReadableStream({
     start(controller) {
@@ -40,6 +42,7 @@ function ndjsonStream(
     async pull(controller) {
       try {
         const next = await rest.next();
+        if (abort.signal.aborted) return;
         if (next.done) return controller.close();
         controller.enqueue(line(next.value));
       } catch (error) {
@@ -48,7 +51,8 @@ function ndjsonStream(
         controller.close();
       }
     },
-    async cancel() {
+    async cancel(reason: unknown) {
+      abort.abort(reason);
       await rest.return?.();
     },
   });
@@ -60,15 +64,17 @@ export function handleGenerateWith(
   return async request => {
     try {
       const body = GenerateBody.parse(await request.json());
+      const abort = new AbortController();
       const snapshots = generateFlower({
         source: sourceFor(body.model),
         prompt: body.prompt,
         templateName: body.template_name,
         templates: TEMPLATES,
+        signal: AbortSignal.any([request.signal, abort.signal]),
       })[Symbol.asyncIterator]();
       const head = await snapshots.next();
       if (head.done) throw new Error("generation produced no snapshot");
-      return new Response(ndjsonStream(head.value, snapshots), {
+      return new Response(ndjsonStream(head.value, snapshots, abort), {
         headers: { "Content-Type": "application/x-ndjson; charset=utf-8" },
       });
     } catch (error) {
