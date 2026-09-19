@@ -10,10 +10,6 @@ export class GardenSimulation {
     [Symbol.dispose](): void;
     ambient_light(): number;
     flower_count(): number;
-    /**
-     * Get pending merge events as JSON: [{ "a": session_id, "b": session_id }, ...]
-     */
-    get_merge_events(): string;
     constructor();
     /**
      * Remove a flower immediately (no animation)
@@ -39,7 +35,7 @@ export class GardenSimulation {
     /**
      * Add or update a flower from SpacetimeDB data
      */
-    upsert_flower(session_id: bigint, spec_json: string, x: number, y: number): void;
+    upsert_flower(session_id: bigint, spec_yaml: string, x: number, y: number): void;
     /**
      * Start wilt-out animation for a flower (it will be removed after animation completes)
      */
@@ -61,7 +57,6 @@ export interface InitOutput {
     readonly __wbg_gardensimulation_free: (a: number, b: number) => void;
     readonly gardensimulation_ambient_light: (a: number) => number;
     readonly gardensimulation_flower_count: (a: number) => number;
-    readonly gardensimulation_get_merge_events: (a: number) => [number, number];
     readonly gardensimulation_new: () => number;
     readonly gardensimulation_remove_flower: (a: number, b: bigint) => void;
     readonly gardensimulation_render_buffer_size: () => number;

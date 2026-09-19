@@ -1,11 +1,5 @@
 import type { GardenSim } from "./loader.ts";
 
-export interface MergeEvent {
-  a: number;
-  b: number;
-}
-
-export type MergeHandler = (event: MergeEvent) => void;
 export type RenderCallback = (pool: FlowerRenderData[], count: number) => void;
 
 export interface FlowerRenderData {
@@ -142,11 +136,7 @@ function readFromBuffer(buf: Float32Array): number {
   return count;
 }
 
-export function startLoop(
-  sim: GardenSim,
-  onMerge: MergeHandler,
-  onRender: RenderCallback,
-) {
+export function startLoop(sim: GardenSim, onRender: RenderCallback) {
   if (animFrameId !== null) return;
 
   lastTime = performance.now();
@@ -158,18 +148,13 @@ export function startLoop(
     lastTime = time;
 
     // 1. Physics tick
-    sim.tick(dt as unknown as number);
-
-    // 2. Check merge events
     try {
-      const eventsJson = sim.get_merge_events();
-      const events = JSON.parse(eventsJson) as MergeEvent[];
-      events.forEach(onMerge);
-    } catch {
-      /* no events */
+      sim.tick(dt);
+    } catch (err) {
+      console.error("[loop] tick failed:", err);
     }
 
-    // 3. Export render data
+    // 2. Export render data
     try {
       if (useBuffer && buf) {
         // Fast path: write directly to typed buffer, read into pool (zero alloc)
@@ -186,8 +171,8 @@ export function startLoop(
         }
         onRender(pool, raw.length);
       }
-    } catch {
-      /* render error */
+    } catch (err) {
+      console.error("[loop] render frame failed:", err);
     }
 
     animFrameId = requestAnimationFrame(frame);

@@ -1,12 +1,10 @@
 mod simulation;
-mod merge;
 mod buffer;
 
 use flower_core::catalog::FlowerSpec;
 use flower_core::animation::FlowerAnimation;
 use flower_core::physics::{GardenPhysics, body_params};
 use simulation::PhysicsWorld;
-use merge::MergeTracker;
 use buffer::RenderBuffer;
 use wasm_bindgen::prelude::*;
 
@@ -23,7 +21,6 @@ struct FlowerInstance {
 pub struct GardenSimulation {
     physics: GardenPhysics,
     world: PhysicsWorld,
-    merge_tracker: MergeTracker,
     flowers: Vec<FlowerInstance>,
     render_buf: RenderBuffer,
 }
@@ -35,7 +32,6 @@ impl GardenSimulation {
         Self {
             physics: GardenPhysics::new(),
             world: PhysicsWorld::new(),
-            merge_tracker: MergeTracker::new(),
             flowers: Vec::new(),
             render_buf: RenderBuffer::new(),
         }
@@ -89,9 +85,6 @@ impl GardenSimulation {
         // Step rapier2d physics
         self.world.step(dt);
 
-        // Update merge tracker with current collision pairs
-        self.merge_tracker.update(&self.world, dt);
-
         // Tick animations
         for flower in &mut self.flowers {
             flower.anim.tick(&flower.spec, dt64, wind);
@@ -108,12 +101,6 @@ impl GardenSimulation {
         });
 
         self.flowers.len() as u32
-    }
-
-    /// Get pending merge events as JSON: [{ "a": session_id, "b": session_id }, ...]
-    pub fn get_merge_events(&mut self) -> String {
-        let events = self.merge_tracker.drain_events(&self.flowers);
-        serde_json::to_string(&events).unwrap_or_else(|_| "[]".into())
     }
 
     /// Export render data as JSON for PixiJS

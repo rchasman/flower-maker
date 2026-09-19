@@ -228,14 +228,10 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     void loadWasm().then(sim => {
       simRef.current = sim;
       wireToWasm(conn, sim);
-      startLoop(
-        sim,
-        () => {},
-        (pool, count) => {
-          setFlowerCount(count);
-          canvasRef.current?.updateFlowers(pool, count);
-        },
-      );
+      startLoop(sim, (pool, count) => {
+        setFlowerCount(count);
+        canvasRef.current?.updateFlowers(pool, count);
+      });
     });
 
     return () => {

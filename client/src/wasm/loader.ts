@@ -13,7 +13,6 @@ export interface GardenSim {
   wilt_flower(session_id: bigint): void;
   remove_flower(session_id: bigint): void;
   tick(dt: number): number;
-  get_merge_events(): string;
   render_data(): string;
   /** Write render data to a Float32Array (SharedArrayBuffer-backed). */
   write_to_buffer?(buf: Float32Array): number;
@@ -72,9 +71,6 @@ function createStub(): GardenSim {
     },
     tick() {
       return flowers.size;
-    },
-    get_merge_events() {
-      return "[]";
     },
     render_data() {
       const data = [...flowers.entries()].map(([sid, f]) => ({

@@ -4,7 +4,6 @@ export const memory: WebAssembly.Memory;
 export const __wbg_gardensimulation_free: (a: number, b: number) => void;
 export const gardensimulation_ambient_light: (a: number) => number;
 export const gardensimulation_flower_count: (a: number) => number;
-export const gardensimulation_get_merge_events: (a: number) => [number, number];
 export const gardensimulation_new: () => number;
 export const gardensimulation_remove_flower: (a: number, b: bigint) => void;
 export const gardensimulation_render_buffer_size: () => number;
