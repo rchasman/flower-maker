@@ -20,14 +20,10 @@ export const MODELS = [
   { id: "gpt-5.4", fullName: "openai/gpt-5.4", provider: "openai" },
 
   // Google
-  { id: "gemini-3.1-flash-lite", fullName: "google/gemini-3.1-flash-lite-preview", provider: "google" },
+  { id: "gemini-3.1-flash-lite", fullName: "google/gemini-3.1-flash-lite", provider: "google" },
   { id: "gemini-3-flash", fullName: "google/gemini-3-flash", provider: "google" },
   { id: "gemini-3.1-pro", fullName: "google/gemini-3.1-pro-preview", provider: "google" },
 
-  // xAI
-  { id: "grok-4.20-agent", fullName: "xai/grok-4.20-multi-agent-beta", provider: "xai" },
-  { id: "grok-4.20", fullName: "xai/grok-4.20-non-reasoning-beta", provider: "xai" },
-  { id: "grok-4.1-fast", fullName: "xai/grok-4.1-fast-non-reasoning", provider: "xai" },
 
   // DeepSeek
   { id: "deepseek-v3.2", fullName: "deepseek/deepseek-v3.2", provider: "deepseek" },
@@ -58,6 +54,6 @@ export const MODEL_MAP: Record<string, string> = Object.fromEntries(
   MODELS.map(m => [m.id, m.fullName]),
 );
 
-export const DEFAULT_MODEL = "google/gemini-3.1-flash-lite-preview";
+export const DEFAULT_MODEL = "google/gemini-3.1-flash-lite";
 
 export const JEV_MODEL = "typesafe-ai/jev";

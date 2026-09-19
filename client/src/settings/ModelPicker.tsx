@@ -15,12 +15,9 @@ const MODELS: ModelConfig[] = [
   { id: "gpt-5.4-nano", fullName: "openai/gpt-5.4-nano", provider: "openai" },
   { id: "gpt-5.4-mini", fullName: "openai/gpt-5.4-mini", provider: "openai" },
   { id: "gpt-5.4", fullName: "openai/gpt-5.4", provider: "openai" },
-  { id: "gemini-3.1-flash-lite", fullName: "google/gemini-3.1-flash-lite-preview", provider: "google" },
+  { id: "gemini-3.1-flash-lite", fullName: "google/gemini-3.1-flash-lite", provider: "google" },
   { id: "gemini-3-flash", fullName: "google/gemini-3-flash", provider: "google" },
   { id: "gemini-3.1-pro", fullName: "google/gemini-3.1-pro-preview", provider: "google" },
-  { id: "grok-4.20-agent", fullName: "xai/grok-4.20-multi-agent-beta", provider: "xai" },
-  { id: "grok-4.20", fullName: "xai/grok-4.20-non-reasoning-beta", provider: "xai" },
-  { id: "grok-4.1-fast", fullName: "xai/grok-4.1-fast-non-reasoning", provider: "xai" },
   { id: "deepseek-v3.2", fullName: "deepseek/deepseek-v3.2", provider: "deepseek" },
   { id: "mistral-large-3", fullName: "mistral/mistral-large-3", provider: "mistral" },
   { id: "minimax-m2.7", fullName: "minimax/minimax-m2.7-highspeed", provider: "minimax" },
@@ -30,13 +27,12 @@ const MODELS: ModelConfig[] = [
   { id: "jev", fullName: "typesafe-ai/jev", provider: "typesafe-ai" },
 ];
 
-export const DEFAULT_MODEL = "google/gemini-3.1-flash-lite-preview";
+export const DEFAULT_MODEL = "google/gemini-3.1-flash-lite";
 
 const PROVIDER_COLORS: Record<string, string> = {
   anthropic: "#a78bfa",
   openai: "#86efac",
   google: "#93c5fd",
-  xai: "#fbbf24",
   deepseek: "#60a5fa",
   mistral: "#f97316",
   minimax: "#f472b6",
