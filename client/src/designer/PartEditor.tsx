@@ -1,6 +1,29 @@
 import { useState } from "react";
 import { useSession } from "../session/SessionProvider.tsx";
-import { run, getNestedValue, parseSpec } from "../lib/utils.ts";
+import { run, getNestedValue, isRecord, parseSpec } from "../lib/utils.ts";
+import {
+  AURA_KINDS,
+  BIO_PATTERNS,
+  BRANCH_PATTERNS,
+  DEWDROP_PLACEMENTS,
+  DISPERSAL_PATTERNS,
+  EDGE_STYLES,
+  FLOWER_FAMILIES,
+  FUSION_KINDS,
+  INFLORESCENCE_KINDS,
+  LEAF_SHAPES,
+  LIFE_STAGES,
+  NECTARY_POSITIONS,
+  PARTICLE_KINDS,
+  PATTERN_KINDS,
+  PETAL_ARRANGEMENTS,
+  PETAL_SHAPES,
+  SERRATIONS,
+  SIDES,
+  SURFACE_TEXTURES,
+  SYMMETRIES,
+  VARIEGATION_KINDS,
+} from "../data/flower-enums.ts";
 
 interface ConstituentInfo {
   index: number;
@@ -14,17 +37,26 @@ interface PartEditorProps {
   constituents?: ConstituentInfo[];
 }
 
-// ── Full taxonomy schema ──────────────────────────────────────────────────
+// ── Field schema ───────────────────────────────────────────────────────────
+// Every path is one the renderer reads (client/src/flower/render.ts).
 
-type FieldDef = {
+type NumberField = {
   path: string;
   label: string;
-  type: "number" | "color" | "select";
-  options?: string[];
-  min?: number;
-  max?: number;
-  step?: number;
+  type: "number";
+  min: number;
+  max: number;
+  step: number;
 };
+type SelectField = {
+  path: string;
+  label: string;
+  type: "select";
+  options: readonly string[];
+};
+type BooleanField = { path: string; label: string; type: "boolean" };
+type ColorField = { path: string; label: string; type: "color" };
+type FieldDef = NumberField | SelectField | BooleanField | ColorField;
 
 type TaxonomySection = {
   key: string;
@@ -33,79 +65,32 @@ type TaxonomySection = {
   fields: FieldDef[];
 };
 
-const PETAL_SHAPES = [
-  "Ovate",
-  "Lanceolate",
-  "Spatulate",
-  "Oblong",
-  "Orbicular",
-  "Cordate",
-  "Deltoid",
-  "Falcate",
-  "Ligulate",
-  "Fimbriate",
-  "Laciniate",
-  "Runcinate",
-  "Cuneate",
-  "Acuminate",
-  "Panduriform",
-  "Unguiculate",
-  "Flabellate",
-  "Obovate",
-  "Rhomboid",
-  "Filiform",
-  "Reniform",
-  "Sagittate",
-  "Tubular",
-];
+const num = (
+  path: string,
+  label: string,
+  min: number,
+  max: number,
+  step: number,
+): NumberField => ({ path, label, type: "number", min, max, step });
+const unit = (path: string, label: string): NumberField =>
+  num(path, label, 0, 1, 0.05);
+const pick = (
+  path: string,
+  label: string,
+  options: readonly string[],
+): SelectField => ({ path, label, type: "select", options });
+const flag = (path: string, label: string): BooleanField => ({
+  path,
+  label,
+  type: "boolean",
+});
+const color = (path: string, label: string): ColorField => ({
+  path,
+  label,
+  type: "color",
+});
 
-const EDGE_STYLES = [
-  "Smooth",
-  "Ruffled",
-  "Fringed",
-  "Serrated",
-  "Rolled",
-  "Undulate",
-  "Crisped",
-  "Lobed",
-  "Plicate",
-  "Revolute",
-  "Dentate",
-  "Erose",
-];
-
-const ARRANGEMENT_TYPES = ["Radial", "Spiral", "Whorled"];
-
-const AURA_KINDS = [
-  "Ethereal",
-  "Prismatic",
-  "Rainbow",
-  "Crystal",
-  "Flame",
-  "Solar",
-  "Frost",
-  "Aurora",
-  "Nebula",
-  "Shadow",
-  "Void",
-  "Electric",
-  "Storm",
-];
-
-const PARTICLE_KINDS = [
-  "Pollen",
-  "Sparkle",
-  "Firefly",
-  "Mote",
-  "Ember",
-  "Snowflake",
-  "Petal",
-  "Spore",
-];
-
-const SYMMETRY_TYPES = ["Radial", "Spiral"];
-
-const DEWDROP_PLACEMENTS = ["Random", "Tips", "Edges", "Center"];
+const BOOLEAN_OPTIONS: readonly string[] = ["true", "false"];
 
 const TAXONOMY: TaxonomySection[] = [
   {
@@ -113,88 +98,25 @@ const TAXONOMY: TaxonomySection[] = [
     label: "PETALS",
     accent: "var(--tui-purple)",
     fields: [
-      {
-        path: "petals.arrangement",
-        label: "arrangement",
-        type: "select",
-        options: ARRANGEMENT_TYPES,
-      },
-      {
-        path: "petals.layers.0.shape",
-        label: "shape",
-        type: "select",
-        options: PETAL_SHAPES,
-      },
-      {
-        path: "petals.layers.0.count",
-        label: "count",
-        type: "number",
-        min: 1,
-        max: 60,
-        step: 1,
-      },
-      {
-        path: "petals.layers.0.length",
-        label: "length",
-        type: "number",
-        min: 0.1,
-        max: 3,
-        step: 0.05,
-      },
-      {
-        path: "petals.layers.0.width",
-        label: "width",
-        type: "number",
-        min: 0.1,
-        max: 2,
-        step: 0.05,
-      },
-      {
-        path: "petals.layers.0.curvature",
-        label: "curvature",
-        type: "number",
-        min: -1,
-        max: 1,
-        step: 0.05,
-      },
-      {
-        path: "petals.layers.0.curl",
-        label: "curl",
-        type: "number",
-        min: -1,
-        max: 1,
-        step: 0.05,
-      },
-      {
-        path: "petals.layers.0.droop",
-        label: "droop",
-        type: "number",
-        min: 0,
-        max: 1,
-        step: 0.05,
-      },
-      {
-        path: "petals.layers.0.opacity",
-        label: "opacity",
-        type: "number",
-        min: 0,
-        max: 1,
-        step: 0.05,
-      },
-      {
-        path: "petals.layers.0.angularOffset",
-        label: "angular offset",
-        type: "number",
-        min: 0,
-        max: 360,
-        step: 5,
-      },
-      {
-        path: "petals.layers.0.edge_style",
-        label: "edge style",
-        type: "select",
-        options: EDGE_STYLES,
-      },
+      pick("petals.layers.0.shape", "shape", PETAL_SHAPES),
+      pick("petals.layers.0.arrangement", "arrangement", PETAL_ARRANGEMENTS),
+      num("petals.layers.0.count", "count", 1, 60, 1),
+      num("petals.layers.0.length", "length", 0.1, 5, 0.05),
+      num("petals.layers.0.width", "width", 0.1, 3, 0.05),
+      num("petals.layers.0.curvature", "curvature", -1, 1, 0.05),
+      unit("petals.layers.0.curl", "curl"),
+      unit("petals.layers.0.droop", "droop"),
+      unit("petals.layers.0.opacity", "opacity"),
+      num("petals.layers.0.angular_offset", "angular offset", 0, 360, 5),
+      pick("petals.layers.0.edge_style", "edge style", EDGE_STYLES),
+      pick("petals.layers.0.pattern.kind", "pattern", PATTERN_KINDS),
+      color("petals.layers.0.pattern.color", "pattern color"),
+      unit("petals.layers.0.pattern.scale", "mark scale"),
+      unit("petals.layers.0.pattern.density", "mark density"),
+      unit("petals.layers.0.pattern.extent", "mark extent"),
+      pick("petals.layers.0.fusion.kind", "fusion", FUSION_KINDS),
+      unit("petals.layers.0.fusion.depth", "fusion depth"),
+      pick("petals.stage", "stage", LIFE_STAGES),
     ],
   },
   {
@@ -202,62 +124,24 @@ const TAXONOMY: TaxonomySection[] = [
     label: "STRUCTURE",
     accent: "var(--tui-green)",
     fields: [
-      {
-        path: "structure.stem.height",
-        label: "stem height",
-        type: "number",
-        min: 0,
-        max: 3,
-        step: 0.05,
-      },
-      {
-        path: "structure.stem.thickness",
-        label: "stem width",
-        type: "number",
-        min: 0,
-        max: 1,
-        step: 0.02,
-      },
-      {
-        path: "structure.stem.curvature",
-        label: "stem curve",
-        type: "number",
-        min: -1,
-        max: 1,
-        step: 0.05,
-      },
-      {
-        path: "structure.stem.thorns.density",
-        label: "thorn density",
-        type: "number",
-        min: 0,
-        max: 1,
-        step: 0.1,
-      },
-      {
-        path: "structure.stem.thorns.size",
-        label: "thorn size",
-        type: "number",
-        min: 0,
-        max: 1,
-        step: 0.05,
-      },
-      {
-        path: "structure.sepals.length",
-        label: "sepal length",
-        type: "number",
-        min: 0,
-        max: 2,
-        step: 0.05,
-      },
-      {
-        path: "structure.receptacle.size",
-        label: "receptacle",
-        type: "number",
-        min: 0,
-        max: 2,
-        step: 0.05,
-      },
+      num("structure.stem.height", "stem height", 0, 3, 0.05),
+      num("structure.stem.thickness", "stem width", 0, 1, 0.02),
+      unit("structure.stem.curvature", "stem curve"),
+      pick("structure.stem.surface", "stem surface", SURFACE_TEXTURES),
+      pick("structure.stem.branching", "branching", BRANCH_PATTERNS),
+      color("structure.stem.color", "stem color"),
+      num("structure.stem.thorns.density", "thorn density", 0, 1, 0.1),
+      unit("structure.stem.thorns.size", "thorn size"),
+      num("structure.sepals.0.length", "sepal length", 0, 2, 0.05),
+      num("structure.receptacle.size", "receptacle", 0, 2, 0.05),
+      pick("inflorescence.kind", "heads", INFLORESCENCE_KINDS),
+      num("inflorescence.head_count", "head count", 1, 30, 1),
+      unit("inflorescence.head_scale", "head scale"),
+      unit("inflorescence.spread", "head spread"),
+      unit("structure.buds.0.position", "bud position"),
+      pick("structure.buds.0.side", "bud side", SIDES),
+      unit("structure.buds.0.size", "bud size"),
+      unit("structure.buds.0.openness", "bud openness"),
     ],
   },
   {
@@ -265,22 +149,32 @@ const TAXONOMY: TaxonomySection[] = [
     label: "REPRODUCTIVE",
     accent: "var(--tui-amber)",
     fields: [
-      {
-        path: "reproductive.stamens.height",
-        label: "stamen height",
-        type: "number",
-        min: 0,
-        max: 2,
-        step: 0.05,
-      },
-      {
-        path: "reproductive.pistil.height",
-        label: "pistil height",
-        type: "number",
-        min: 0,
-        max: 2,
-        step: 0.05,
-      },
+      num("reproductive.stamens.0.height", "stamen height", 0, 2, 0.05),
+      num("reproductive.pistil.height", "pistil height", 0, 2, 0.05),
+      num("reproductive.pollen.particle_count", "pollen count", 0, 200, 1),
+      unit("reproductive.pollen.drift_speed", "pollen drift"),
+      unit("reproductive.pollen.luminosity", "pollen glow"),
+      pick("reproductive.pollen.dispersal", "dispersal", DISPERSAL_PATTERNS),
+      pick("reproductive.nectary.position", "nectary", NECTARY_POSITIONS),
+    ],
+  },
+  {
+    key: "foliage",
+    label: "FOLIAGE",
+    accent: "var(--tui-green)",
+    fields: [
+      pick("foliage.leaves.0.shape", "leaf shape", LEAF_SHAPES),
+      pick("foliage.leaves.0.serration", "serration", SERRATIONS),
+      unit("foliage.leaves.0.translucency", "translucency"),
+      pick(
+        "foliage.leaves.0.variegation.kind",
+        "variegation",
+        VARIEGATION_KINDS,
+      ),
+      color("foliage.leaves.0.variegation.color", "varieg. color"),
+      flag("foliage.bracts.0.showy", "showy bract"),
+      unit("foliage.bracts.0.size", "bract size"),
+      pick("foliage.bracts.0.shape", "bract shape", LEAF_SHAPES),
     ],
   },
   {
@@ -288,80 +182,24 @@ const TAXONOMY: TaxonomySection[] = [
     label: "EFFECTS",
     accent: "var(--tui-cyan)",
     fields: [
-      {
-        path: "effects.aura.kind",
-        label: "aura",
-        type: "select",
-        options: AURA_KINDS,
-      },
-      {
-        path: "effects.aura.opacity",
-        label: "aura opacity",
-        type: "number",
-        min: 0,
-        max: 1,
-        step: 0.05,
-      },
-      {
-        path: "effects.aura.radius",
-        label: "aura radius",
-        type: "number",
-        min: 0,
-        max: 3,
-        step: 0.1,
-      },
-      {
-        path: "effects.particles.kind",
-        label: "particles",
-        type: "select",
-        options: PARTICLE_KINDS,
-      },
-      {
-        path: "effects.particles.density",
-        label: "particle density",
-        type: "number",
-        min: 0,
-        max: 1,
-        step: 0.05,
-      },
-      {
-        path: "effects.particles.drift_speed",
-        label: "drift speed",
-        type: "number",
-        min: 0,
-        max: 2,
-        step: 0.1,
-      },
-      {
-        path: "effects.particles.gravity",
-        label: "gravity",
-        type: "number",
-        min: -1,
-        max: 1,
-        step: 0.05,
-      },
-      {
-        path: "effects.dewdrops.count",
-        label: "dewdrops",
-        type: "number",
-        min: 0,
-        max: 20,
-        step: 1,
-      },
-      {
-        path: "effects.dewdrops.size",
-        label: "dew size",
-        type: "number",
-        min: 0,
-        max: 1,
-        step: 0.05,
-      },
-      {
-        path: "effects.dewdrops.placement",
-        label: "dew placement",
-        type: "select",
-        options: DEWDROP_PLACEMENTS,
-      },
+      pick("aura.kind", "aura", AURA_KINDS),
+      unit("aura.opacity", "aura opacity"),
+      num("aura.radius", "aura radius", 0, 3, 0.1),
+      pick("ornamentation.particles.0.kind", "particles", PARTICLE_KINDS),
+      num("ornamentation.particles.0.density", "particle density", 0, 50, 1),
+      num("ornamentation.particles.0.drift_speed", "drift speed", 0, 2, 0.1),
+      num("ornamentation.particles.0.gravity", "gravity", -1, 1, 0.05),
+      num("ornamentation.dewdrops.0.count", "dewdrops", 0, 20, 1),
+      unit("ornamentation.dewdrops.0.size", "dew size"),
+      pick(
+        "ornamentation.dewdrops.0.placement",
+        "dew placement",
+        DEWDROP_PLACEMENTS,
+      ),
+      unit("ornamentation.iridescence.intensity", "iridescence"),
+      num("ornamentation.iridescence.hue_shift_range", "hue shift", 0, 180, 5),
+      pick("ornamentation.bioluminescence.pattern", "biolum.", BIO_PATTERNS),
+      unit("ornamentation.bioluminescence.intensity", "biolum. glow"),
     ],
   },
   {
@@ -369,15 +207,157 @@ const TAXONOMY: TaxonomySection[] = [
     label: "SYMMETRY",
     accent: "var(--tui-blue)",
     fields: [
-      {
-        path: "symmetry",
-        label: "type",
-        type: "select",
-        options: SYMMETRY_TYPES,
-      },
+      pick("petals.symmetry", "type", SYMMETRIES),
+      num("petals.symmetry_order", "order", 0, 20, 1),
+      num("petals.divergence_angle", "divergence", 0, 360, 0.5),
     ],
   },
+  {
+    key: "taxonomy",
+    label: "TAXONOMY",
+    accent: "var(--tui-blue)",
+    fields: [pick("taxonomy.family", "family", FLOWER_FAMILIES)],
+  },
 ];
+
+const FIELD_BY_PATH = new Map<string, FieldDef>(
+  TAXONOMY.flatMap(section => section.fields).map(field => [field.path, field]),
+);
+
+// ── Value encoding ─────────────────────────────────────────────────────────
+// Overrides travel as strings; these map between them and typed spec values.
+
+type SpecColor = { r: number; g: number; b: number; a: number };
+
+const channelHex = (value: unknown): string => {
+  const channel =
+    typeof value === "number" ? Math.min(1, Math.max(0, value)) : 0;
+  return Math.round(channel * 255)
+    .toString(16)
+    .padStart(2, "0");
+};
+
+const colorToHexString = (value: unknown): string | null =>
+  isRecord(value)
+    ? `#${channelHex(value.r)}${channelHex(value.g)}${channelHex(value.b)}`
+    : null;
+
+function hexStringToColor(hex: string): SpecColor | undefined {
+  const digits = /^#([0-9a-f]{6})$/i.exec(hex)?.[1];
+  if (digits === undefined) return undefined;
+  const packed = parseInt(digits, 16);
+  return {
+    r: ((packed >> 16) & 0xff) / 255,
+    g: ((packed >> 8) & 0xff) / 255,
+    b: (packed & 0xff) / 255,
+    a: 1,
+  };
+}
+
+/**
+ * The typed spec value for a stored override, or undefined when the path is
+ * not an editor field or the value does not fit the field.
+ */
+export function decodeOverride(path: string, raw: string): unknown {
+  const field = FIELD_BY_PATH.get(path);
+  if (!field || raw === "") return undefined;
+  switch (field.type) {
+    case "number": {
+      const value = Number(raw);
+      return Number.isFinite(value) ? value : undefined;
+    }
+    case "boolean":
+      return BOOLEAN_OPTIONS.includes(raw) ? raw === "true" : undefined;
+    case "select":
+      return field.options.includes(raw) ? raw : undefined;
+    case "color":
+      return hexStringToColor(raw);
+  }
+}
+
+const isPrimitive = (value: unknown): value is string | number | boolean =>
+  typeof value === "string" ||
+  typeof value === "number" ||
+  typeof value === "boolean";
+
+function displayValueFor(field: FieldDef, current: unknown): string {
+  if (field.type === "color") return colorToHexString(current) ?? "#000000";
+  return isPrimitive(current) ? String(current) : "";
+}
+
+const firstString = (
+  record: Record<string, unknown>,
+  keys: readonly string[],
+): string | null =>
+  keys
+    .map(key => record[key])
+    .find((value): value is string => typeof value === "string") ?? null;
+
+const stringOr = (value: unknown, fallback: string): string =>
+  typeof value === "string" ? value : fallback;
+
+// ── Field input ────────────────────────────────────────────────────────────
+
+type FieldInputProps = {
+  field: FieldDef;
+  value: string;
+  isModified: boolean;
+  onChange: (value: string) => void;
+};
+
+function FieldInput({ field, value, isModified, onChange }: FieldInputProps) {
+  const style = {
+    flex: 1,
+    padding: "0.125rem 0.25ch",
+    background: "var(--tui-bg-0)",
+    border: `1px solid ${isModified ? "var(--tui-amber-dim)" : "var(--tui-border)"}`,
+    color: isModified ? "var(--tui-amber)" : "var(--tui-fg-1)",
+    fontSize: "var(--tui-font-size-xs)",
+    fontFamily: "var(--tui-font)",
+    minWidth: 0,
+  };
+
+  if (field.type === "select" || field.type === "boolean") {
+    const options = field.type === "select" ? field.options : BOOLEAN_OPTIONS;
+    return (
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        style={style}
+      >
+        <option value="">—</option>
+        {options.map(opt => (
+          <option key={opt} value={opt}>
+            {opt}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  if (field.type === "color") {
+    return (
+      <input
+        type="color"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        style={{ ...style, width: "4rem", padding: 0 }}
+      />
+    );
+  }
+
+  return (
+    <input
+      type="number"
+      step={field.step}
+      min={field.min}
+      max={field.max}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      style={{ ...style, width: "4rem" }}
+    />
+  );
+}
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -391,12 +371,20 @@ export function PartEditor({
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const spec = parseSpec(specRaw) ?? {};
+  const specName = firstString(spec, ["name", "common_name"]);
+  const species = firstString(spec, ["species"]);
 
   const toggleSection = (key: string) =>
     setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
 
   const handleChange = (path: string, value: string) => {
-    setOverrides(prev => ({ ...prev, [path]: value }));
+    setOverrides(prev =>
+      value === ""
+        ? Object.fromEntries(
+            Object.entries(prev).filter(([key]) => key !== path),
+          )
+        : { ...prev, [path]: value },
+    );
   };
 
   const handleFork = () => {
@@ -428,17 +416,11 @@ export function PartEditor({
           style={{ padding: "0.75rem 1ch 0.5rem", marginBottom: "0.5rem" }}
         >
           {constituents.map(c => {
-            const cSpec = run(() => {
-              return parseSpec(c.spec) ?? ({} as Record<string, unknown>);
-            });
+            const cSpec = parseSpec(c.spec) ?? {};
             const name =
-              (cSpec.name as string) ??
-              (cSpec.common_name as string) ??
-              (cSpec.species as string) ??
+              firstString(cSpec, ["name", "common_name", "species"]) ??
               `Flower ${c.index}`;
-            const shape = getNestedValue(cSpec, "petals.layers.0.shape") as
-              | string
-              | null;
+            const shape = getNestedValue(cSpec, "petals.layers.0.shape");
             return (
               <div
                 key={c.index}
@@ -460,7 +442,7 @@ export function PartEditor({
                   }}
                 >
                   <span style={{ color: "var(--tui-fg-1)" }}>
-                    {c.index === 0 ? `${name}` : name}
+                    {name}
                     {c.index === 0 && (
                       <span
                         className="tui-badge tui-badge-green"
@@ -470,7 +452,7 @@ export function PartEditor({
                       </span>
                     )}
                   </span>
-                  {shape && (
+                  {typeof shape === "string" && (
                     <span
                       style={{
                         color: "var(--tui-fg-4)",
@@ -523,8 +505,7 @@ export function PartEditor({
 
       {/* ── Spec identity ── */}
       <div style={{ marginBottom: "0.5rem" }}>
-        {(typeof spec.name === "string" ||
-          typeof spec.common_name === "string") && (
+        {specName !== null && (
           <div
             style={{
               color: "var(--tui-fg-0)",
@@ -532,10 +513,10 @@ export function PartEditor({
               fontWeight: 600,
             }}
           >
-            {(spec.name as string) ?? (spec.common_name as string)}
+            {specName}
           </div>
         )}
-        {typeof spec.species === "string" && (
+        {species !== null && (
           <div
             style={{
               color: "var(--tui-fg-3)",
@@ -543,7 +524,7 @@ export function PartEditor({
               fontStyle: "italic",
             }}
           >
-            {spec.species}
+            {species}
           </div>
         )}
       </div>
@@ -551,9 +532,9 @@ export function PartEditor({
       {/* ── Taxonomy sections ── */}
       {TAXONOMY.map(section => {
         const isCollapsed = collapsed[section.key] ?? false;
-        const sectionOverrides = Object.keys(overrides).filter(k =>
-          k.startsWith(section.fields[0]?.path.split(".")[0] ?? ""),
-        );
+        const sectionModified = section.fields.filter(
+          field => overrides[field.path] !== undefined,
+        ).length;
 
         return (
           <div key={section.key} style={{ marginBottom: "0.25rem" }}>
@@ -588,7 +569,7 @@ export function PartEditor({
               <span style={{ textShadow: `0 0 6px ${section.accent}33` }}>
                 {section.label}
               </span>
-              {sectionOverrides.length > 0 && (
+              {sectionModified > 0 && (
                 <span
                   style={{
                     marginLeft: "auto",
@@ -596,7 +577,7 @@ export function PartEditor({
                     fontSize: "var(--tui-font-size-2xs)",
                   }}
                 >
-                  {sectionOverrides.length} modified
+                  {sectionModified} modified
                 </span>
               )}
             </button>
@@ -612,11 +593,10 @@ export function PartEditor({
                 }}
               >
                 {section.fields.map(field => {
-                  const currentValue = getNestedValue(spec, field.path);
                   const overrideValue = overrides[field.path];
                   const displayValue =
                     overrideValue ??
-                    (currentValue != null ? String(currentValue) : "");
+                    displayValueFor(field, getNestedValue(spec, field.path));
                   const isModified = overrideValue !== undefined;
 
                   return (
@@ -643,57 +623,12 @@ export function PartEditor({
                       >
                         {field.label}
                       </span>
-                      {field.type === "select" && field.options ? (
-                        <select
-                          value={displayValue}
-                          onChange={e =>
-                            handleChange(field.path, e.target.value)
-                          }
-                          style={{
-                            flex: 1,
-                            padding: "0.125rem 0.25ch",
-                            background: "var(--tui-bg-0)",
-                            border: `1px solid ${isModified ? "var(--tui-amber-dim)" : "var(--tui-border)"}`,
-                            color: isModified
-                              ? "var(--tui-amber)"
-                              : "var(--tui-fg-1)",
-                            fontSize: "var(--tui-font-size-xs)",
-                            fontFamily: "var(--tui-font)",
-                            minWidth: 0,
-                          }}
-                        >
-                          <option value="">—</option>
-                          {field.options.map(opt => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type="number"
-                          step={field.step ?? 0.1}
-                          min={field.min ?? 0}
-                          max={field.max ?? 3}
-                          value={displayValue}
-                          onChange={e =>
-                            handleChange(field.path, e.target.value)
-                          }
-                          style={{
-                            flex: 1,
-                            padding: "0.125rem 0.25ch",
-                            background: "var(--tui-bg-0)",
-                            border: `1px solid ${isModified ? "var(--tui-amber-dim)" : "var(--tui-border)"}`,
-                            color: isModified
-                              ? "var(--tui-amber)"
-                              : "var(--tui-fg-1)",
-                            fontSize: "var(--tui-font-size-xs)",
-                            fontFamily: "var(--tui-font)",
-                            minWidth: 0,
-                            width: "4rem",
-                          }}
-                        />
-                      )}
+                      <FieldInput
+                        field={field}
+                        value={displayValue}
+                        isModified={isModified}
+                        onChange={value => handleChange(field.path, value)}
+                      />
                     </div>
                   );
                 })}
@@ -705,10 +640,9 @@ export function PartEditor({
 
       {/* ── Additional petal layers ── */}
       {run(() => {
-        const layers = getNestedValue(spec, "petals.layers") as
-          | unknown[]
-          | null;
-        if (!layers || layers.length <= 1) return null;
+        const rawLayers = getNestedValue(spec, "petals.layers");
+        const layers: unknown[] = Array.isArray(rawLayers) ? rawLayers : [];
+        if (layers.length <= 1) return null;
         return (
           <div style={{ marginTop: "0.25rem" }}>
             <div
@@ -722,8 +656,15 @@ export function PartEditor({
               + {layers.length - 1} more petal layer
               {layers.length > 2 ? "s" : ""} (read-only)
             </div>
-            {(layers.slice(1) as Array<Record<string, unknown>>).map(
-              (layer, i) => (
+            {layers.slice(1).map((rawLayer, i) => {
+              const layer = isRecord(rawLayer) ? rawLayer : {};
+              const count =
+                typeof layer.count === "number" ? String(layer.count) : "?";
+              const edge =
+                typeof layer.edge_style === "string"
+                  ? `[${layer.edge_style}]`
+                  : "";
+              return (
                 <div
                   key={i}
                   style={{
@@ -733,12 +674,10 @@ export function PartEditor({
                     lineHeight: 1.8,
                   }}
                 >
-                  L{i + 2}: {(layer.shape as string) ?? "?"} x
-                  {(layer.count as number) ?? "?"}{" "}
-                  {(layer.edge_style as string) ? `[${layer.edge_style}]` : ""}
+                  L{i + 2}: {stringOr(layer.shape, "?")} x{count} {edge}
                 </div>
-              ),
-            )}
+              );
+            })}
           </div>
         );
       })}

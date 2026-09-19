@@ -10,7 +10,7 @@ import { TemplatePicker } from "./TemplatePicker.tsx";
 import { FlowerChat } from "../ai/FlowerChat.tsx";
 import { OrderFlow } from "../orders/OrderFlow.tsx";
 import { ActivityFeed } from "../orders/ActivityFeed.tsx";
-import { PartEditor } from "./PartEditor.tsx";
+import { PartEditor, decodeOverride } from "./PartEditor.tsx";
 import { ModelPicker, DEFAULT_MODEL } from "../settings/ModelPicker.tsx";
 import { FlowerCanvas } from "./FlowerCanvas.tsx";
 import type { FlowerCanvasHandle } from "./FlowerCanvas.tsx";
@@ -33,16 +33,22 @@ function applyFieldOverrides(
   specYaml: string,
   overrides: FlowerPartOverride[],
 ): string {
-  const fieldOverrides = overrides.filter(
-    o => !o.partPath.startsWith("constituent:") && o.partPath !== "arrangement",
-  );
-  if (fieldOverrides.length === 0) return specYaml;
+  const decoded = overrides
+    .filter(
+      o =>
+        !o.partPath.startsWith("constituent:") && o.partPath !== "arrangement",
+    )
+    .map(o => ({
+      path: o.partPath,
+      value: decodeOverride(o.partPath, o.overrideJson),
+    }))
+    .filter(o => o.value !== undefined);
+  if (decoded.length === 0) return specYaml;
 
-  const spec = parseSpec(specYaml) ?? {};
-  for (const o of fieldOverrides) {
-    const num = Number(o.overrideJson);
-    setNestedValue(spec, o.partPath, Number.isNaN(num) ? o.overrideJson : num);
-  }
+  const spec = decoded.reduce(
+    (acc, o) => setNestedValue(acc, o.path, o.value),
+    parseSpec(specYaml) ?? {},
+  );
   return stringify(spec);
 }
 
