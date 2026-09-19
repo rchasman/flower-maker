@@ -3,9 +3,11 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "test": "bun test"
   },
   "devDependencies": {
+    "@ai-sdk/provider": "^4.0.17",
     "@types/bun": "catalog:"
   },
   "peerDependencies": {
@@ -13,6 +15,7 @@
   },
   "dependencies": {
     "ai": "catalog:",
+    "yaml": "^2.9.1",
     "zod": "catalog:"
   }
 }

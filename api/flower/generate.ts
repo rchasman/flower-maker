@@ -1,6 +1,13 @@
-import { streamText, gateway } from "ai";
-import { DEFAULT_MODEL } from "../config/models";
+import { streamText, gateway, createTextStreamResponse } from "ai";
+import { z } from "zod";
+import { DEFAULT_MODEL, JEV_MODEL } from "../config/models";
+import { generateSpecYamlWithJev } from "./jevSpec";
 
+const GenerateBody = z.object({
+  prompt: z.string(),
+  template_name: z.string().optional(),
+  model: z.string().default(DEFAULT_MODEL),
+});
 const FLORIST_SYSTEM_PROMPT = `You are an expert botanical florist. Generate a FlowerSpec as YAML (no markdown fences, no explanation — ONLY the YAML).
 
 EXACT SCHEMA (use these field names and enum string values):
@@ -124,22 +131,35 @@ RULES:
 - Mix edge styles with shapes: Fimbriate + Fringed, Panduriform + Undulate, Flabellate + Lobed
 - Be botanically accurate but creatively expressive`;
 
+function generatePrompt(body: z.infer<typeof GenerateBody>): string {
+  return body.template_name
+    ? `Create a ${body.template_name} flower based on this description: ${body.prompt}. Use the real botanical properties of ${body.template_name} as a starting point but make it unique.`
+    : `Create a unique flower based on this description: ${body.prompt}`;
+}
+
+async function generateWithJev(body: z.infer<typeof GenerateBody>): Promise<Response> {
+  const yaml = await generateSpecYamlWithJev(gateway.evaluationModel(JEV_MODEL), {
+    prompt: body.prompt,
+    templateName: body.template_name,
+  });
+  return new Response(yaml, { headers: { "Content-Type": "text/yaml; charset=utf-8" } });
+}
+
 export async function handleGenerate(request: Request) {
   try {
-    const body = await request.json() as { prompt: string; template_name?: string; model?: string };
+    const body = GenerateBody.parse(await request.json());
+    if (body.model === JEV_MODEL) return await generateWithJev(body);
 
     const result = streamText({
-      model: gateway(body.model ?? DEFAULT_MODEL),
+      model: gateway(body.model),
       system: FLORIST_SYSTEM_PROMPT,
-      prompt: body.template_name
-        ? `Create a ${body.template_name} flower based on this description: ${body.prompt}. Use the real botanical properties of ${body.template_name} as a starting point but make it unique.`
-        : `Create a unique flower based on this description: ${body.prompt}`,
+      prompt: generatePrompt(body),
     });
 
-    return result.toTextStreamResponse();
+    return createTextStreamResponse({ stream: result.textStream });
   } catch (err) {
-    // Catches sync errors (bad body, invalid model). Stream errors surface
-    // asynchronously via the AI SDK's error protocol — handled client-side.
+    // Catches sync errors (bad body, invalid model, Jev failures). Gateway stream
+    // errors surface asynchronously via the AI SDK's error protocol — handled client-side.
     const message = err instanceof Error ? err.message : String(err);
     console.error("[generate] failed:", message);
     return Response.json({ error: message }, { status: 502 });
