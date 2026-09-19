@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { FUSION_KINDS } from "../data/flower-enums.ts";
 import {
-  corollaProfile,
   generateCorolla,
   isFused,
+  type Corolla,
   type CorollaLayer,
   type FusedKind,
 } from "./corolla.ts";
@@ -23,76 +23,71 @@ const LAYER: CorollaLayer = {
   color: 0xcc4488,
 };
 
-const referenceFrame = (angle = 0.4) =>
+const referenceFrame = (layer: CorollaLayer = LAYER, angle = 0.4) =>
   createPetalFrame({
     angle,
-    shape: LAYER.shape,
-    edge: LAYER.edge,
-    length: LAYER.length,
-    width: LAYER.width,
-    curvature: LAYER.curvature,
-    curl: LAYER.curl,
+    shape: layer.shape,
+    edge: layer.edge,
+    length: layer.length,
+    width: layer.width,
+    curvature: layer.curvature,
+    curl: layer.curl,
     seed: 0.5,
   });
 
 const corolla = (kind: FusedKind, count = 5, depth = 0.5, seed = 0.42) =>
   generateCorolla(LAYER, referenceFrame(), kind, depth, count, seed);
 
-const SAMPLES = Array.from({ length: 33 }, (_, i) => i / 32);
-
-const profileSamples = (kind: FusedKind) =>
-  SAMPLES.map(s => corollaProfile(kind, s));
-
-const argmax = (values: number[]) =>
-  values.reduce((best, v, i) => (v > values[best]! ? i : best), 0);
-
 const norm = ([x, y]: readonly [number, number]) => Math.hypot(x, y);
 
-describe("corollaProfile", () => {
-  test("Bell is widest before the rim and curves in", () => {
-    const values = profileSamples("Bell");
-    const peak = argmax(values);
-    expect(peak).toBeGreaterThan(0);
-    expect(peak).toBeLessThan(values.length - 1);
-    expect(values.at(-1)!).toBeLessThan(values[peak]!);
+/** How far the rim opens across the cup's full flare: 1 when the rim is the widest point. */
+const rimFlare = ({ throat, rimRadius, bodyRadius }: Corolla): number =>
+  (rimRadius - throat.radius) / (bodyRadius - throat.radius);
+
+/** The cup's widening from throat to silhouette. */
+const flare = ({ throat, bodyRadius }: Corolla): number =>
+  bodyRadius - throat.radius;
+
+describe("cup shapes", () => {
+  test("Bell is widest before the rim and curves in only a little", () => {
+    const bell = corolla("Bell");
+    expect(bell.rimRadius).toBeLessThan(bell.bodyRadius);
+    expect(rimFlare(bell)).toBeGreaterThan(0.75);
   });
 
-  test("Trumpet widens all the way to the rim", () => {
-    const values = profileSamples("Trumpet");
-    expect(argmax(values)).toBe(values.length - 1);
-    const increasing = values.slice(1).every((v, i) => v > values[i]!);
-    expect(increasing).toBe(true);
-  });
-
-  test("Urn bulges in the middle and the rim is narrower than the bulge", () => {
-    const values = profileSamples("Urn");
-    const peakS = SAMPLES[argmax(values)]!;
-    expect(peakS).toBeGreaterThan(0.3);
-    expect(peakS).toBeLessThan(0.7);
-    expect(values.at(-1)!).toBeLessThan(Math.max(...values) * 0.8);
-  });
-
-  test("Funnel widens monotonically", () => {
-    const values = profileSamples("Funnel");
-    const monotonic = values.slice(1).every((v, i) => v >= values[i]!);
-    expect(monotonic).toBe(true);
-    expect(values.at(-1)!).toBe(Math.max(...values));
-  });
-
-  test("Tube stays narrow", () => {
-    expect(Math.max(...profileSamples("Tube"))).toBeLessThanOrEqual(0.35);
-  });
-
-  test("every kind reaches inside (0, 1]", () => {
-    for (const kind of FUSED_KINDS) {
-      const values = profileSamples(kind);
-      expect(Math.min(...values)).toBeGreaterThan(0);
-      expect(Math.max(...values)).toBeLessThanOrEqual(1);
+  test("Trumpet and Funnel are widest at the rim", () => {
+    for (const kind of ["Trumpet", "Funnel"] as const) {
+      expect(rimFlare(corolla(kind))).toBeCloseTo(1, 9);
     }
+  });
+
+  test("Urn's rim closes to less than half the bulge", () => {
+    expect(rimFlare(corolla("Urn"))).toBeLessThan(0.5);
+  });
+
+  test("Tube stays narrow next to a Funnel from the same petal", () => {
+    expect(flare(corolla("Tube"))).toBeLessThan(
+      flare(corolla("Funnel")) * 0.15,
+    );
   });
 });
 
 describe("generateCorolla", () => {
+  test("a short petal with a strong curl still opens outward from its throat", () => {
+    const curled: CorollaLayer = { ...LAYER, length: 0.5, curl: 0.7 };
+    const { throat, rimRadius, bodyRadius } = generateCorolla(
+      curled,
+      referenceFrame(curled),
+      "Bell",
+      0.5,
+      5,
+      0.42,
+    );
+    expect(throat.radius).toBeLessThan(rimRadius);
+    expect(rimRadius).toBeLessThanOrEqual(bodyRadius);
+    expect(bodyRadius - throat.radius).toBeGreaterThan(0.01);
+  });
+
   for (const kind of FUSED_KINDS) {
     test(`${kind}: the body is one closed loop around the head`, () => {
       const { body, bodyRadius } = corolla(kind);

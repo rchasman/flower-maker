@@ -420,7 +420,13 @@ describe("leaf variegation and translucency", () => {
 describe("stem surface and branching", () => {
   const axis = stemAxis([0, 1], [0, 0], 0, "Straight");
   const surface = (texture: SurfaceTexture, style: "Straight" | "Woody") =>
-    generateStemSurface(axis, 0.05, style, texture, 0x2d5a27, 3);
+    generateStemSurface(
+      stemAxis([0, 1], [0, 0], 0, style),
+      0.05,
+      texture,
+      0x2d5a27,
+      3,
+    );
 
   test("a smooth straight stem has no surface detail", () => {
     expect(surface("Smooth", "Straight")).toEqual([]);

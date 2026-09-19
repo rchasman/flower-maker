@@ -5,7 +5,12 @@
  * read-only grid previews (MiniCanvas) so they produce identical visuals.
  */
 
-import { FillGradient, Graphics } from "pixi.js";
+import {
+  FillGradient,
+  Graphics,
+  type FillInput,
+  type StrokeInput,
+} from "pixi.js";
 import type { BioPattern } from "../data/flower-enums.ts";
 import { darkenColor, lightenColor } from "./color.ts";
 import type { NectaryPlan, ParticleSeed } from "./effects.ts";
@@ -22,15 +27,15 @@ import type {
 import type { StemPlan } from "./stem.ts";
 import { GOLDEN_ANGLE, LIGHT_ANGLE, unreachable } from "./util.ts";
 
-// ── Low-level path helper ──
+// ── Low-level path helpers ──
 
 /** Execute DrawCmd[] on a PixiJS Graphics context, scaled around (ox, oy). */
 function drawCmds(
   g: Graphics,
   cmds: readonly DrawCmd[],
   scale: number,
-  ox = 0,
-  oy = 0,
+  ox: number,
+  oy: number,
 ): void {
   for (const cmd of cmds) {
     switch (cmd.op) {
@@ -57,6 +62,39 @@ function drawCmds(
   }
 }
 
+/**
+ * Fill the path `cmds` describes, scaled around (ox, oy). An empty list draws
+ * nothing: pixi's fill() with no path operations since the last fill or
+ * stroke reuses that instruction's path, which would repaint the previous
+ * shape in this style.
+ */
+export function fillCmds(
+  g: Graphics,
+  cmds: readonly DrawCmd[],
+  style: FillInput,
+  scale: number,
+  ox = 0,
+  oy = 0,
+): void {
+  if (cmds.length === 0) return;
+  drawCmds(g, cmds, scale, ox, oy);
+  g.fill(style);
+}
+
+/** Stroke the path `cmds` describes, scaled around (ox, oy); an empty list draws nothing (see fillCmds). */
+export function strokeCmds(
+  g: Graphics,
+  cmds: readonly DrawCmd[],
+  style: StrokeInput,
+  scale: number,
+  ox = 0,
+  oy = 0,
+): void {
+  if (cmds.length === 0) return;
+  drawCmds(g, cmds, scale, ox, oy);
+  g.stroke(style);
+}
+
 // ── Part-level helpers ──
 
 const LIGHT_COS = Math.cos(LIGHT_ANGLE);
@@ -73,108 +111,127 @@ type PetalPass = {
   shadowOffY: number;
 };
 
-/** One petal or corolla lobe: fill, gradient stops, light, shadow, texture, marks, veins, outline. */
-function drawPetal(
+/** The material's extra pass over the petal fill, or nothing for a matte texture. */
+function drawPetalTexture(
   g: Graphics,
   petal: PetalPlan,
-  petalIdx: number,
   pass: PetalPass,
 ): void {
-  const { scale, alpha, opacity, lightOffsetX, lightOffsetY } = pass;
-
-  // Intra-layer depth: each petal casts a subtle shadow on the one behind it
-  if (petalIdx > 0) {
-    drawCmds(
-      g,
-      petal.cmds,
-      scale * 1.01,
-      pass.shadowOffX * 0.5,
-      pass.shadowOffY * 0.5,
-    );
-    g.fill({ color: 0x000000, alpha: alpha * 0.04 });
-  }
-
-  drawCmds(g, petal.cmds, scale);
-  g.fill({ color: petal.color, alpha: alpha * opacity });
-
-  for (let si = 1; si < petal.gradientStops.length; si++) {
-    const stop = petal.gradientStops[si]!;
-    if (stop.cmds.length === 0) continue;
-    const stopAlpha = alpha * opacity * (0.65 - (si - 1) * 0.1);
-    drawCmds(g, stop.cmds, scale);
-    g.fill({ color: stop.blendedColor, alpha: Math.max(0.15, stopAlpha) });
-  }
-
-  drawCmds(g, petal.cmds, scale, lightOffsetX, lightOffsetY);
-  g.fill({ color: petal.lightColor, alpha: alpha * opacity * 0.18 });
-
-  drawCmds(g, petal.cmds, scale, -lightOffsetX * 0.7, -lightOffsetY * 0.7);
-  g.fill({ color: petal.shadowColor, alpha: alpha * opacity * 0.1 });
-
-  drawCmds(g, petal.cmds, scale);
-  g.fill({ color: petal.highlightColor, alpha: alpha * 0.15 });
-
-  // Texture pass — material-specific visual treatment
+  const { scale, alpha, lightOffsetX, lightOffsetY } = pass;
   switch (petal.texture) {
     case "Velvet": {
       // Edge darkening — thick inner stroke for soft absorbed-light look
-      drawCmds(g, petal.cmds, scale);
-      g.stroke({
-        color: petal.textureEdge,
-        width: Math.max(1.5, scale * 0.025),
-        alpha: alpha * 0.2,
-      });
+      strokeCmds(
+        g,
+        petal.cmds,
+        {
+          color: petal.textureEdge,
+          width: Math.max(1.5, scale * 0.025),
+          alpha: alpha * 0.2,
+        },
+        scale,
+      );
       break;
     }
     case "Silk": {
       // Bright specular band — thin highlight stripe across petal center
-      drawCmds(g, petal.cmds, scale, lightOffsetX * 2, lightOffsetY * 2);
-      g.fill({ color: petal.textureHighlight, alpha: alpha * 0.12 });
+      fillCmds(
+        g,
+        petal.cmds,
+        { color: petal.textureHighlight, alpha: alpha * 0.12 },
+        scale,
+        lightOffsetX * 2,
+        lightOffsetY * 2,
+      );
       break;
     }
     case "Waxy": {
       // Sharp specular — bright highlight near petal base
-      drawCmds(g, petal.cmds, scale, lightOffsetX * 1.5, lightOffsetY * 1.5);
-      g.fill({ color: petal.textureHighlight, alpha: alpha * 0.15 });
+      fillCmds(
+        g,
+        petal.cmds,
+        { color: petal.textureHighlight, alpha: alpha * 0.15 },
+        scale,
+        lightOffsetX * 1.5,
+        lightOffsetY * 1.5,
+      );
       break;
     }
     case "Metallic": {
       // Color-shift: warm/cool offset fills for metallic sheen
-      drawCmds(g, petal.cmds, scale, lightOffsetX, lightOffsetY);
-      g.fill({ color: petal.textureHighlight, alpha: alpha * 0.2 });
-      drawCmds(g, petal.cmds, scale, -lightOffsetX, -lightOffsetY);
-      g.fill({ color: petal.textureEdge, alpha: alpha * 0.12 });
+      fillCmds(
+        g,
+        petal.cmds,
+        { color: petal.textureHighlight, alpha: alpha * 0.2 },
+        scale,
+        lightOffsetX,
+        lightOffsetY,
+      );
+      fillCmds(
+        g,
+        petal.cmds,
+        { color: petal.textureEdge, alpha: alpha * 0.12 },
+        scale,
+        -lightOffsetX,
+        -lightOffsetY,
+      );
       break;
     }
     case "Papery": {
       // Desaturated overlay — muted, translucent look
-      drawCmds(g, petal.cmds, scale);
-      g.fill({ color: petal.textureHighlight, alpha: alpha * 0.08 });
+      fillCmds(
+        g,
+        petal.cmds,
+        { color: petal.textureHighlight, alpha: alpha * 0.08 },
+        scale,
+      );
       break;
     }
     case "Glassy":
     case "Crystalline": {
       // Sharp specular point — bright white highlight
-      drawCmds(g, petal.cmds, scale, lightOffsetX * 2.5, lightOffsetY * 2.5);
-      g.fill({ color: 0xffffff, alpha: alpha * 0.18 });
+      fillCmds(
+        g,
+        petal.cmds,
+        { color: 0xffffff, alpha: alpha * 0.18 },
+        scale,
+        lightOffsetX * 2.5,
+        lightOffsetY * 2.5,
+      );
       break;
     }
     case "Pearlescent": {
       // Warm and cool offset fills for rainbow sheen
-      drawCmds(g, petal.cmds, scale, lightOffsetX * 0.8, lightOffsetY * 0.8);
-      g.fill({ color: petal.textureHighlight, alpha: alpha * 0.1 });
-      drawCmds(g, petal.cmds, scale, -lightOffsetX * 0.5, -lightOffsetY * 0.5);
-      g.fill({ color: petal.textureEdge, alpha: alpha * 0.08 });
+      fillCmds(
+        g,
+        petal.cmds,
+        { color: petal.textureHighlight, alpha: alpha * 0.1 },
+        scale,
+        lightOffsetX * 0.8,
+        lightOffsetY * 0.8,
+      );
+      fillCmds(
+        g,
+        petal.cmds,
+        { color: petal.textureEdge, alpha: alpha * 0.08 },
+        scale,
+        -lightOffsetX * 0.5,
+        -lightOffsetY * 0.5,
+      );
       break;
     }
     case "Frosted": {
       // White edge frost
-      drawCmds(g, petal.cmds, scale);
-      g.stroke({
-        color: 0xffffff,
-        width: Math.max(1, scale * 0.02),
-        alpha: alpha * 0.15,
-      });
+      strokeCmds(
+        g,
+        petal.cmds,
+        {
+          color: 0xffffff,
+          width: Math.max(1, scale * 0.02),
+          alpha: alpha * 0.15,
+        },
+        scale,
+      );
       break;
     }
     // Matte textures get no extra pass
@@ -189,43 +246,134 @@ function drawPetal(
     default:
       unreachable(petal.texture);
   }
+}
+
+/** One petal or corolla lobe: fill, gradient stops, light, shadow, texture, marks, veins, outline. */
+function drawPetal(
+  g: Graphics,
+  petal: PetalPlan,
+  petalIdx: number,
+  pass: PetalPass,
+): void {
+  const { scale, alpha, opacity, lightOffsetX, lightOffsetY } = pass;
+
+  // Intra-layer depth: each petal casts a subtle shadow on the one behind it
+  if (petalIdx > 0) {
+    fillCmds(
+      g,
+      petal.cmds,
+      { color: 0x000000, alpha: alpha * 0.04 },
+      scale * 1.01,
+      pass.shadowOffX * 0.5,
+      pass.shadowOffY * 0.5,
+    );
+  }
+
+  fillCmds(
+    g,
+    petal.cmds,
+    { color: petal.color, alpha: alpha * opacity },
+    scale,
+  );
+
+  for (const [si, stop] of petal.gradientStops.slice(1).entries()) {
+    const stopAlpha = alpha * opacity * (0.65 - si * 0.1);
+    fillCmds(
+      g,
+      stop.cmds,
+      { color: stop.blendedColor, alpha: Math.max(0.15, stopAlpha) },
+      scale,
+    );
+  }
+
+  fillCmds(
+    g,
+    petal.cmds,
+    { color: petal.lightColor, alpha: alpha * opacity * 0.18 },
+    scale,
+    lightOffsetX,
+    lightOffsetY,
+  );
+
+  fillCmds(
+    g,
+    petal.cmds,
+    { color: petal.shadowColor, alpha: alpha * opacity * 0.1 },
+    scale,
+    -lightOffsetX * 0.7,
+    -lightOffsetY * 0.7,
+  );
+
+  fillCmds(
+    g,
+    petal.cmds,
+    { color: petal.highlightColor, alpha: alpha * 0.15 },
+    scale,
+  );
+
+  drawPetalTexture(g, petal, pass);
 
   // Iridescence: a hue-shifted sheen toward the light and its complement away from it
   if (petal.iridescence) {
     const { color, complement, intensity } = petal.iridescence;
-    drawCmds(g, petal.cmds, scale, lightOffsetX * 0.8, lightOffsetY * 0.8);
-    g.fill({ color, alpha: alpha * intensity * 0.25 });
-    drawCmds(g, petal.cmds, scale, -lightOffsetX * 0.5, -lightOffsetY * 0.5);
-    g.fill({ color: complement, alpha: alpha * intensity * 0.12 });
+    fillCmds(
+      g,
+      petal.cmds,
+      { color, alpha: alpha * intensity * 0.25 },
+      scale,
+      lightOffsetX * 0.8,
+      lightOffsetY * 0.8,
+    );
+    fillCmds(
+      g,
+      petal.cmds,
+      { color: complement, alpha: alpha * intensity * 0.12 },
+      scale,
+      -lightOffsetX * 0.5,
+      -lightOffsetY * 0.5,
+    );
   }
 
   for (const mark of petal.marks) {
-    drawCmds(g, mark.cmds, scale);
-    g.fill({ color: mark.color, alpha: alpha * opacity * mark.alpha });
+    fillCmds(
+      g,
+      mark.cmds,
+      { color: mark.color, alpha: alpha * opacity * mark.alpha },
+      scale,
+    );
   }
 
-  if (petal.veinCmds.length > 0) {
-    drawCmds(g, petal.veinCmds, scale);
-    g.stroke({
+  strokeCmds(
+    g,
+    petal.veinCmds,
+    {
       color: petal.midribGlowColor,
       width: Math.max(0.8, scale * 0.018),
       alpha: alpha * 0.12,
-    });
-
-    drawCmds(g, petal.veinCmds, scale);
-    g.stroke({
+    },
+    scale,
+  );
+  strokeCmds(
+    g,
+    petal.veinCmds,
+    {
       color: petal.veinColor,
       width: Math.max(0.3, scale * 0.008),
       alpha: alpha * 0.25,
-    });
-  }
+    },
+    scale,
+  );
 
-  drawCmds(g, petal.cmds, scale);
-  g.stroke({
-    color: petal.outlineColor,
-    width: Math.max(0.3, scale * 0.006),
-    alpha: alpha * opacity * 0.4,
-  });
+  strokeCmds(
+    g,
+    petal.cmds,
+    {
+      color: petal.outlineColor,
+      width: Math.max(0.3, scale * 0.006),
+      alpha: alpha * opacity * 0.4,
+    },
+    scale,
+  );
 }
 
 /**
@@ -262,16 +410,28 @@ function drawCorollaBody(
   pass: PetalPass,
 ): void {
   const { scale, alpha, opacity } = pass;
-  drawCmds(g, corolla.body, scale);
-  g.fill({ color: corolla.color, alpha: alpha * opacity });
-  drawCmds(g, corolla.body, scale);
-  g.fill({ fill: corollaGradient(corolla), alpha: alpha * opacity * 0.9 });
-  drawCmds(g, corolla.body, scale);
-  g.stroke({
-    color: darkenColor(corolla.color, 0.55),
-    width: Math.max(0.3, scale * 0.006),
-    alpha: alpha * opacity * 0.4,
-  });
+  fillCmds(
+    g,
+    corolla.body,
+    { color: corolla.color, alpha: alpha * opacity },
+    scale,
+  );
+  fillCmds(
+    g,
+    corolla.body,
+    { fill: corollaGradient(corolla), alpha: alpha * opacity * 0.9 },
+    scale,
+  );
+  strokeCmds(
+    g,
+    corolla.body,
+    {
+      color: darkenColor(corolla.color, 0.55),
+      width: Math.max(0.3, scale * 0.006),
+      alpha: alpha * opacity * 0.4,
+    },
+    scale,
+  );
 }
 
 function drawThroat(g: Graphics, corolla: CorollaPlan, pass: PetalPass): void {
@@ -313,8 +473,14 @@ function drawPetals(
     // Pass 1: petal overlap depth shadows (inner layers cast onto outer)
     if (layerIdx > 0) {
       for (const cmds of layerOutlines(layer)) {
-        drawCmds(g, cmds, scale * 1.02, shadowOffX, shadowOffY);
-        g.fill({ color: 0x000000, alpha: alpha * 0.06 });
+        fillCmds(
+          g,
+          cmds,
+          { color: 0x000000, alpha: alpha * 0.06 },
+          scale * 1.02,
+          shadowOffX,
+          shadowOffY,
+        );
       }
     }
 
@@ -385,18 +551,22 @@ function drawNectary(
   alpha: number,
 ): void {
   const intensity = nectary.glow?.intensity ?? 0.5;
-  if (nectary.fills.length > 0) {
-    drawCmds(g, nectary.fills, scale);
-    g.fill({ color: nectary.color, alpha: alpha * (0.2 + intensity * 0.3) });
-  }
-  if (nectary.strokes.length > 0) {
-    drawCmds(g, nectary.strokes, scale);
-    g.stroke({
+  fillCmds(
+    g,
+    nectary.fills,
+    { color: nectary.color, alpha: alpha * (0.2 + intensity * 0.3) },
+    scale,
+  );
+  strokeCmds(
+    g,
+    nectary.strokes,
+    {
       color: nectary.color,
       width: Math.max(0.5, nectary.strokeWidth * scale),
       alpha: alpha * (0.3 + intensity * 0.4),
-    });
-  }
+    },
+    scale,
+  );
 }
 
 /** The seed head's dense stipple, then its pappus hairs and anthers or its seed marks. */
@@ -406,18 +576,28 @@ function drawSeedHead(
   scale: number,
   alpha: number,
 ): void {
-  drawCmds(g, seedHead.stipple, scale);
-  g.fill({ color: seedHead.stippleColor, alpha: alpha * 0.7 });
-  if (seedHead.strokes.length > 0) {
-    drawCmds(g, seedHead.strokes, scale);
-    g.stroke({
+  fillCmds(
+    g,
+    seedHead.stipple,
+    { color: seedHead.stippleColor, alpha: alpha * 0.7 },
+    scale,
+  );
+  strokeCmds(
+    g,
+    seedHead.strokes,
+    {
       color: seedHead.strokeColor,
       width: Math.max(0.4, seedHead.strokeWidth * scale),
       alpha: alpha * 0.8,
-    });
-  }
-  drawCmds(g, seedHead.fills, scale);
-  g.fill({ color: seedHead.fillColor, alpha: alpha * 0.9 });
+    },
+    scale,
+  );
+  fillCmds(
+    g,
+    seedHead.fills,
+    { color: seedHead.fillColor, alpha: alpha * 0.9 },
+    scale,
+  );
 }
 
 /** Draw center disc with outline, radial depth, stippling, seed head and pistil highlight. */
@@ -572,14 +752,17 @@ function drawStalk(
   scale: number,
   alpha: number,
 ): void {
-  drawCmds(g, cmds, scale);
-  g.fill({ color, alpha: alpha * 0.9 });
-  drawCmds(g, cmds, scale);
-  g.stroke({
-    color: darkenColor(color, 0.5),
-    width: Math.max(0.4, scale * 0.008),
-    alpha: alpha * 0.45,
-  });
+  fillCmds(g, cmds, { color, alpha: alpha * 0.9 }, scale);
+  strokeCmds(
+    g,
+    cmds,
+    {
+      color: darkenColor(color, 0.5),
+      width: Math.max(0.4, scale * 0.008),
+      alpha: alpha * 0.45,
+    },
+    scale,
+  );
 }
 
 /** Sepals and showy bracts: a flat fill with a darker edge. */
@@ -590,91 +773,114 @@ function drawBlades(
   alpha: number,
 ): void {
   for (const blade of blades) {
-    drawCmds(g, blade.cmds, scale);
-    g.fill({ color: blade.color, alpha: alpha * 0.85 });
-    drawCmds(g, blade.cmds, scale);
-    g.stroke({
-      color: darkenColor(blade.color, 0.5),
-      width: Math.max(0.3, scale * 0.005),
-      alpha: alpha * 0.35,
-    });
+    fillCmds(g, blade.cmds, { color: blade.color, alpha: alpha * 0.85 }, scale);
+    strokeCmds(
+      g,
+      blade.cmds,
+      {
+        color: darkenColor(blade.color, 0.5),
+        width: Math.max(0.3, scale * 0.005),
+        alpha: alpha * 0.35,
+      },
+      scale,
+    );
   }
 }
 
 function drawLeaf(g: Graphics, leaf: LeafPlan, scale: number, alpha: number) {
   const leafAlpha = alpha * leaf.alpha;
-  drawCmds(g, leaf.cmds, scale);
-  g.fill({ color: leaf.color, alpha: leafAlpha * 0.9 });
+  fillCmds(g, leaf.cmds, { color: leaf.color, alpha: leafAlpha * 0.9 }, scale);
   if (leaf.variegation) {
-    drawCmds(g, leaf.variegation.cmds, scale);
-    g.fill({ color: leaf.variegation.color, alpha: leafAlpha * 0.8 });
+    fillCmds(
+      g,
+      leaf.variegation.cmds,
+      { color: leaf.variegation.color, alpha: leafAlpha * 0.8 },
+      scale,
+    );
   }
-  drawCmds(g, leaf.cmds, scale);
-  g.stroke({
-    color: darkenColor(leaf.color, 0.45),
-    width: Math.max(0.3, scale * 0.006),
-    alpha: leafAlpha * 0.4,
-  });
-  drawCmds(g, leaf.veins, scale);
-  g.stroke({
-    color: leaf.veinColor,
-    width: Math.max(0.4, scale * 0.012),
-    alpha: leafAlpha * 0.65,
-  });
+  strokeCmds(
+    g,
+    leaf.cmds,
+    {
+      color: darkenColor(leaf.color, 0.45),
+      width: Math.max(0.3, scale * 0.006),
+      alpha: leafAlpha * 0.4,
+    },
+    scale,
+  );
+  strokeCmds(
+    g,
+    leaf.veins,
+    {
+      color: leaf.veinColor,
+      width: Math.max(0.4, scale * 0.012),
+      alpha: leafAlpha * 0.65,
+    },
+    scale,
+  );
 }
 
 /** A side bud: its pedicel, the sepal shell with two seams, and any petal showing at the tip. */
 function drawBud(g: Graphics, bud: BudPlan, scale: number, alpha: number) {
   drawStalk(g, bud.pedicel, bud.pedicelColor, scale, alpha);
-  drawCmds(g, bud.shell, scale);
-  g.fill({ color: bud.shellColor, alpha: alpha * 0.95 });
-  drawCmds(g, bud.shell, scale);
-  g.stroke({
-    color: darkenColor(bud.shellColor, 0.5),
-    width: Math.max(0.3, scale * 0.005),
-    alpha: alpha * 0.45,
-  });
-  drawCmds(g, bud.seams, scale);
-  g.stroke({
-    color: darkenColor(bud.shellColor, 0.6),
-    width: Math.max(0.3, scale * 0.004),
-    alpha: alpha * 0.4,
-  });
-  if (bud.petal.length > 0) {
-    drawCmds(g, bud.petal, scale);
-    g.fill({ color: bud.petalColor, alpha: alpha * 0.9 });
-  }
+  fillCmds(g, bud.shell, { color: bud.shellColor, alpha: alpha * 0.95 }, scale);
+  strokeCmds(
+    g,
+    bud.shell,
+    {
+      color: darkenColor(bud.shellColor, 0.5),
+      width: Math.max(0.3, scale * 0.005),
+      alpha: alpha * 0.45,
+    },
+    scale,
+  );
+  strokeCmds(
+    g,
+    bud.seams,
+    {
+      color: darkenColor(bud.shellColor, 0.6),
+      width: Math.max(0.3, scale * 0.004),
+      alpha: alpha * 0.4,
+    },
+    scale,
+  );
+  fillCmds(g, bud.petal, { color: bud.petalColor, alpha: alpha * 0.9 }, scale);
 }
 
 /** The stem fill and edge, then its branches, surface detail and thorns. */
 function drawStem(g: Graphics, stem: StemPlan, scale: number, alpha: number) {
   drawStalk(g, stem.cmds, stem.color, scale, alpha);
-  if (stem.branches.length > 0) {
-    drawStalk(g, stem.branches, stem.color, scale, alpha);
-  }
+  drawStalk(g, stem.branches, stem.color, scale, alpha);
   for (const layer of stem.surface) {
-    if (layer.strokes.length > 0) {
-      drawCmds(g, layer.strokes, scale);
-      g.stroke({
+    strokeCmds(
+      g,
+      layer.strokes,
+      {
         color: layer.color,
         width: Math.max(0.4, scale * 0.007),
         alpha: alpha * 0.55,
-      });
-    }
-    if (layer.fills.length > 0) {
-      drawCmds(g, layer.fills, scale);
-      g.fill({ color: layer.color, alpha: alpha * 0.55 });
-    }
+      },
+      scale,
+    );
+    fillCmds(
+      g,
+      layer.fills,
+      { color: layer.color, alpha: alpha * 0.55 },
+      scale,
+    );
   }
   for (const thorn of stem.thorns) {
-    drawCmds(g, thorn.cmds, scale);
-    g.fill({ color: thorn.color, alpha: alpha * 0.85 });
-    drawCmds(g, thorn.cmds, scale);
-    g.stroke({
-      color: darkenColor(thorn.color, 0.4),
-      width: Math.max(0.3, scale * 0.005),
-      alpha: alpha * 0.5,
-    });
+    fillCmds(g, thorn.cmds, { color: thorn.color, alpha: alpha * 0.85 }, scale);
+    strokeCmds(
+      g,
+      thorn.cmds,
+      {
+        color: darkenColor(thorn.color, 0.4),
+        width: Math.max(0.3, scale * 0.005),
+        alpha: alpha * 0.5,
+      },
+      scale,
+    );
   }
 }
 
@@ -724,15 +930,24 @@ function drawHeadAt(
   g.restore();
 }
 
+export type DrawFlowerOptions = {
+  /**
+   * Draw the plan's particles on top of the flower. A static snapshot wants
+   * them; a live canvas draws them every frame with drawParticles on its own
+   * Graphics instead, so the flower itself is not re-tessellated to move them.
+   */
+  particles: boolean;
+};
+
 /** Draw a flower from its pre-computed plan: stem, pedicels, leaves, buds, then every head back to front. */
 export function drawFlowerFromPlan(
   g: Graphics,
   plan: FlowerPlan,
   r: number,
   alpha: number,
+  options: DrawFlowerOptions = { particles: true },
 ) {
   const scale = r;
-  const now = performance.now();
 
   // Stem (behind everything else)
   if (plan.stem) {
@@ -757,9 +972,20 @@ export function drawFlowerFromPlan(
     );
   }
 
-  // Particles (on top of everything, time-animated)
+  if (options.particles) drawParticles(g, plan, r, alpha);
+}
+
+/** The plan's particles at this moment, in front of the flower. */
+export function drawParticles(
+  g: Graphics,
+  plan: FlowerPlan,
+  r: number,
+  alpha: number,
+): void {
+  const scale = r;
+  const t = performance.now() / 1000;
+
   for (const p of plan.particles) {
-    const t = now / 1000;
     const { px, py, fade } = particlePosition(p, t, scale);
     const pr = p.size * scale;
     const alphaNow = alpha * fade;
@@ -907,24 +1133,27 @@ export function drawGlow(
 
     if (bio) {
       const glow = alpha * bio.intensity * bioWave;
-      if (bio.strokes.length > 0) {
-        drawCmds(g, bio.strokes, scale);
-        g.stroke({
+      strokeCmds(
+        g,
+        bio.strokes,
+        {
           color: bio.color,
           width: Math.max(1.5, scale * 0.05),
           alpha: glow * 0.3,
-        });
-        drawCmds(g, bio.strokes, scale);
-        g.stroke({
+        },
+        scale,
+      );
+      strokeCmds(
+        g,
+        bio.strokes,
+        {
           color: bio.color,
           width: Math.max(0.6, scale * 0.016),
           alpha: glow * 0.9,
-        });
-      }
-      if (bio.fills.length > 0) {
-        drawCmds(g, bio.fills, scale);
-        g.fill({ color: bio.color, alpha: glow * 0.5 });
-      }
+        },
+        scale,
+      );
+      fillCmds(g, bio.fills, { color: bio.color, alpha: glow * 0.5 }, scale);
     }
 
     g.restore();
@@ -946,15 +1175,22 @@ export function drawArrangementFromPlan(
   // Pass 2: Adornment
   if (plan.adornment) {
     const ad = plan.adornment;
-    drawCmds(g, ad.cmds, scale);
-    g.fill({ color: ad.color, alpha: alpha * ad.opacity });
+    fillCmds(g, ad.cmds, { color: ad.color, alpha: alpha * ad.opacity }, scale);
     if (ad.accent) {
-      drawCmds(g, ad.accent.cmds, scale);
-      g.fill({ color: ad.accent.color, alpha: alpha * ad.accent.opacity });
+      fillCmds(
+        g,
+        ad.accent.cmds,
+        { color: ad.accent.color, alpha: alpha * ad.accent.opacity },
+        scale,
+      );
     }
     if (ad.detail) {
-      drawCmds(g, ad.detail.cmds, scale);
-      g.fill({ color: ad.detail.color, alpha: alpha * ad.detail.opacity });
+      fillCmds(
+        g,
+        ad.detail.cmds,
+        { color: ad.detail.color, alpha: alpha * ad.detail.opacity },
+        scale,
+      );
     }
   }
 

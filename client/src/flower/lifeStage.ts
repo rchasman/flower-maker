@@ -404,7 +404,6 @@ function generateBud(bud: BudSource, ctx: BudContext): BudPlan {
     pedicel: generateStem(
       stemAxis([pt.x, pt.y], base, sideSign(bud.side) * 0.2, "Straight"),
       ctx.stemHalfWidth * PEDICEL_HALF_WIDTH,
-      "Straight",
     ),
     pedicelColor: ctx.stemColor,
     shell: spindleCmds(steps(BUD_STATIONS), point, width),

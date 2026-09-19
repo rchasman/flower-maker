@@ -18,7 +18,7 @@ const PRIMARY_FLORET = SOLITARY_LAYOUT.florets[0];
 function straightStem(length = 1.2): StemPlan {
   const axis = stemAxis([0, length], [0, 0], 0, "Straight");
   return {
-    cmds: generateStem(axis, HALF_WIDTH, "Straight"),
+    cmds: generateStem(axis, HALF_WIDTH),
     color: 0x2d5a27,
     thorns: [],
     axis,

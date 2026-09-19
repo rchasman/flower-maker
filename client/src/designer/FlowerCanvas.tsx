@@ -28,6 +28,7 @@ import {
   drawFlowerFromPlan,
   drawArrangementFromPlan,
   drawGlow,
+  drawParticles,
   hasGlow,
 } from "../flower/pixi-draw.ts";
 import { setCanvasViewport } from "../spacetime/bridge.ts";
@@ -171,6 +172,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const auraGraphicsRef = useRef<Map<number, Graphics>>(new Map());
     // Glow graphics — additive, in front of the flower, redrawn every frame
     const glowGraphicsRef = useRef<Map<number, Graphics>>(new Map());
+    // Particle graphics — in front of the flower, redrawn every frame so the flower itself is not
+    const particleGraphicsRef = useRef<Map<number, Graphics>>(new Map());
 
     // Shader filter refs
     const mergeGlowFiltersRef = useRef<
@@ -264,7 +267,18 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
 
         const auras = auraGraphicsRef.current;
         const glows = glowGraphicsRef.current;
+        const particles = particleGraphicsRef.current;
         const drawnState = drawnStateRef.current;
+        const destroyCompanion = (
+          companions: Map<number, Graphics>,
+          sid: number,
+        ) => {
+          const companion = companions.get(sid);
+          if (!companion) return;
+          stage.removeChild(companion);
+          companion.destroy();
+          companions.delete(sid);
+        };
         graphics.forEach((g, sid) => {
           if (_activeSids.has(sid)) return;
           stage.removeChild(g);
@@ -272,18 +286,9 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           graphics.delete(sid);
           planCacheRef.current.delete(sid);
           drawnState.delete(sid);
-          const ag = auras.get(sid);
-          if (ag) {
-            stage.removeChild(ag);
-            ag.destroy();
-            auras.delete(sid);
-          }
-          const gg = glows.get(sid);
-          if (gg) {
-            stage.removeChild(gg);
-            gg.destroy();
-            glows.delete(sid);
-          }
+          destroyCompanion(auras, sid);
+          destroyCompanion(glows, sid);
+          destroyCompanion(particles, sid);
         });
 
         for (let fi = 0; fi < count; fi++) {
@@ -325,8 +330,6 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           const isSelected = selectedIdRef.current === flower.sid;
 
           const flowerPlan = cached.kind === "flower" ? cached.plan : null;
-          const hasParticles =
-            flowerPlan != null && flowerPlan.particles.length > 0;
           const hasAura =
             flower.has_glow ||
             flower.has_aura ||
@@ -337,8 +340,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             !prev ||
             prev.scale !== flower.scale ||
             prev.alpha !== flower.alpha ||
-            prev.selected !== isSelected ||
-            hasParticles; // particles animate every frame
+            prev.selected !== isSelected;
 
           if (needsRedraw) {
             const footprint = flowerPlan
@@ -356,7 +358,9 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             if (cached.kind === "arrangement") {
               drawArrangementFromPlan(g, cached.plan, r, alpha);
             } else {
-              drawFlowerFromPlan(g, cached.plan, r, alpha);
+              drawFlowerFromPlan(g, cached.plan, r, alpha, {
+                particles: false,
+              });
             }
 
             drawnState.set(flower.sid, {
@@ -406,20 +410,31 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             }
           }
 
+          // Particles move every frame, on their own Graphics so the flower keeps its tessellation
+          {
+            let pg = particles.get(flower.sid);
+            if (flowerPlan && flowerPlan.particles.length > 0) {
+              if (!pg) {
+                pg = new Graphics();
+                particles.set(flower.sid, pg);
+                stage.addChildAt(pg, stage.getChildIndex(g) + 1);
+              }
+              pg.clear();
+              drawParticles(pg, flowerPlan, r, alpha);
+            } else if (pg) {
+              pg.clear();
+            }
+          }
+
           g.position.set(flower.x, flower.y);
           g.rotation = flower.rotation;
 
-          // Aura and glow positions track the flower
-          {
-            const ag = auras.get(flower.sid);
-            if (ag) {
-              ag.position.set(flower.x, flower.y);
-              ag.rotation = flower.rotation;
-            }
-            const gg = glows.get(flower.sid);
-            if (gg) {
-              gg.position.set(flower.x, flower.y);
-              gg.rotation = flower.rotation;
+          // Aura, glow and particle positions track the flower
+          for (const companions of [auras, glows, particles]) {
+            const companion = companions.get(flower.sid);
+            if (companion) {
+              companion.position.set(flower.x, flower.y);
+              companion.rotation = flower.rotation;
             }
           }
 
@@ -758,6 +773,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         stageContainerRef.current = null;
         flowerGraphicsRef.current.clear();
         auraGraphicsRef.current.clear();
+        glowGraphicsRef.current.clear();
+        particleGraphicsRef.current.clear();
         planCacheRef.current.clear();
         drawnStateRef.current.clear();
         mergeOverlayRef.current = null;

@@ -18,13 +18,16 @@ import {
   type DrawCmd,
   type Vec2,
 } from "./geometry.ts";
-import { lerp, sidHash, sideSign, steps } from "./util.ts";
+import { clamp, lerp, sidHash, sideSign, steps } from "./util.ts";
+
+const TAU = Math.PI * 2;
 
 /**
- * A stem's quadratic axis from its base to its tip; curvature bows the
- * midpoint sideways. Build one with `stemAxis` so the curvature already
- * carries the style's modifier: the drawn outline and every part attached
- * through stemPointAt then follow the same curve.
+ * A stem's axis from its base to its tip. Curvature bows the axis sideways
+ * and the style shapes it (an S for Sinuous, corners for Zigzag). Build one
+ * with `stemAxis` so the curvature already carries the style's modifier:
+ * the drawn outline and every part attached through stemPointAt then follow
+ * the one centreline that stemCentreAt defines.
  */
 export type StemAxis = {
   fromX: number;
@@ -32,6 +35,7 @@ export type StemAxis = {
   toX: number;
   toY: number;
   curvature: number;
+  style: StemStyle;
 };
 
 /** How each stem style bends the spec's curvature before anything is drawn. */
@@ -59,6 +63,7 @@ export function stemAxis(
     toX,
     toY,
     curvature: STYLE_CURVATURE[style](curvature),
+    style,
   };
 }
 
@@ -106,191 +111,188 @@ const STEM_WIDTH_MODIFIERS: Record<
   Trailing: halfWidth => ({ halfWidth, tipRatio: 0.55 }),
 };
 
-/** Generate a stem outline as a closed path (two parallel bezier curves). */
-export function generateStem(
-  axis: StemAxis,
+/** Half width of the drawn outline at t, after the style's width and taper. */
+function drawnHalfWidthAt(
   halfWidth: number,
   style: StemStyle,
-): DrawCmd[] {
-  const { fromX, fromY, toX, toY, curvature } = axis;
+  t: number,
+): number {
   const mods = STEM_WIDTH_MODIFIERS[style](halfWidth);
-  const effHW = mods.halfWidth;
+  return mods.halfWidth * lerp(1, mods.tipRatio, t);
+}
 
-  const dx = toX - fromX;
-  const dy = toY - fromY;
-  const len = Math.sqrt(dx * dx + dy * dy);
-  if (len < 0.001) return [];
+// ── Centreline ──
 
-  // Normal perpendicular to stem direction
-  const nx = -dy / len;
-  const ny = dx / len;
+/** Sideways bow of the axis at its middle, as a fraction of its length. */
+const CURVATURE_BOW = 0.3;
+/** Sideways reach of the S in a Sinuous or Twining stem, as a fraction of its length. */
+const SWAY: Partial<Record<StemStyle, number>> = {
+  Sinuous: 0.22,
+  Twining: 0.18,
+};
+const ZIGZAG_SEGMENTS = 4;
+/** Sideways reach of each Zigzag corner, as a fraction of the stem length. */
+const ZIGZAG_AMOUNT = 0.08;
+/** Stations along a smooth centreline that its outline is sampled at. */
+const OUTLINE_SEGMENTS = 8;
 
-  // ── Sinuous / Twining: S-curve with two midpoints ──
-  if ((style === "Sinuous" || style === "Twining") && len > 0.1) {
-    const sway = style === "Twining" ? len * 0.18 : len * 0.22;
-    const t1 = 0.33,
-      t2 = 0.66;
-    const m1x = fromX + dx * t1 + nx * sway;
-    const m1y = fromY + dy * t1 + ny * sway;
-    const m2x = fromX + dx * t2 - nx * sway;
-    const m2y = fromY + dy * t2 - ny * sway;
+/** A point on the centreline with the unnormalised tangent toward the tip. */
+type CentrePoint = { x: number; y: number; tx: number; ty: number };
 
-    const baseW = effHW;
-    const tipW = effHW * mods.tipRatio;
-    const w1 = baseW * 0.75 + tipW * 0.25;
-    const w2 = baseW * 0.35 + tipW * 0.65;
+type ChordFrame = { len: number; nx: number; ny: number };
 
-    // Simplified S-curve: base → m1 → m2 → tip, each side
-    const pts: Vec2[] = [
-      [fromX, fromY],
-      [m1x, m1y],
-      [m2x, m2y],
-      [toX, toY],
-    ];
-    const ws = [baseW, w1, w2, tipW];
+/** The chord's length and unit normal, or null for a degenerate axis. */
+function chordFrame(axis: StemAxis): ChordFrame | null {
+  const dx = axis.toX - axis.fromX;
+  const dy = axis.toY - axis.fromY;
+  const len = Math.hypot(dx, dy);
+  if (len < 0.001) return null;
+  return { len, nx: -dy / len, ny: dx / len };
+}
 
-    const left = pts.map((p, i): Vec2 => [
-      p[0] + nx * ws[i]!,
-      p[1] + ny * ws[i]!,
-    ]);
-    const right = pts.map((p, i): Vec2 => [
-      p[0] - nx * ws[i]!,
-      p[1] - ny * ws[i]!,
-    ]);
-    return assembleOutline(left, right);
-  }
+/**
+ * The quadratic Bezier through the chord midpoint bowed sideways by the
+ * curvature. The control point sits twice as far out as the bow, so the
+ * curve itself passes through the bowed midpoint at t = 0.5.
+ */
+function quadraticCentreAt(axis: StemAxis, t: number): CentrePoint {
+  const { fromX, fromY, toX, toY, curvature } = axis;
+  const frame = chordFrame(axis);
+  const bow = frame ? curvature * frame.len * CURVATURE_BOW * 2 : 0;
+  const cx = (fromX + toX) / 2 + (frame?.nx ?? 0) * bow;
+  const cy = (fromY + toY) / 2 + (frame?.ny ?? 0) * bow;
+  const u = 1 - t;
+  return {
+    x: u * u * fromX + 2 * u * t * cx + t * t * toX,
+    y: u * u * fromY + 2 * u * t * cy + t * t * toY,
+    tx: 2 * u * (cx - fromX) + 2 * t * (toX - cx),
+    ty: 2 * u * (cy - fromY) + 2 * t * (toY - cy),
+  };
+}
 
-  // ── Zigzag: angular segments ──
-  if (style === "Zigzag" && len > 0.1) {
-    const segs = 4;
-    const zigAmt = len * 0.08;
-    const zigs: Vec2[] = Array.from({ length: segs - 1 }, (_, k) => {
-      const i = k + 1;
-      const t = i / segs;
-      const sign = i % 2 === 1 ? 1 : -1;
-      return [
-        fromX + dx * t + nx * zigAmt * sign,
-        fromY + dy * t + ny * zigAmt * sign,
-      ];
-    });
-    const pts: Vec2[] = [[fromX, fromY], ...zigs, [toX, toY]];
+/** The quadratic centreline with one full S wave laid over it. */
+function swayingCentreAt(axis: StemAxis, sway: number, t: number): CentrePoint {
+  const frame = chordFrame(axis);
+  const base = quadraticCentreAt(axis, t);
+  if (!frame) return base;
+  const reach = frame.len * sway;
+  const wave = Math.sin(TAU * t) * reach;
+  const slope = Math.cos(TAU * t) * reach * TAU;
+  return {
+    x: base.x + frame.nx * wave,
+    y: base.y + frame.ny * wave,
+    tx: base.tx + frame.nx * slope,
+    ty: base.ty + frame.ny * slope,
+  };
+}
 
-    const baseW = effHW;
-    const tipW = effHW * mods.tipRatio;
-    const widthAt = (i: number): number =>
-      baseW + (tipW - baseW) * (i / (pts.length - 1));
-    const left = pts.map((p, i): Vec2 => [
-      p[0] + nx * widthAt(i),
-      p[1] + ny * widthAt(i),
-    ]);
-    const right = pts.map((p, i): Vec2 => [
-      p[0] - nx * widthAt(i),
-      p[1] - ny * widthAt(i),
-    ]);
+/** Corner k of a Zigzag stem, k from 0 (base) to ZIGZAG_SEGMENTS (tip). */
+function zigzagCorner(axis: StemAxis, k: number): Vec2 {
+  const frame = chordFrame(axis);
+  const t = k / ZIGZAG_SEGMENTS;
+  const onChord: Vec2 = [
+    lerp(axis.fromX, axis.toX, t),
+    lerp(axis.fromY, axis.toY, t),
+  ];
+  if (!frame || k === 0 || k === ZIGZAG_SEGMENTS) return onChord;
+  const sign = k % 2 === 1 ? 1 : -1;
+  const reach = frame.len * ZIGZAG_AMOUNT * sign;
+  return [onChord[0] + frame.nx * reach, onChord[1] + frame.ny * reach];
+}
 
-    // Line segments for the angular look
-    const lineTo = (p: Vec2): DrawCmd => ({ op: "L", x: p[0], y: p[1] });
-    return [
-      { op: "M", x: left[0]![0], y: left[0]![1] },
-      ...left.slice(1).map(lineTo),
-      ...right.toReversed().map(lineTo),
-      { op: "Z" },
-    ];
-  }
+/**
+ * Straight runs between the Zigzag corners. The tangent is the chord's, not
+ * the run's: the outline offsets every corner along the chord normal so the
+ * corners stay sharp, and parts attach perpendicular to that same normal.
+ */
+function zigzagCentreAt(axis: StemAxis, t: number): CentrePoint {
+  const scaled = clamp(0, ZIGZAG_SEGMENTS, t * ZIGZAG_SEGMENTS);
+  const k = Math.min(ZIGZAG_SEGMENTS - 1, Math.floor(scaled));
+  const [ax, ay] = zigzagCorner(axis, k);
+  const [bx, by] = zigzagCorner(axis, k + 1);
+  const s = scaled - k;
+  return {
+    x: lerp(ax, bx, s),
+    y: lerp(ay, by, s),
+    tx: axis.toX - axis.fromX,
+    ty: axis.toY - axis.fromY,
+  };
+}
 
-  // ── Standard stem (Straight, Arching, Woody, Succulent, Trailing) ──
-  const curvOff = curvature * len * 0.3;
-  const midX = (fromX + toX) / 2 + nx * curvOff;
-  const midY = (fromY + toY) / 2 + ny * curvOff;
+/** The one centreline every stem style is drawn around and attached to. */
+function stemCentreAt(axis: StemAxis, t: number): CentrePoint {
+  const sway = SWAY[axis.style];
+  if (sway !== undefined) return swayingCentreAt(axis, sway, t);
+  if (axis.style === "Zigzag") return zigzagCentreAt(axis, t);
+  return quadraticCentreAt(axis, t);
+}
 
-  const baseW = effHW;
-  const tipW = effHW * mods.tipRatio;
+/** Unit vector perpendicular to the tangent, pointing to the stem's left. */
+function centreNormal({ tx, ty }: CentrePoint): Vec2 {
+  const len = Math.hypot(tx, ty);
+  if (len < 1e-9) return [0, 0];
+  return [-ty / len, tx / len];
+}
 
-  // Left side (base → tip)
-  const lb1x = fromX + nx * baseW;
-  const lb1y = fromY + ny * baseW;
-  const lm1x = midX + nx * (baseW + tipW) * 0.5;
-  const lm1y = midY + ny * (baseW + tipW) * 0.5;
-  const lt1x = toX + nx * tipW;
-  const lt1y = toY + ny * tipW;
+type EdgePair = { left: Vec2; right: Vec2 };
 
-  // Right side (tip → base)
-  const rt1x = toX - nx * tipW;
-  const rt1y = toY - ny * tipW;
-  const rm1x = midX - nx * (baseW + tipW) * 0.5;
-  const rm1y = midY - ny * (baseW + tipW) * 0.5;
-  const rb1x = fromX - nx * baseW;
-  const rb1y = fromY - ny * baseW;
+/** The outline's two edge points at t: the centre pushed out to each side along `normal`. */
+function edgePairAt(
+  axis: StemAxis,
+  halfWidth: number,
+  t: number,
+  normal: Vec2,
+): EdgePair {
+  const c = stemCentreAt(axis, t);
+  const w = drawnHalfWidthAt(halfWidth, axis.style, t);
+  return {
+    left: [c.x + normal[0] * w, c.y + normal[1] * w],
+    right: [c.x - normal[0] * w, c.y - normal[1] * w],
+  };
+}
 
+/** Zigzag edges are offset along the chord normal so every corner stays sharp. */
+function zigzagOutline(
+  axis: StemAxis,
+  halfWidth: number,
+  frame: ChordFrame,
+): DrawCmd[] {
+  const pairs = Array.from({ length: ZIGZAG_SEGMENTS + 1 }, (_, k) =>
+    edgePairAt(axis, halfWidth, k / ZIGZAG_SEGMENTS, [frame.nx, frame.ny]),
+  );
+  const lineTo = (p: Vec2): DrawCmd => ({ op: "L", x: p[0], y: p[1] });
+  const left = pairs.map(pair => pair.left);
+  const right = pairs.map(pair => pair.right);
   return [
-    { op: "M", x: lb1x, y: lb1y },
-    {
-      op: "C",
-      c1x: lb1x,
-      c1y: lb1y + (lm1y - lb1y) * 0.5,
-      c2x: lm1x,
-      c2y: lm1y - (lm1y - lb1y) * 0.5,
-      x: lm1x,
-      y: lm1y,
-    },
-    {
-      op: "C",
-      c1x: lm1x,
-      c1y: lm1y + (lt1y - lm1y) * 0.5,
-      c2x: lt1x,
-      c2y: lt1y - (lt1y - lm1y) * 0.5,
-      x: lt1x,
-      y: lt1y,
-    },
-    { op: "L", x: rt1x, y: rt1y },
-    {
-      op: "C",
-      c1x: rt1x,
-      c1y: rt1y + (rm1y - rt1y) * 0.5,
-      c2x: rm1x,
-      c2y: rm1y - (rm1y - rt1y) * 0.5,
-      x: rm1x,
-      y: rm1y,
-    },
-    {
-      op: "C",
-      c1x: rm1x,
-      c1y: rm1y + (rb1y - rm1y) * 0.5,
-      c2x: rb1x,
-      c2y: rb1y - (rb1y - rm1y) * 0.5,
-      x: rb1x,
-      y: rb1y,
-    },
+    { op: "M", x: left[0]![0], y: left[0]![1] },
+    ...left.slice(1).map(lineTo),
+    ...right.toReversed().map(lineTo),
     { op: "Z" },
   ];
 }
 
-/** Get a point and tangent angle along a curved stem at parameter t ∈ [0,1] (base → tip). */
+/** Generate a stem outline as a closed path around the axis centreline. */
+export function generateStem(axis: StemAxis, halfWidth: number): DrawCmd[] {
+  const frame = chordFrame(axis);
+  if (!frame) return [];
+  if (axis.style === "Zigzag") return zigzagOutline(axis, halfWidth, frame);
+
+  const pairs = steps(OUTLINE_SEGMENTS).map(t =>
+    edgePairAt(axis, halfWidth, t, centreNormal(stemCentreAt(axis, t))),
+  );
+  return assembleOutline(
+    pairs.map(pair => pair.left),
+    pairs.map(pair => pair.right),
+  );
+}
+
+/** Get a point and tangent angle along a curved stem at parameter t in [0,1] (base to tip). */
 export function stemPointAt(
   axis: StemAxis,
   t: number,
 ): { x: number; y: number; angle: number } {
-  const { fromX, fromY, toX, toY, curvature } = axis;
-  const dx = toX - fromX;
-  const dy = toY - fromY;
-  const len = Math.sqrt(dx * dx + dy * dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const curvOff = curvature * len * 0.3;
-  const midX = (fromX + toX) / 2 + nx * curvOff;
-  const midY = (fromY + toY) / 2 + ny * curvOff;
-
-  // Quadratic bezier: B(t) = (1-t)²·from + 2(1-t)t·mid + t²·to
-  const u = 1 - t;
-  const x = u * u * fromX + 2 * u * t * midX + t * t * toX;
-  const y = u * u * fromY + 2 * u * t * midY + t * t * toY;
-
-  // Tangent: B'(t) = 2(1-t)(mid-from) + 2t(to-mid)
-  const tx = 2 * u * (midX - fromX) + 2 * t * (toX - midX);
-  const ty = 2 * u * (midY - fromY) + 2 * t * (toY - midY);
-  const angle = Math.atan2(-tx, ty); // perpendicular to stem direction
-
-  return { x, y, angle };
+  const { x, y, tx, ty } = stemCentreAt(axis, t);
+  return { x, y, angle: Math.atan2(-tx, ty) };
 }
 
 /**
@@ -313,16 +315,6 @@ export function stemAxisLength(axis: StemAxis): number {
 }
 
 // ── Surface texture ──
-
-/** Half width of the drawn outline at t, after the style's width and taper. */
-function drawnHalfWidthAt(
-  halfWidth: number,
-  style: StemStyle,
-  t: number,
-): number {
-  const mods = STEM_WIDTH_MODIFIERS[style](halfWidth);
-  return mods.halfWidth * lerp(1, mods.tipRatio, t);
-}
 
 /** The axis point at t pushed sideways by `offset` (plan units, signed). */
 function lateralPoint(axis: StemAxis, t: number, offset: number): Vec2 {
@@ -461,25 +453,24 @@ const SURFACE_BUILDERS: Record<SurfaceTexture, SurfaceBuilder | null> = {
 const WOODY_BARK = bark([-0.5, 0.05, 0.45], 0.55);
 
 /**
- * Surface detail for the stem: bark when the style is Woody, then whatever
- * the texture adds. Empty when there is nothing to draw over the fill.
+ * Surface detail for the stem: bark when the axis style is Woody, then
+ * whatever the texture adds. Empty when there is nothing to draw over the fill.
  */
 export function generateStemSurface(
   axis: StemAxis,
   halfWidth: number,
-  style: StemStyle,
   surface: SurfaceTexture,
   color: number,
   seed: number,
 ): StemSurfacePlan[] {
   const frame: SurfaceFrame = {
     axis,
-    widthAt: t => drawnHalfWidthAt(halfWidth, style, t),
+    widthAt: t => drawnHalfWidthAt(halfWidth, axis.style, t),
     rnd: salt => sidHash(seed, salt),
   };
   const texture = SURFACE_BUILDERS[surface];
   return [
-    ...(style === "Woody" ? [WOODY_BARK(frame, color)] : []),
+    ...(axis.style === "Woody" ? [WOODY_BARK(frame, color)] : []),
     ...(texture ? [texture(frame, color)] : []),
   ];
 }
@@ -564,7 +555,6 @@ export function generateBranches(
         "Straight",
       ),
       halfWidth * 0.5,
-      "Straight",
     );
   });
 }

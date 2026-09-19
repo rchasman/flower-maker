@@ -1388,7 +1388,7 @@ function buildStemPlan(
 ): StemPlan {
   const halfWidth = clamp(0.03, 0.08, stemData.thickness * 0.08);
   return {
-    cmds: generateStem(axis, halfWidth, stemData.style),
+    cmds: generateStem(axis, halfWidth),
     color: stemData.color,
     thorns: thorns ? generateThorns(axis, thorns) : [],
     axis,
@@ -1396,7 +1396,6 @@ function buildStemPlan(
     surface: generateStemSurface(
       axis,
       halfWidth,
-      stemData.style,
       stemData.surface,
       stemData.color,
       seed,

@@ -135,7 +135,6 @@ function pedicel(
   return generateStem(
     stemAxis([from.x, from.y], [to.x, to.y], curvature, "Straight"),
     frame.stem.halfWidth * PEDICEL_WIDTH,
-    "Straight",
   );
 }
 

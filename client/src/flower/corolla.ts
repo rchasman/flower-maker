@@ -15,7 +15,6 @@ import { darkenColor, lightenColor } from "./color.ts";
 import { closedSmoothCmds, type DrawCmd, type Vec2 } from "./geometry.ts";
 import {
   createPetalFrame,
-  petalLength,
   placePetal,
   type PetalFrame,
   type PlacedPetal,
@@ -99,21 +98,31 @@ const CUP_SHAPES: Record<FusedKind, CupShape> = {
 
 const MIN_DEPTH = 0.1;
 const MAX_DEPTH = 0.9;
+/** the cup is never shorter than this, so its throat always sits inside its rim */
+const MIN_FUSED_LENGTH = 0.02;
 const PROFILE_SAMPLES = 16;
 const BODY_POINTS_PER_LOBE = 8;
 const MIN_BODY_POINTS = 24;
 const TAU = Math.PI * 2;
-
-/** Projected radius fraction of the fused extent at s in [0, 1], base to rim. */
-export function corollaProfile(kind: FusedKind, s: number): number {
-  return CUP_SHAPES[kind].profile(Math.max(0, Math.min(1, s)));
-}
 
 const clampDepth = (depth: number): number =>
   Math.max(MIN_DEPTH, Math.min(MAX_DEPTH, depth));
 
 const frameAngle = (frame: PetalFrame): number =>
   Math.atan2(frame.sinA, frame.cosA);
+
+/**
+ * How far the petal reaches from its base before curl pulls the tip back.
+ * A fused cup is the petal's lower part seen from above, so curl at the tip
+ * must not shorten it.
+ */
+function petalReach(frame: PetalFrame): number {
+  const base = frame.spine[0]!.along;
+  return frame.spine.reduce(
+    (reach, station) => Math.max(reach, station.along - base),
+    0,
+  );
+}
 
 /** The same frame with its base moved so the spine starts at `along`. */
 function frameStartingAt(frame: PetalFrame, along: number): PetalFrame {
@@ -161,7 +170,7 @@ export function generateCorolla(
   const cup = CUP_SHAPES[kind];
   const fused = clampDepth(depth);
   const baseAlong = frame.spine[0]!.along;
-  const fusedLength = petalLength(frame) * fused;
+  const fusedLength = Math.max(MIN_FUSED_LENGTH, petalReach(frame) * fused);
   const angle = frameAngle(frame);
 
   const profileMax = Math.max(
