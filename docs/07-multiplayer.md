@@ -2,31 +2,40 @@
 
 ## Per-Player Zones
 
-Each player has their own zone. No cross-player physics or collision. The multiplayer aspect is **observation** — everyone sees everyone else's zones live-updating on the homepage grid.
+Each player has a zone. There is no cross-player physics or merging. The
+multiplayer aspect is observation: everyone sees everyone else's zones on the
+homepage grid as they change.
 
 ## SpacetimeDB Subscriptions
 
-All clients subscribe to the same tables. When any player creates a flower, merges, or places an order, every connected client receives the update in real-time via WebSocket.
+Every client calls `subscribeToAllTables()` on connect
+(`client/src/spacetime/connection.ts`). When any player creates a flower,
+merges, orders or chats, every connected client receives the row over the
+WebSocket. The homepage grid (`FlowerGrid`) groups `flower_session` rows by
+owner and renders one card per user through `PixiMiniCanvas`.
 
-## What's Shared vs Local
+## Shared vs Local
 
-| Data                  | Shared (SpacetimeDB) | Local (client)       |
-| --------------------- | -------------------- | -------------------- |
-| Which flowers exist   | Yes                  | —                    |
-| FlowerSpec data       | Yes                  | —                    |
-| Canvas positions      | Yes                  | —                    |
-| Physics simulation    | —                    | Yes (your zone only) |
-| Merge detection       | —                    | Yes (your zone only) |
-| Orders, chat, fitness | Yes                  | —                    |
+| Data                        | Shared (SpacetimeDB) | Local (client)                |
+| --------------------------- | -------------------- | ----------------------------- |
+| Sessions and their status   | yes                  |                               |
+| FlowerSpec YAML             | yes                  |                               |
+| Part overrides              | yes                  |                               |
+| Canvas positions (0 to 100) | yes                  | pixel mapping to the viewport |
+| Physics bodies              |                      | yes, your Designing sessions  |
+| Merge target detection      |                      | yes, drag distance in pixels  |
+| Orders, chat                | yes                  |                               |
+| Generation stream           |                      | yes, then written as specs    |
 
 ## Identity
 
-SpacetimeDB assigns a unique Identity per connection. Auth tokens persist in localStorage. No username/password — anonymous by default.
+SpacetimeDB assigns an identity per connection token. An anonymous token and
+its identity hex are kept in `localStorage`. The client can also sign in with
+OIDC (`client/src/auth/`); after sign-in it calls `claim_anonymous_identity`
+with the saved hex so the anonymous sessions, orders and messages move to the
+signed-in identity. `set_name` gives a display name.
 
-## AI Agents
+## Agents
 
-Autonomous AI agents connect as SpacetimeDB clients alongside humans. They have their own zones, create flowers, optimize for fitness leaderboards, and place orders. Visually distinct on the grid.
-
-## Scaling
-
-The homepage grid is virtualized — only visible zones render. SpacetimeDB handles state sync. Practical limit is visual density, not performance.
+`agents/agent.ts` is a placeholder that prints the loop it would run. No agent
+connects today.

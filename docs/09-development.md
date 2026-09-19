@@ -2,269 +2,205 @@
 
 ## Prerequisites
 
-- **Rust** (latest stable) with `wasm32-unknown-unknown` target
-- **Bun** (v1.3+)
-- **SpacetimeDB CLI** (v2.0+)
-- **wasm-pack** (v0.13+)
+- Rust (stable) with the `wasm32-unknown-unknown` target
+- Bun 1.x
+- SpacetimeDB CLI 2.x
+- wasm-pack, for the client WASM build
+- wasm-opt from binaryen, for the SpacetimeDB module build
 
-### Install Prerequisites
+`bun run setup` (`scripts/setup.sh`) checks for `bun`, `spacetime` and
+`cargo`, runs `bun install`, copies `.env.example` to `.env` when it is
+missing, and runs `bun run db:deploy`.
 
-```bash
-# Rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-rustup target add wasm32-unknown-unknown
+## Ports and names
 
-# Bun
-curl -fsSL https://bun.sh/install | bash
+| What              | Value                      | Where                                              |
+| ----------------- | -------------------------- | -------------------------------------------------- |
+| API               | 9200                       | `api/index.ts`                                     |
+| Client (Vite)     | 9100                       | `client/package.json` `dev` script                 |
+| Local SpacetimeDB | 9300                       | `dev:spacetime` script                             |
+| Database name     | `flower-picker`            | `scripts/module.ts`, `server/spacetime.local.json` |
+| Vite proxy        | `/api` to `localhost:9200` | `client/vite.config.ts`                            |
 
-# SpacetimeDB CLI
-curl -sSf https://install.spacetimedb.com | bash
+## Environment variables
 
-# wasm-pack
-curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-```
+`.env.example` at the repo root lists them. Vite reads the same file
+(`envDir: ".."`).
 
-## Local Development
+| Variable                  | Used by | Default               | Purpose                                                               |
+| ------------------------- | ------- | --------------------- | --------------------------------------------------------------------- |
+| `AI_GATEWAY_API_KEY`      | api     | none, required        | Vercel AI Gateway key; every model, including Jev, goes through it    |
+| `VITE_SPACETIMEDB_URI`    | client  | `ws://localhost:9300` | SpacetimeDB WebSocket                                                 |
+| `VITE_SPACETIMEDB_MODULE` | client  | `flower-picker`       | database name                                                         |
+| `SPACETIMEDB_URI`         | agents  | `ws://localhost:9300` | same, for `agents/agent.ts`                                           |
+| `SPACETIMEDB_MODULE`      | agents  | `flower-maker`        | `agents/agent.ts` defaults to the old name; set it to `flower-picker` |
+| `AGENT_NAME`              | agents  | `flora-bot`           | display name of the placeholder agent                                 |
 
-### 1. Start SpacetimeDB
-
-```bash
-spacetime start
-```
-
-Runs a local SpacetimeDB instance on `http://localhost:3000`.
-
-### 2. Publish the Server Module
-
-```bash
-spacetime publish flower-maker --module-path server/spacetimedb
-```
-
-This compiles the Rust module to WASM and deploys it to the local SpacetimeDB instance. The `init` reducer runs automatically, seeding the part catalog.
-
-To reset the database and republish:
+## Local development
 
 ```bash
-spacetime publish flower-maker --clear-database -y --module-path server/spacetimedb
+bun install
+bun run dev
 ```
 
-### 3. Generate TypeScript Bindings
+`bun run dev` starts four processes and writes their logs to `.logs/`:
 
-```bash
-spacetime generate --lang typescript \
-  --out-dir client/src/spacetime/module_bindings \
-  --module-path server/spacetimedb
-```
+| Script              | Does                                                        |
+| ------------------- | ----------------------------------------------------------- |
+| `dev:spacetime`     | `spacetime start --listen-addr 0.0.0.0:9300`                |
+| `dev:api`           | `bun --watch api/index.ts`                                  |
+| `dev:publish-local` | waits for the local server, builds the module, publishes it |
+| `dev:client`        | Vite on 9100 (in the foreground)                            |
 
-This generates TypeScript types and connection helpers from the SpacetimeDB module schema. **Regenerate every time the schema changes.**
+Open http://localhost:9100.
 
-### 4. Build the WASM Client Module
+## Database scripts
+
+All SpacetimeDB operations run through `bun run db:*`. Each one calls
+`scripts/module.ts`, which runs `spacetime build`, then `wasm-opt -g -O2`
+(the CLI's own `wasm-opt -all` pass emits a binary SpacetimeDB cannot parse),
+and hands the file to the CLI with `--bin-path`.
+
+| Command                    | What it does                                       |
+| -------------------------- | -------------------------------------------------- |
+| `bun run db:publish`       | publish to maincloud                               |
+| `bun run db:publish:local` | publish to the local server on 9300                |
+| `bun run db:publish:clear` | publish to maincloud with `--delete-data`          |
+| `bun run db:generate`      | regenerate `client/src/spacetime/module_bindings/` |
+| `bun run db:deploy`        | `db:publish` then `db:generate`                    |
+| `bun run db:logs`          | tail maincloud logs                                |
+
+After any change to `server/spacetimedb/src/lib.rs`, run `bun run db:deploy`
+and commit the regenerated bindings.
+
+## Rebuilding the client WASM
+
+Vercel has no Rust toolchain, so the wasm-pack output in
+`client/src/wasm/pkg/` is committed. After any change to
+`crates/flower-core` or `crates/client-wasm`:
 
 ```bash
 cd crates/client-wasm
 wasm-pack build --target web --out-dir ../../client/src/wasm/pkg
-cd ../..
 ```
 
-This compiles the Rust physics simulation to WASM with wasm-bindgen glue code. The output goes directly into the client source tree.
+`client/src/wasm/loader.ts` imports `./pkg/client_wasm.js`. When the import
+fails it falls back to a stub simulation with no physics.
 
-### 5. Install Dependencies
+## Fixtures
 
 ```bash
-cd client && bun install
-cd ../api && bun install
+bun run fixtures
 ```
 
-### 6. Start the API Server
+`scripts/fixtures.ts` assembles one spec per family with a fixed seed under
+`invented` strangeness, rotating the answers so every enum variant appears at
+least once, and writes them as YAML into `crates/flower-core/tests/fixtures/`.
+It fails when a variant is never reached. `cargo test -p flower-core` parses
+every fixture and round trips it through `serde_yaml`;
+`api/flower/specSchema.test.ts` parses the same files with the zod mirror.
+Regenerate the fixtures whenever `catalog.rs`, `flower-enums.ts`, the family
+profiles or the assembler change.
 
-```bash
-cd api && bun run --hot index.ts
-```
+## Checks and tests
 
-Runs the Hono API server with hot reloading. Default port: 3001.
+| Command                 | Does                                           |
+| ----------------------- | ---------------------------------------------- |
+| `bun run check`         | typecheck every workspace, oxlint, oxfmt check |
+| `bun run check:type`    | `tsc --noEmit` in `client` and `api`           |
+| `bun run lint`          | `oxlint --type-aware`                          |
+| `bun run fmt`           | `oxfmt .`                                      |
+| `bun test` in `api/`    | generator tests                                |
+| `bun test` in `client/` | renderer and client tests                      |
+| `cargo test`            | Rust unit tests and the fixture test           |
 
-### 7. Start the Client Dev Server
-
-```bash
-cd client && bun run dev
-```
-
-Runs Vite dev server with HMR. Default port: 5173.
-
-## Development Workflow
-
-### Changing the SpacetimeDB Schema
-
-1. Edit `server/spacetimedb/src/lib.rs`
-2. Republish: `spacetime publish flower-maker --clear-database -y --module-path server/spacetimedb`
-3. Regenerate bindings: `spacetime generate --lang typescript --out-dir client/src/spacetime/module_bindings --module-path server/spacetimedb`
-4. Update TypeScript code that references changed types
-
-### Changing Physics / WASM Code
-
-1. Edit files in `crates/client-wasm/src/` or `crates/flower-core/src/`
-2. Rebuild: `cd crates/client-wasm && wasm-pack build --target web --out-dir ../../client/src/wasm/pkg`
-3. Vite picks up the changed WASM files via HMR (may need manual reload)
-
-### Changing React / PixiJS Code
-
-1. Edit files in `client/src/`
-2. Vite HMR handles it automatically
-
-### Changing AI Prompts / API Routes
-
-1. Edit files in `api/`
-2. Bun hot reloading handles it automatically
-
-## Project Structure
+## Project structure
 
 ```
 flower-maker/
-├── Cargo.toml                  # Rust workspace (3 members)
+├── Cargo.toml                  # Rust workspace: flower-core, client-wasm, server/spacetimedb
+├── package.json                # Bun workspaces: client, api, agents; the scripts above
+├── vercel.json                 # two services: client (static) and api (Bun)
+├── .env.example
 │
 ├── crates/
-│   ├── flower-core/            # Shared Rust crate (rlib)
-│   │   ├── Cargo.toml          #   features: spacetimedb, wasm
-│   │   └── src/
-│   │       ├── lib.rs
-│   │       ├── parts.rs        # Part types, kinds, metadata
-│   │       ├── catalog.rs      # 45 flower definitions
-│   │       ├── combination.rs  # Merge rules, level progression
-│   │       └── physics.rs      # Physics preset per archetype
-│   │
-│   └── client-wasm/            # Browser WASM crate (cdylib)
-│       ├── Cargo.toml          #   deps: flower-core, rapier2d, wasm-bindgen
+│   ├── flower-core/            # rlib
+│   │   ├── src/
+│   │   │   ├── catalog.rs      # FlowerSpec types and enums
+│   │   │   ├── genetics.rs     # cross()
+│   │   │   ├── physics.rs      # GardenPhysics, PhysicsArchetype, body_params
+│   │   │   └── animation.rs    # bloom-in / wilt-out
+│   │   └── tests/
+│   │       ├── fixtures.rs     # parses every fixture
+│   │       └── fixtures/       # one YAML per family plus contract-smoke.yaml
+│   └── client-wasm/            # cdylib
 │       └── src/
-│           ├── lib.rs          # wasm-bindgen exports: init, tick, add/remove
-│           ├── simulation.rs   # rapier2d world management
-│           ├── buffer.rs       # SharedArrayBuffer write logic
-│           ├── merge.rs        # Collision → merge event detection
-│           └── bridge.rs       # JSON deserialization for SpacetimeDB updates
+│           ├── lib.rs          # GardenSimulation (wasm-bindgen)
+│           ├── simulation.rs   # rapier2d world
+│           └── buffer.rs       # render buffer layout
 │
 ├── server/
-│   ├── spacetime.json          # SpacetimeDB config
-│   └── spacetimedb/            # SpacetimeDB module (cdylib)
-│       ├── Cargo.toml          #   deps: flower-core, spacetimedb 2.0
-│       └── src/
-│           └── lib.rs          # Tables + reducers
+│   ├── spacetime.json          # maincloud config
+│   ├── spacetime.local.json    # database name
+│   └── spacetimedb/src/lib.rs  # tables and reducers
 │
-├── client/                     # React + Vite + PixiJS
-│   ├── package.json
-│   └── src/
-│       ├── main.tsx            # Entry: SpacetimeDB + WASM + PixiJS init
-│       ├── App.tsx             # Layout: canvas background + UI overlay
-│       ├── spacetime/          # SpacetimeDB connection, hooks, bridge
-│       ├── canvas/             # PixiJS renderer, viewport, effects
-│       ├── wasm/               # WASM loader, game loop
-│       ├── ai/                 # Chat UI, merge prompts
-│       ├── catalog/            # Part browser, editor
-│       ├── designer/           # Flower assembly
-│       ├── orders/             # Order flow, feed
-│       └── session/            # Identity, presence
+├── scripts/
+│   ├── setup.sh                # bun run setup
+│   ├── module.ts               # build + wasm-opt the module
+│   ├── publish.ts              # spacetime publish
+│   ├── generate.ts             # spacetime generate
+│   └── fixtures.ts             # bun run fixtures
 │
-├── api/                        # Hono on Bun
-│   └── index.ts                # AI streaming routes
+├── api/                        # Bun HTTP server
+│   ├── index.ts                # routes, CORS, port 9200
+│   ├── config/models.ts        # gateway model list, DEFAULT_MODEL, JEV_MODEL
+│   └── flower/
+│       ├── families.ts         # FamilyProfile per FlowerFamily
+│       ├── questions.ts        # stage one and stage two questions
+│       ├── answering.ts        # jevSource, textModelSource
+│       ├── seed.ts             # FNV-1a seed, LCG rng
+│       ├── assemble.ts         # assembleSpec
+│       ├── specSchema.ts       # zod mirror of catalog.rs
+│       ├── pipeline.ts         # generateFlower snapshots
+│       ├── generate.ts         # POST /flower/generate
+│       ├── combine.ts          # POST /flower/combine
+│       └── order.ts            # POST /flower/order
 │
-└── docs/                       # You are here
-```
-
-## Debugging
-
-### SpacetimeDB
-
-```bash
-# View server logs (reducer output, errors)
-spacetime logs flower-maker
-
-# Check if module is published
-spacetime list
-```
-
-### WASM
-
-Open browser DevTools console:
-
-```javascript
-// Check WASM module loaded
-console.log(simulation); // should be a Simulation object
-
-// Manual tick
-simulation.tick(0.016); // 16ms = one frame at 60fps
-
-// Check merge events
-console.log(simulation.get_merge_events()); // JSON array
-
-// Check buffer
-const view = new Float32Array(sharedBuffer);
-console.log(view.slice(0, 9)); // first flower's transform data
-```
-
-### PixiJS
-
-```javascript
-// Access PixiJS app from console
-const app = window.__PIXI_APP__;
-
-// Check sprite count
-console.log(app.stage.children.length);
-
-// Check FPS
-console.log(app.ticker.FPS);
-```
-
-### SpacetimeDB Client (TypeScript)
-
-```javascript
-// Check connection state
-console.log(conn.isConnected);
-
-// Count cached rows
-console.log(conn.db.flower_session.count());
-console.log(conn.db.part_definition.count());
-
-// Iterate sessions
-for (const s of conn.db.flower_session.iter()) {
-  console.log(s.id, s.name, s.status);
-}
+├── client/src/
+│   ├── data/
+│   │   ├── flower-enums.ts     # every Rust enum as an as-const array
+│   │   └── templates.ts        # 45 templates with family and inflorescence
+│   ├── flower/                 # render.ts, pixi-draw.ts, patterns, corolla, inflorescence, lifeStage, effects, leaf, stem, petal
+│   ├── ai/                     # generateFlower.ts (NDJSON client), FlowerChat.tsx
+│   ├── designer/               # DesignerView, FlowerCanvas, TemplatePicker, PartEditor
+│   ├── homepage/               # FlowerGrid, PixiMiniCanvas
+│   ├── spacetime/              # connection, hooks, bridge, module_bindings/
+│   ├── wasm/                   # loader.ts, loop.ts, pkg/ (committed wasm-pack output)
+│   ├── orders/                 # OrderFlow, OrderFeed, ActivityFeed
+│   ├── settings/               # ModelPicker
+│   ├── session/, social/, auth/, ui/, styles/, lib/
+│   └── App.tsx, main.tsx
+│
+├── agents/agent.ts             # placeholder agent, prints its plan
+└── docs/
 ```
 
 ## Deployment
 
-### SpacetimeDB → Maincloud
+**SpacetimeDB.** `bun run db:deploy` publishes `flower-picker` to maincloud
+and regenerates the bindings. Dashboard: https://spacetimedb.com/flower-picker.
+
+**Vercel.** `vercel.json` declares two services. `client/` builds with Vite;
+`api/` runs `index.ts` on Bun. Rewrites send `/api/(.*)` to the API service and
+everything else to the client. Set `AI_GATEWAY_API_KEY` on the project.
+
+## Debugging
 
 ```bash
-spacetime publish flower-maker --module-path server/spacetimedb
+spacetime logs flower-picker --server maincloud   # or: bun run db:logs
+spacetime list
 ```
 
-Deploys to SpacetimeDB's free hosted cloud. Dashboard at: `https://spacetimedb.com/@<username>/flower-maker`
-
-### Client → Vercel
-
-Standard Vite deployment. Build output goes to `dist/`.
-
-### API → Vercel / Any Bun Host
-
-The Hono API is stateless and can deploy anywhere that runs Bun.
-
-## Environment Variables
-
-### API Server
-
-```
-# AI Gateway (via Vercel)
-VERCEL_OIDC_TOKEN=<auto-provisioned>
-
-# Or direct provider key (development)
-AI_GATEWAY_API_KEY=<key>
-```
-
-### Client
-
-```
-# SpacetimeDB connection
-VITE_SPACETIMEDB_URI=ws://localhost:3000
-VITE_SPACETIMEDB_MODULE=flower-maker
-
-# API server
-VITE_API_URL=http://localhost:3001
-```
+The API logs `[generate] failed:` and `[generate] failed mid-stream:` with the
+error message. The client logs `[wasm]`, `[bridge]`, `[merge]` and
+`[spacetimedb]` prefixed messages to the browser console.

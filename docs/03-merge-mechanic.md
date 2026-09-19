@@ -1,116 +1,112 @@
 # The Merge Mechanic
 
-The core game loop. Everything in flower-maker exists to serve this interaction.
+Merging happens inside your own zone in the designer. You drag one of your
+flowers onto another. The two sessions become one child session that carries
+both flowers.
 
-## How It Works
+## How a merge starts
 
-Merging happens within YOUR zone in the designer. Drag your flowers together. When they overlap for 500ms, they merge.
+`FlowerCanvas` tracks the dragged flower each frame. While it moves, the
+nearest other flower within `MERGE_RANGE` (3 times `FLOWER_BASE_RADIUS`, 210
+px) is the merge target and the cursor changes. Releasing the flower over a
+target calls `onMergeDrop(dragSid, targetSid)`, which `DesignerView` hands to
+`handleMerge` in `client/src/spacetime/bridge.ts`. A pending pair is not
+submitted twice.
+
+Drop is the only trigger. The WASM physics does not detect merges.
+
+## What happens
 
 ```
-You pick flowers from templates / AI chat
+Drop flower A on flower B
        │
-You drag them around in your zone (rapier2d physics)
+handleMerge reads both specs and sessions from the local cache
        │
-Two of YOUR flowers collide for 500ms+
+POST /api/flower/combine  (spec_a, spec_b, total_count, level, parent_adornments?)
        │
-Client calls AI: "what do these become?"
+AI returns one JSON: name, description, adornments, sprite_hints, adornment_spec, harmony_note
        │
-AI generates arrangement description
+merge_sessions(session_a_id, session_b_id, ai_arrangement_json)
        │
-Client calls merge_sessions reducer
+Server: parses both YAML specs, genetics::cross(a, b, seed) with seed from ctx.rng()
+Server: inserts the child session at the midpoint, prompt "A × B"
+Server: stores the AI JSON as part_override "arrangement"
+Server: stores every constituent spec as part_override "constituent:N"
+Server: sets both parents to Complete
        │
-Server: genetics::cross() creates child spec
-Server: archives both parents
-Server: evaluates fitness in all environments
-Server: awards 50 XP
-       │
-All clients see: old flowers wilt out, new arrangement blooms in
+Every client: parents wilt out (WASM wilt animation), the child blooms in
 ```
 
-**No cross-player merging.** Each player merges their own flowers. The multiplayer aspect is observation — you watch everyone else's flowers on the homepage grid.
+`total_count` is the sum of both `flower_count` values. The child's
+`arrangement_level` comes from `arrangement_level_for_count` and its
+`generation` is the larger parent generation plus one.
 
-## Arrangement Progression
+No cross-player merging: `merge_sessions` requires the caller to own both
+sessions and both must be in `Designing` status.
 
-Every arrangement has a **level** determined by how many individual flowers it contains:
+## Arrangement levels
 
-| Count | Level            | What It Looks Like          | AI Generates                      |
-| ----- | ---------------- | --------------------------- | --------------------------------- |
-| 1     | **Stem**         | Single flower, bare stem    | Flower description                |
-| 2-3   | **Group**        | Small cluster, plastic wrap | How flowers complement each other |
-| 4-6   | **Bunch**        | Tissue paper, ribbon tied   | Color harmony, shape              |
-| 7-9   | **Arrangement**  | In a vase, decorative paper | Composition, focal points         |
-| 10-19 | **Bouquet**      | Full wrap, bow, card, box   | Complete bouquet narrative        |
-| 20-49 | **Centerpiece**  | Stand, candelabra, greenery | Event-scale description           |
-| 50+   | **Installation** | Structure, lighting, space  | Installation art description      |
+`arrangement_level_for_count` in `server/spacetimedb/src/lib.rs`, with the
+names the client uses:
 
-Each level transition triggers a fresh AI call. The AI sees the full list of flower types and generates:
+| Flowers   | Level | Name         | Renderer adornment (without an `adornment_spec`) |
+| --------- | ----- | ------------ | ------------------------------------------------ |
+| 0 to 1    | 1     | stem         | none                                             |
+| 2 to 3    | 2     | group        | tie                                              |
+| 4 to 6    | 3     | bunch        | wrap                                             |
+| 7 to 9    | 4     | arrangement  | vase                                             |
+| 10 to 19  | 5     | bouquet      | vase                                             |
+| 20 to 49  | 6     | centerpiece  | vase on a pedestal                               |
+| 50 and up | 7     | installation | vase on a pedestal                               |
 
-1. **Arrangement description** — what it looks like, the mood, the color story
-2. **Adornments** — what physical additions unlock (wrap, ribbon, vase, stand)
-3. **Sprite hints** — colors, textures, style keywords for the renderer
+When the combine response carries an `adornment_spec`, the renderer draws its
+container, accent and base instead. See `docs/05-ai-integration.md` for the
+schema and `docs/06-rendering.md` for the drawing.
 
-## Collision Detection
+## Genetics: `cross`
 
-rapier2d in the WASM module tracks overlap duration per collision pair. Each flower session is a rigid body with a circular collider sized to its arrangement level (bigger arrangements have bigger colliders).
+`crates/flower-core/src/genetics.rs`. `cross(parent_a, parent_b, seed)` is
+deterministic for a seed. The RNG is the LCG that `api/flower/seed.ts` mirrors.
+Every draw is either a coin flip between the parents (`next() > 0.5`) or a
+lerp between two numbers or two colors with a random `t`.
 
-**Merge threshold**: Two flowers must overlap for **500ms continuously**. This prevents:
+| Field                                                   | Rule                                                                                                                                      |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                                                  | `"{a.name} × {b.name}"`                                                                                                                   |
+| `species`                                               | one parent                                                                                                                                |
+| `taxonomy`                                              | the same parent as `petals.layers`, so the family agrees with the petals                                                                  |
+| `petals.layers`                                         | one parent's layers, with their `pattern` and `fusion`                                                                                    |
+| `petals.symmetry`, `symmetry_order`, `divergence_angle` | one parent, drawn separately from the petal parent                                                                                        |
+| `petals.stage`                                          | always `Bloom`                                                                                                                            |
+| `petals.bloom_progress`, `wilt_progress`                | 0.0                                                                                                                                       |
+| `reproductive`                                          | one parent                                                                                                                                |
+| `structure.stem`                                        | `height`, `thickness`, `curvature`, `internode_length` and `color` lerped; `thorns`, `surface`, `branching`, `style` from one parent each |
+| `structure.sepals`, `receptacle`                        | one parent each                                                                                                                           |
+| `structure.peduncle`                                    | every field lerped                                                                                                                        |
+| `structure.buds`                                        | one parent                                                                                                                                |
+| `foliage`                                               | one parent, with its `variegation`                                                                                                        |
+| `ornamentation`                                         | one parent                                                                                                                                |
+| `roots`                                                 | `pattern` and `luminescence` from one parent, numbers and color lerped, `mycorrhizal` is the OR                                           |
+| `aura`                                                  | both present: kind from one, numbers and color lerped; one present: kept with probability 0.7; none: none                                 |
+| `personality`                                           | numbers lerped, enums from one parent each                                                                                                |
+| `inflorescence.kind`                                    | one parent                                                                                                                                |
+| `inflorescence.head_count`                              | lerped and rounded, at least 1                                                                                                            |
+| `inflorescence.head_scale`, `spread`                    | lerped                                                                                                                                    |
 
-- Glancing collisions from triggering unwanted merges
-- Fast-moving flowers from merging on flyby
-- Physics settling from causing accidental merges
+The tests check that a child's family follows the parent that gave its petals,
+that the stage is `Bloom`, and that the head count stays at least 1.
 
-The threshold is enforced in WASM, not SpacetimeDB, because it requires frame-by-frame timing.
+## Physics after a merge
 
-## Genetics vs AI
+The WASM `wireToWasm` bridge sees the parents move to `Complete` and starts
+their wilt animation; when it ends their bodies are removed. The child session
+arrives as a new `Designing` row and gets a new body at its position.
+`body_params(spec)` sizes it from the child's stem and `inflorescence.head_count`
+(`docs/04-part-catalog.md`, Physics). A child made of several flowers renders
+as an arrangement from its `constituent:N` overrides.
 
-- **genetics::cross()** creates the child FlowerSpec — deterministic given a seed. Blends continuous traits (colors, heights) via lerp, picks discrete traits (shapes, patterns) randomly.
-- **AI** generates the narrative — arrangement name, description, adornments, color story. This is the "magic" layer.
-- **fitness::evaluate()** scores the child against environments — this drives leaderboards.
+## Splitting
 
-The genetics system ensures consistent, reproducible offspring. The AI layer makes each merge feel creative and unique.
-
-## AI Combination Prompt
-
-When a merge is detected, the client calls `POST /api/flower/combine`:
-
-```json
-{
-  "flowers_a": [
-    { "type": "rose", "color": "red", "quantity": 3 },
-    { "type": "baby_breath", "color": "white", "quantity": 5 }
-  ],
-  "flowers_b": [{ "type": "sunflower", "color": "yellow", "quantity": 2 }],
-  "total_count": 10,
-  "current_level": "bouquet"
-}
-```
-
-The AI returns:
-
-```json
-{
-  "arrangement_level": "bouquet",
-  "description": "A bold contrast bouquet anchored by golden sunflowers...",
-  "adornments": ["kraft paper wrap", "twine bow", "eucalyptus accent"],
-  "sprite_hints": {
-    "wrap_color": "#8B6914",
-    "accent_style": "rustic",
-    "dominant_color": "#FFD700"
-  },
-  "name": "Sunset Harvest"
-}
-```
-
-The description is stored in the FlowerSession's `arrangement_json`. The sprite hints guide the PixiJS renderer on how to display the new arrangement.
-
-## Physics After Merge
-
-When two flowers merge:
-
-1. WASM removes both old rigid bodies
-2. Creates one new rigid body at the midpoint
-3. New body has larger collider radius (bigger arrangement = bigger footprint)
-4. New body has more mass (harder to push around)
-5. Velocity is the average of the two originals (preserves momentum feel)
-
-An installation (50+ flowers) is a massive, slow-moving object in your zone. It takes real effort (many smaller flowers) to merge with it.
+`split_constituent(session_id, index)` moves one constituent out into a new
+standalone session and re-indexes the rest. `remove_constituent` deletes one
+constituent. Both refuse to act on the last flower of a session.
