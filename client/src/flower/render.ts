@@ -7,7 +7,7 @@
  */
 
 import { parse as parseYaml } from "yaml";
-import { run } from "../lib/utils.ts";
+import { run, parseSpec } from "../lib/utils.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types
@@ -1086,16 +1086,6 @@ function parseSymmetry(raw: any): ParsedSymmetry {
   return { type: raw.type ?? "Radial" };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseRawSpec(raw: string | undefined): any {
-  if (!raw) return null;
-  try {
-    return parseYaml(raw);
-  } catch {
-    return null;
-  }
-}
-
 function leafSide(raw: unknown, index: number): "left" | "right" {
   if (raw === "left" || raw === "right") return raw;
   return index % 2 === 0 ? "left" : "right";
@@ -1627,7 +1617,7 @@ export function createFlowerPlan(
   sid: number,
   growthProgress = 1.0,
 ): FlowerPlan {
-  const raw = parseRawSpec(spec);
+  const raw = parseSpec(spec);
   const parsed = parseFlowerSpec(raw);
 
   if (!parsed) {
@@ -3583,7 +3573,7 @@ export function createArrangementPlan(
 
   const members: ArrangementMember[] = slots.map((slot, i) => {
     const { spec, sid } = constituents[Math.min(i, count - 1)]!;
-    const raw = parseRawSpec(spec);
+    const raw = parseSpec(spec);
     const flowerPlan = createFlowerPlan(spec, sid);
     const stemData = parseSpecStem(raw);
     const foliage = parseFoliage(raw);
@@ -3685,7 +3675,7 @@ export function resolveFlowerColor(
   sid: number,
   spec: string | undefined,
 ): number {
-  const parsed = parseFlowerSpec(parseRawSpec(spec));
+  const parsed = parseFlowerSpec(parseSpec(spec));
   return parsed?.layers[0]?.color ?? fallbackColor(sid);
 }
 
@@ -3694,7 +3684,7 @@ export function resolveFlowerPetalCount(
   sid: number,
   spec: string | undefined,
 ): number {
-  const parsed = parseFlowerSpec(parseRawSpec(spec));
+  const parsed = parseFlowerSpec(parseSpec(spec));
   const count = parsed?.layers[0]?.count ?? 0;
   return count > 0 ? count : 5 + Math.floor(sidHash(sid, 1) * 3);
 }

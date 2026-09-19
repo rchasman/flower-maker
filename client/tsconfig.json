@@ -8,7 +8,7 @@
     "allowJs": true,
 
     "moduleResolution": "bundler",
-    "types": ["vite/client"],
+    "types": ["vite/client", "bun"],
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,

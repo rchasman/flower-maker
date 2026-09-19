@@ -255,7 +255,7 @@ The Hono API is stateless and can deploy anywhere that runs Bun.
 VERCEL_OIDC_TOKEN=<auto-provisioned>
 
 # Or direct provider key (development)
-ANTHROPIC_API_KEY=<key>
+AI_GATEWAY_API_KEY=<key>
 ```
 
 ### Client

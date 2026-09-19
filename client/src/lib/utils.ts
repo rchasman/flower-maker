@@ -1,7 +1,18 @@
-import { parse as parseYaml } from "yaml";
+import { parse as parseYaml, type CollectionTag } from "yaml";
 
 /** Execute a block and return its value. Use instead of IIFEs. */
 export const run = <T>(f: () => T): T => f();
+
+// serde_yaml writes Rust struct-variant enums as YAML tags, for example
+// `symmetry: !Radial { order: 5 }`. Resolve each tag to the externally tagged
+// object form `{ Radial: { order: 5 } }` that the renderer reads.
+const RUST_ENUM_VARIANT_TAGS: CollectionTag[] = ["Radial", "Spiral"].map(
+  variant => ({
+    tag: `!${variant}`,
+    collection: "map",
+    resolve: map => ({ [variant]: map.toJSON() }),
+  }),
+);
 
 /** Parse a spec string (YAML or JSON) to an object. Returns null on failure. */
 export function parseSpec(
@@ -9,7 +20,7 @@ export function parseSpec(
 ): Record<string, unknown> | null {
   if (!raw || raw === "{}" || raw.trim() === "") return null;
   try {
-    const parsed = parseYaml(raw);
+    const parsed = parseYaml(raw, { customTags: RUST_ENUM_VARIANT_TAGS });
     return parsed && typeof parsed === "object"
       ? (parsed as Record<string, unknown>)
       : null;
