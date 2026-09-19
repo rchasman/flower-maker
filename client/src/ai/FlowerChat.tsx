@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { readStreamWithProgress, parseSpec } from "../lib/utils.ts";
+import { errorMessage, parseSpec } from "../lib/utils.ts";
+import { generateFlower, type Answer } from "./generateFlower.ts";
 
 interface FlowerChatProps {
   model: string;
@@ -11,10 +12,32 @@ interface FlowerChatProps {
   compact?: boolean;
 }
 
+type AssistantMsg =
+  | { role: "assistant"; state: "generating"; answers: Answer[] }
+  | { role: "assistant"; state: "ok"; text: string }
+  | { role: "assistant"; state: "err"; text: string };
+
+type ChatMsg = { id: string } & ({ role: "user"; text: string } | AssistantMsg);
+
+const STATUS_STYLE = {
+  generating: { mark: "⋯ ", color: "var(--tui-fg-2)" },
+  ok: { mark: "✓ ", color: "var(--tui-green)" },
+  err: { mark: "✗ ", color: "var(--tui-red)" },
+} as const;
+
 function extractName(raw: string): string {
-  const parsed = parseSpec(raw);
-  return (parsed?.name as string) ?? "your flower";
+  const name = parseSpec(raw)?.name;
+  return typeof name === "string" ? name : "your flower";
 }
+
+const formatValue = (value: string | boolean): string => {
+  if (value === true) return "yes";
+  if (value === false) return "no";
+  return value;
+};
+
+const describeAnswer = (answer: Answer): string =>
+  `${answer.id.replaceAll("_", " ")}: ${formatValue(answer.value)}`;
 
 export function FlowerChat({
   model,
@@ -28,6 +51,7 @@ export function FlowerChat({
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [activeCount, setActiveCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const nextMsgId = useRef(0);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -41,60 +65,46 @@ export function FlowerChat({
     if (!text) return;
 
     setInput("");
-    setMessages(prev => [...prev, { role: "user", content: text }]);
+    const userId = `msg-${++nextMsgId.current}`;
+    const replyId = `msg-${++nextMsgId.current}`;
+    setMessages(prev => [
+      ...prev,
+      { id: userId, role: "user", text },
+      { id: replyId, role: "assistant", state: "generating", answers: [] },
+    ]);
     setActiveCount(c => c + 1);
-    const msgIdx = { current: -1 };
-
-    let genId = "";
-    try {
-      const res = await fetch("/api/flower/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text, model }),
-      });
-
-      if (!res.ok || !res.body) {
-        setMessages(prev => [
-          ...prev,
-          { role: "assistant", content: `[err] ${res.statusText}` },
-        ]);
-        return;
-      }
-
-      setMessages(prev => {
-        msgIdx.current = prev.length;
-        return [...prev, { role: "assistant", content: "" }];
-      });
-      genId = onGenerationStart?.(text) ?? "";
-
-      const raw = await readStreamWithProgress(res, accumulated => {
-        if (parseSpec(accumulated)) onSpecProgress?.(genId, accumulated);
-      });
-
-      if (!parseSpec(raw)) {
-        if (genId) onGenerationFailed?.(genId);
-        setMessages(prev => [
-          ...prev,
-          { role: "assistant", content: "[err] failed to parse spec" },
-        ]);
-        return;
-      }
-
+    const setReply = (reply: AssistantMsg) =>
       setMessages(prev =>
-        prev.map((m, i) =>
-          i === msgIdx.current
-            ? { ...m, content: `[ok] created: ${extractName(raw)}` }
-            : m,
-        ),
+        prev.map(m => (m.id === replyId ? { id: replyId, ...reply } : m)),
       );
 
-      onFlowerGenerated?.(genId, raw);
+    const genId = onGenerationStart?.(text) ?? "";
+    try {
+      const result = await generateFlower({
+        prompt: text,
+        model,
+        onSnapshot: snapshot => {
+          setReply({
+            role: "assistant",
+            state: "generating",
+            answers: snapshot.answers,
+          });
+          if (!snapshot.done) onSpecProgress?.(genId, snapshot.spec);
+        },
+      });
+      setReply({
+        role: "assistant",
+        state: "ok",
+        text: `[ok] created: ${extractName(result.spec)}`,
+      });
+      onFlowerGenerated?.(genId, result.spec);
     } catch (err) {
       if (genId) onGenerationFailed?.(genId);
-      setMessages(prev => [
-        ...prev,
-        { role: "assistant", content: `[err] ${String(err)}` },
-      ]);
+      setReply({
+        role: "assistant",
+        state: "err",
+        text: `[err] ${errorMessage(err)}`,
+      });
     } finally {
       setActiveCount(c => c - 1);
     }
@@ -193,9 +203,9 @@ export function FlowerChat({
           </div>
         )}
         <AnimatePresence>
-          {messages.map((msg, i) => (
+          {messages.map(msg => (
             <motion.div
-              key={i}
+              key={msg.id}
               initial={{ opacity: 0, x: -4 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.12 }}
@@ -204,31 +214,10 @@ export function FlowerChat({
               {msg.role === "user" ? (
                 <>
                   <span style={{ color: "var(--tui-purple)" }}>$ </span>
-                  <span className="msg">{msg.content}</span>
+                  <span className="msg">{msg.text}</span>
                 </>
               ) : (
-                <>
-                  <span
-                    style={{
-                      color: msg.content.startsWith("[err]")
-                        ? "var(--tui-red)"
-                        : "var(--tui-green)",
-                    }}
-                  >
-                    {statusOf(msg.content).mark}
-                  </span>
-                  <span
-                    className="msg"
-                    style={{ color: statusOf(msg.content).color }}
-                  >
-                    {msg.content || (
-                      <span>
-                        generating
-                        <span className="tui-generating" />
-                      </span>
-                    )}
-                  </span>
-                </>
+                <AssistantEntry msg={msg} />
               )}
             </motion.div>
           ))}
@@ -270,15 +259,44 @@ export function FlowerChat({
   );
 }
 
-function statusOf(content: string): { mark: string; color: string } {
-  if (content.startsWith("[err]"))
-    return { mark: "✗ ", color: "var(--tui-red)" };
-  if (content.startsWith("[ok]"))
-    return { mark: "✓ ", color: "var(--tui-green)" };
-  return { mark: "⋯ ", color: "var(--tui-fg-2)" };
+function AssistantEntry({ msg }: { msg: AssistantMsg }) {
+  const { mark, color } = STATUS_STYLE[msg.state];
+  if (msg.state !== "generating") {
+    return (
+      <>
+        <span style={{ color }}>{mark}</span>
+        <span className="msg" style={{ color }}>
+          {msg.text}
+        </span>
+      </>
+    );
+  }
+  if (msg.answers.length === 0) {
+    return (
+      <>
+        <span style={{ color }}>{mark}</span>
+        <span className="msg" style={{ color }}>
+          generating
+          <span className="tui-generating" />
+        </span>
+      </>
+    );
+  }
+  return <AnswerTrace answers={msg.answers} mark={mark} />;
 }
 
-interface ChatMsg {
-  role: "user" | "assistant";
-  content: string;
+function AnswerTrace({ answers, mark }: { answers: Answer[]; mark: string }) {
+  const lastIndex = answers.length - 1;
+  return (
+    <div className="tui-answer-trace">
+      {answers.map((answer, i) => (
+        <div key={answer.id} className="tui-answer-trace__line">
+          <span className="tui-answer-trace__mark">
+            {i === lastIndex ? mark : "  "}
+          </span>
+          {describeAnswer(answer)}
+        </div>
+      ))}
+    </div>
+  );
 }

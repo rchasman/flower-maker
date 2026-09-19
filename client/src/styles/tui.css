@@ -538,6 +538,20 @@ body {
   color: var(--tui-fg-1);
 }
 
+/* Answer trace: one line per generator answer while a flower streams. */
+.tui-answer-trace {
+  display: flex;
+  flex-direction: column;
+  color: var(--tui-fg-2);
+  font-family: var(--tui-font);
+  white-space: pre-wrap;
+}
+
+.tui-answer-trace__mark {
+  display: inline-block;
+  width: 2ch;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    BLINKING CURSOR — Phosphor-glow block cursor
    ══════════════════════════════════════════════════════════════════════════ */

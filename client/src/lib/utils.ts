@@ -1,18 +1,10 @@
-import { parse as parseYaml, type CollectionTag } from "yaml";
+import { parse as parseYaml } from "yaml";
 
 /** Execute a block and return its value. Use instead of IIFEs. */
 export const run = <T>(f: () => T): T => f();
 
-// serde_yaml writes Rust struct-variant enums as YAML tags, for example
-// `symmetry: !Radial { order: 5 }`. Resolve each tag to the externally tagged
-// object form `{ Radial: { order: 5 } }` that the renderer reads.
-const RUST_ENUM_VARIANT_TAGS: CollectionTag[] = ["Radial", "Spiral"].map(
-  variant => ({
-    tag: `!${variant}`,
-    collection: "map",
-    resolve: map => ({ [variant]: map.toJSON() }),
-  }),
-);
+export const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
 
 /** Parse a spec string (YAML or JSON) to an object. Returns null on failure. */
 export function parseSpec(
@@ -20,14 +12,16 @@ export function parseSpec(
 ): Record<string, unknown> | null {
   if (!raw || raw === "{}" || raw.trim() === "") return null;
   try {
-    const parsed = parseYaml(raw, { customTags: RUST_ENUM_VARIANT_TAGS });
-    return parsed && typeof parsed === "object"
-      ? (parsed as Record<string, unknown>)
-      : null;
+    const parsed: unknown = parseYaml(raw);
+    return isRecord(parsed) ? parsed : null;
   } catch {
     return null;
   }
 }
+
+/** The message of a thrown value, whatever its type. */
+export const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 
 /** Group array elements by a key function. */
 export function groupBy<T, K>(items: T[], keyFn: (item: T) => K): Map<K, T[]> {
@@ -54,22 +48,44 @@ export function getNestedValue(
   }, obj);
 }
 
-/** Set a nested value on an object by dot-separated path, creating intermediates. */
+const isIndexKey = (key: string): boolean => /^\d+$/.test(key);
+
+const emptyObjects = (count: number): Record<string, unknown>[] =>
+  Array.from({ length: Math.max(0, count) }, () => ({}));
+
+function setAt(
+  container: unknown,
+  keys: readonly string[],
+  value: unknown,
+): unknown {
+  const [key, ...rest] = keys;
+  if (key === undefined) return value;
+  if (isIndexKey(key)) {
+    const list: unknown[] = Array.isArray(container) ? container : [];
+    const index = Number(key);
+    const filled = [...list, ...emptyObjects(index + 1 - list.length)];
+    return filled.map((item, i) =>
+      i === index ? setAt(item, rest, value) : item,
+    );
+  }
+  // A named key cannot address an array element, so the array is left as it is.
+  if (Array.isArray(container)) return container;
+  const record = isRecord(container) ? container : {};
+  return { ...record, [key]: setAt(record[key], rest, value) };
+}
+
+/**
+ * Return a copy of `obj` with `value` set at the dot-separated `path`.
+ * Numeric keys address array elements and create the array and the element
+ * when missing; missing objects on the way are created.
+ */
 export function setNestedValue(
   obj: Record<string, unknown>,
   path: string,
   value: unknown,
-): void {
-  const keys = path.split(".");
-  let target = obj;
-  for (let i = 0; i < keys.length - 1; i++) {
-    const k = keys[i]!;
-    if (target[k] == null || typeof target[k] !== "object") {
-      target[k] = {};
-    }
-    target = target[k] as Record<string, unknown>;
-  }
-  target[keys[keys.length - 1]!] = value;
+): Record<string, unknown> {
+  const result = setAt(obj, path.split("."), value);
+  return isRecord(result) && !Array.isArray(result) ? result : obj;
 }
 
 /** Color a fitness score: green (>70), yellow (>40), red. */
@@ -93,20 +109,39 @@ export async function readStream(res: Response): Promise<string> {
   return result;
 }
 
-/** Read a stream, calling onChunk with the accumulated text after each chunk. */
-export async function readStreamWithProgress(
+const parseNdjsonLines = <T>(text: string): T[] =>
+  text
+    .split("\n")
+    .filter(line => line.trim() !== "")
+    .map((line): T => JSON.parse(line));
+
+async function readNdjsonFrom<T>(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  decoder: TextDecoder,
+  onLine: (line: T) => void,
+  carry: string,
+  collected: readonly T[],
+): Promise<T[]> {
+  const { done, value } = await reader.read();
+  const text = carry + decoder.decode(value, { stream: !done });
+  const boundary = done ? text.length : text.lastIndexOf("\n") + 1;
+  const lines = parseNdjsonLines<T>(text.slice(0, boundary));
+  for (const line of lines) onLine(line);
+  const all = [...collected, ...lines];
+  if (done) return all;
+  return readNdjsonFrom(reader, decoder, onLine, text.slice(boundary), all);
+}
+
+/**
+ * Read an NDJSON response, calling onLine with each parsed line as soon as
+ * its newline arrives (a trailing line without one is parsed at the end).
+ * Resolves with every parsed line in order.
+ */
+export async function readNdjson<T>(
   res: Response,
-  onChunk: (accumulated: string) => void,
-): Promise<string> {
+  onLine: (line: T) => void,
+): Promise<T[]> {
   const reader = res.body?.getReader();
-  if (!reader) return "";
-  const decoder = new TextDecoder();
-  let result = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    result += decoder.decode(value, { stream: true });
-    onChunk(result);
-  }
-  return result;
+  if (!reader) return [];
+  return readNdjsonFrom(reader, new TextDecoder(), onLine, "", []);
 }

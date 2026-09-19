@@ -2,7 +2,7 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import type { DbConnection } from "../spacetime/types.ts";
 import { templatesByCategory, type TemplateInfo } from "../data/templates.ts";
-import { readStreamWithProgress, parseSpec } from "../lib/utils.ts";
+import { generateFlower } from "../ai/generateFlower.ts";
 
 interface TemplatePickerProps {
   conn: DbConnection | null;
@@ -44,31 +44,19 @@ export function TemplatePicker({
     setGeneratingSet(prev => new Set([...prev, t.name]));
     const genId = onGenerationStart(t.name);
     try {
-      const res = await fetch("/api/flower/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: t.name, template_name: t.name, model }),
+      const result = await generateFlower({
+        prompt: t.name,
+        templateName: t.name,
+        model,
+        onSnapshot: snapshot => {
+          if (!snapshot.done) onSpecProgress(genId, snapshot.spec);
+        },
       });
-      if (!res.ok || !res.body) {
-        onGenerationFailed(genId);
-        return;
-      }
-      const raw = await readStreamWithProgress(res, accumulated => {
-        if (parseSpec(accumulated)) onSpecProgress(genId, accumulated);
-      });
-      if (!parseSpec(raw)) {
-        onGenerationFailed(genId);
-        return;
-      }
-      onFlowerGenerated(genId, raw);
+      onFlowerGenerated(genId, result.spec);
     } catch {
       onGenerationFailed(genId);
     } finally {
-      setGeneratingSet(prev => {
-        const next = new Set(prev);
-        next.delete(t.name);
-        return next;
-      });
+      setGeneratingSet(prev => new Set([...prev].filter(n => n !== t.name)));
     }
   };
 
