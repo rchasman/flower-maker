@@ -1,14 +1,17 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "bunVersion": "1.x",
-  "experimentalServices": {
+  "services": {
     "client": {
-      "entrypoint": "client",
-      "routePrefix": "/"
+      "root": "client/"
     },
     "api": {
-      "entrypoint": "api/index.ts",
-      "routePrefix": "/api"
+      "root": "api/",
+      "entrypoint": "index.ts"
     }
-  }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": { "service": "api" } },
+    { "source": "/(.*)", "destination": { "service": "client" } }
+  ]
 }
