@@ -79,15 +79,15 @@ This demonstrates what a programmatic flower order looks like for the flowers AP
 
 ## Stack
 
-| Layer             | Tech                                               | Role                                       |
-| ----------------- | -------------------------------------------------- | ------------------------------------------ |
-| Multiplayer state | [SpacetimeDB](https://spacetimedb.com) (Rust)      | Real-time table sync over WebSocket        |
-| Client physics    | Rust WASM ([rapier2d](https://rapier.rs))          | Per-zone collision detection, merge events |
-| Rendering         | [PixiJS](https://pixijs.com) + custom shaders      | Homepage grid + designer canvas            |
-| UI                | React 19 + TypeScript                              | Designer, catalog, orders, social          |
-| AI                | [Vercel AI SDK](https://sdk.vercel.ai) + Anthropic | Flower generation, merge descriptions      |
+| Layer             | Tech                                                                    | Role                                                |
+| ----------------- | ----------------------------------------------------------------------- | --------------------------------------------------- |
+| Multiplayer state | [SpacetimeDB](https://spacetimedb.com) (Rust)                           | Real-time table sync over WebSocket                 |
+| Client physics    | Rust WASM ([rapier2d](https://rapier.rs))                               | Per-zone collision detection, merge events          |
+| Rendering         | [PixiJS](https://pixijs.com) + custom shaders                           | Homepage grid + designer canvas                     |
+| UI                | React 19 + TypeScript                                                   | Designer, catalog, orders, social                   |
+| AI                | [Vercel AI SDK](https://sdk.vercel.ai) + Anthropic                      | Flower generation, merge descriptions               |
 | AI (evaluation)   | [TypeSafe Jev](https://vercel.com/ai-gateway/models/jev) via AI Gateway | Typed selection of every spec field, one round trip |
-| API               | [Hono](https://hono.dev) on Bun                    | AI streaming + order endpoints             |
+| API               | [Hono](https://hono.dev) on Bun                                         | AI streaming + order endpoints                      |
 
 ## Architecture
 
@@ -143,14 +143,14 @@ bun run dev                # starts spacetime, api, and client concurrently
 
 All SpacetimeDB operations are scripted via `bun run db:*`:
 
-| Command                | What it does                                        |
-| ---------------------- | --------------------------------------------------- |
-| `bun run db:deploy`    | Publish to maincloud + regenerate TypeScript bindings |
-| `bun run db:publish`   | Publish module to maincloud only                    |
-| `bun run db:publish:local` | Publish to local SpacetimeDB server             |
-| `bun run db:publish:clear` | Nuke DB and republish fresh (maincloud)         |
-| `bun run db:generate`  | Regenerate TypeScript client bindings only          |
-| `bun run db:logs`      | Tail maincloud logs                                 |
+| Command                    | What it does                                          |
+| -------------------------- | ----------------------------------------------------- |
+| `bun run db:deploy`        | Publish to maincloud + regenerate TypeScript bindings |
+| `bun run db:publish`       | Publish module to maincloud only                      |
+| `bun run db:publish:local` | Publish to local SpacetimeDB server                   |
+| `bun run db:publish:clear` | Nuke DB and republish fresh (maincloud)               |
+| `bun run db:generate`      | Regenerate TypeScript client bindings only            |
+| `bun run db:logs`          | Tail maincloud logs                                   |
 
 After any schema change in `server/spacetimedb/src/lib.rs`, run `bun run db:deploy`.
 
@@ -171,11 +171,11 @@ flower-maker/
 
 ## Related Repos
 
-| Repo            | What                              | Reused Here                       |
-| --------------- | --------------------------------- | --------------------------------- |
-| `hyper-flowers` | Flower search + preview (Next.js) | 45 flower taxonomy for templates  |
-| `flower-core`   | AI flower image generator (FLUX)  | Prompt engineering patterns       |
-| `normalflowers` | ISLO manifesto + API vision       | Order model, agent-first design   |
+| Repo            | What                              | Reused Here                      |
+| --------------- | --------------------------------- | -------------------------------- |
+| `hyper-flowers` | Flower search + preview (Next.js) | 45 flower taxonomy for templates |
+| `flower-core`   | AI flower image generator (FLUX)  | Prompt engineering patterns      |
+| `normalflowers` | ISLO manifesto + API vision       | Order model, agent-first design  |
 
 ## License
 

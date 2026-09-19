@@ -9,9 +9,14 @@ describe("gateway model list", () => {
     expect(MODELS.map(m => m.fullName)).toContain(DEFAULT_MODEL);
   });
 
-  test.skipIf(!hasGatewayKey)("every configured model is served by the AI Gateway", async () => {
-    const served = new Set((await gateway.getAvailableModels()).models.map(m => m.id));
-    const missing = MODELS.map(m => m.fullName).filter(id => !served.has(id));
-    expect(missing).toEqual([]);
-  });
+  test.skipIf(!hasGatewayKey)(
+    "every configured model is served by the AI Gateway",
+    async () => {
+      const served = new Set(
+        (await gateway.getAvailableModels()).models.map(m => m.id),
+      );
+      const missing = MODELS.map(m => m.fullName).filter(id => !served.has(id));
+      expect(missing).toEqual([]);
+    },
+  );
 });

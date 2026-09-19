@@ -4,16 +4,19 @@ import { parse as parseYaml } from "yaml";
 export const run = <T>(f: () => T): T => f();
 
 /** Parse a spec string (YAML or JSON) to an object. Returns null on failure. */
-export function parseSpec(raw: string | undefined): Record<string, unknown> | null {
+export function parseSpec(
+  raw: string | undefined,
+): Record<string, unknown> | null {
   if (!raw || raw === "{}" || raw.trim() === "") return null;
   try {
     const parsed = parseYaml(raw);
-    return parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : null;
+    return parsed && typeof parsed === "object"
+      ? (parsed as Record<string, unknown>)
+      : null;
   } catch {
     return null;
   }
 }
-
 
 /** Group array elements by a key function. */
 export function groupBy<T, K>(items: T[], keyFn: (item: T) => K): Map<K, T[]> {
@@ -28,7 +31,10 @@ export function groupBy<T, K>(items: T[], keyFn: (item: T) => K): Map<K, T[]> {
 }
 
 /** Get a nested value from an object by dot-separated path. */
-export function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
+export function getNestedValue(
+  obj: Record<string, unknown>,
+  path: string,
+): unknown {
   return path.split(".").reduce<unknown>((o, k) => {
     if (o && typeof o === "object" && k in (o as Record<string, unknown>)) {
       return (o as Record<string, unknown>)[k];
@@ -38,7 +44,11 @@ export function getNestedValue(obj: Record<string, unknown>, path: string): unkn
 }
 
 /** Set a nested value on an object by dot-separated path, creating intermediates. */
-export function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): void {
+export function setNestedValue(
+  obj: Record<string, unknown>,
+  path: string,
+  value: unknown,
+): void {
   const keys = path.split(".");
   let target = obj;
   for (let i = 0; i < keys.length - 1; i++) {

@@ -1,5 +1,5 @@
 export async function handleOrder(request: Request) {
-  const body = await request.json() as {
+  const body = (await request.json()) as {
     session_id: number;
     spec: unknown;
     arrangement_level: string;

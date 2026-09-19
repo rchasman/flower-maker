@@ -32,11 +32,28 @@ const HEADER_FLOATS = 2;
 const INITIAL_POOL_CAPACITY = 256;
 
 function createEmptyFlower(): FlowerRenderData {
-  return { sid: 0, x: 0, y: 0, rotation: 0, scale: 0, alpha: 0, has_aura: false, has_glow: false, particles: 0, petal_color_r: 0, petal_color_g: 0, petal_color_b: 0, petal_count: 0 };
+  return {
+    sid: 0,
+    x: 0,
+    y: 0,
+    rotation: 0,
+    scale: 0,
+    alpha: 0,
+    has_aura: false,
+    has_glow: false,
+    particles: 0,
+    petal_color_r: 0,
+    petal_color_g: 0,
+    petal_color_b: 0,
+    petal_count: 0,
+  };
 }
 
 /** Module-level pool — grows by 2x when capacity is exceeded, never shrinks. */
-let pool: FlowerRenderData[] = Array.from({ length: INITIAL_POOL_CAPACITY }, createEmptyFlower);
+let pool: FlowerRenderData[] = Array.from(
+  { length: INITIAL_POOL_CAPACITY },
+  createEmptyFlower,
+);
 
 function ensurePoolCapacity(needed: number): void {
   if (needed <= pool.length) return;

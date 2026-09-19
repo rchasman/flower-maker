@@ -21,7 +21,13 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 // ── Low-level path helper ──
 
 /** Execute DrawCmd[] on a PixiJS Graphics context, scaled around (ox, oy). */
-export function drawCmds(g: Graphics, cmds: readonly DrawCmd[], scale: number, ox = 0, oy = 0): void {
+export function drawCmds(
+  g: Graphics,
+  cmds: readonly DrawCmd[],
+  scale: number,
+  ox = 0,
+  oy = 0,
+): void {
   for (const cmd of cmds) {
     switch (cmd.op) {
       case "M":
@@ -55,8 +61,12 @@ const LIGHT_SIN = Math.sin(LIGHT_ANGLE);
 
 /** Draw petal layers with 7-pass rendering per petal. */
 export function drawPetals(
-  g: Graphics, layers: FlowerPlan["layers"],
-  scale: number, alpha: number, ox = 0, oy = 0,
+  g: Graphics,
+  layers: FlowerPlan["layers"],
+  scale: number,
+  alpha: number,
+  ox = 0,
+  oy = 0,
 ) {
   const lightOffsetX = LIGHT_COS * scale * 0.012;
   const lightOffsetY = LIGHT_SIN * scale * 0.012;
@@ -76,7 +86,13 @@ export function drawPetals(
     for (const [petalIdx, petal] of layer.petals.entries()) {
       // Intra-layer depth: each petal casts a subtle shadow on the one behind it
       if (petalIdx > 0) {
-        drawCmds(g, petal.cmds, scale * 1.01, ox + shadowOffX * 0.5, oy + shadowOffY * 0.5);
+        drawCmds(
+          g,
+          petal.cmds,
+          scale * 1.01,
+          ox + shadowOffX * 0.5,
+          oy + shadowOffY * 0.5,
+        );
         g.fill({ color: 0x000000, alpha: alpha * 0.04 });
       }
 
@@ -94,7 +110,13 @@ export function drawPetals(
       drawCmds(g, petal.cmds, scale, ox + lightOffsetX, oy + lightOffsetY);
       g.fill({ color: petal.lightColor, alpha: alpha * layer.opacity * 0.18 });
 
-      drawCmds(g, petal.cmds, scale, ox - lightOffsetX * 0.7, oy - lightOffsetY * 0.7);
+      drawCmds(
+        g,
+        petal.cmds,
+        scale,
+        ox - lightOffsetX * 0.7,
+        oy - lightOffsetY * 0.7,
+      );
       g.fill({ color: petal.shadowColor, alpha: alpha * layer.opacity * 0.1 });
 
       drawCmds(g, petal.cmds, scale, ox, oy);
@@ -105,18 +127,34 @@ export function drawPetals(
         case "Velvet": {
           // Edge darkening — thick inner stroke for soft absorbed-light look
           drawCmds(g, petal.cmds, scale, ox, oy);
-          g.stroke({ color: petal.textureEdge, width: Math.max(1.5, scale * 0.025), alpha: alpha * 0.2 });
+          g.stroke({
+            color: petal.textureEdge,
+            width: Math.max(1.5, scale * 0.025),
+            alpha: alpha * 0.2,
+          });
           break;
         }
         case "Silk": {
           // Bright specular band — thin highlight stripe across petal center
-          drawCmds(g, petal.cmds, scale, ox + lightOffsetX * 2, oy + lightOffsetY * 2);
+          drawCmds(
+            g,
+            petal.cmds,
+            scale,
+            ox + lightOffsetX * 2,
+            oy + lightOffsetY * 2,
+          );
           g.fill({ color: petal.textureHighlight, alpha: alpha * 0.12 });
           break;
         }
         case "Waxy": {
           // Sharp specular — bright highlight near petal base
-          drawCmds(g, petal.cmds, scale, ox + lightOffsetX * 1.5, oy + lightOffsetY * 1.5);
+          drawCmds(
+            g,
+            petal.cmds,
+            scale,
+            ox + lightOffsetX * 1.5,
+            oy + lightOffsetY * 1.5,
+          );
           g.fill({ color: petal.textureHighlight, alpha: alpha * 0.15 });
           break;
         }
@@ -137,22 +175,44 @@ export function drawPetals(
         case "Glassy":
         case "Crystalline": {
           // Sharp specular point — bright white highlight
-          drawCmds(g, petal.cmds, scale, ox + lightOffsetX * 2.5, oy + lightOffsetY * 2.5);
+          drawCmds(
+            g,
+            petal.cmds,
+            scale,
+            ox + lightOffsetX * 2.5,
+            oy + lightOffsetY * 2.5,
+          );
           g.fill({ color: 0xffffff, alpha: alpha * 0.18 });
           break;
         }
         case "Pearlescent": {
           // Warm and cool offset fills for rainbow sheen
-          drawCmds(g, petal.cmds, scale, ox + lightOffsetX * 0.8, oy + lightOffsetY * 0.8);
+          drawCmds(
+            g,
+            petal.cmds,
+            scale,
+            ox + lightOffsetX * 0.8,
+            oy + lightOffsetY * 0.8,
+          );
           g.fill({ color: petal.textureHighlight, alpha: alpha * 0.1 });
-          drawCmds(g, petal.cmds, scale, ox - lightOffsetX * 0.5, oy - lightOffsetY * 0.5);
+          drawCmds(
+            g,
+            petal.cmds,
+            scale,
+            ox - lightOffsetX * 0.5,
+            oy - lightOffsetY * 0.5,
+          );
           g.fill({ color: petal.textureEdge, alpha: alpha * 0.08 });
           break;
         }
         case "Frosted": {
           // White edge frost
           drawCmds(g, petal.cmds, scale, ox, oy);
-          g.stroke({ color: 0xffffff, width: Math.max(1, scale * 0.02), alpha: alpha * 0.15 });
+          g.stroke({
+            color: 0xffffff,
+            width: Math.max(1, scale * 0.02),
+            alpha: alpha * 0.15,
+          });
           break;
         }
         // Smooth, Rough, Hairy, Fuzzy, Scaled, Leathery, Powdery — no extra pass
@@ -160,22 +220,38 @@ export function drawPetals(
 
       if (petal.veinCmds.length > 0) {
         drawCmds(g, petal.veinCmds, scale, ox, oy);
-        g.stroke({ color: petal.midribGlowColor, width: Math.max(0.8, scale * 0.018), alpha: alpha * 0.12 });
+        g.stroke({
+          color: petal.midribGlowColor,
+          width: Math.max(0.8, scale * 0.018),
+          alpha: alpha * 0.12,
+        });
 
         drawCmds(g, petal.veinCmds, scale, ox, oy);
-        g.stroke({ color: petal.veinColor, width: Math.max(0.3, scale * 0.008), alpha: alpha * 0.25 });
+        g.stroke({
+          color: petal.veinColor,
+          width: Math.max(0.3, scale * 0.008),
+          alpha: alpha * 0.25,
+        });
       }
 
       drawCmds(g, petal.cmds, scale, ox, oy);
-      g.stroke({ color: petal.outlineColor, width: Math.max(0.3, scale * 0.006), alpha: alpha * layer.opacity * 0.4 });
+      g.stroke({
+        color: petal.outlineColor,
+        width: Math.max(0.3, scale * 0.006),
+        alpha: alpha * layer.opacity * 0.4,
+      });
     }
   }
 }
 
 /** Draw stamens with curved filaments and anther highlights. */
 export function drawStamens(
-  g: Graphics, stamens: FlowerPlan["center"]["stamens"],
-  scale: number, alpha: number, ox = 0, oy = 0,
+  g: Graphics,
+  stamens: FlowerPlan["center"]["stamens"],
+  scale: number,
+  alpha: number,
+  ox = 0,
+  oy = 0,
 ) {
   for (const [i, s] of stamens.entries()) {
     const sx = ox + Math.cos(s.angle) * s.length * scale;
@@ -188,17 +264,28 @@ export function drawStamens(
 
     g.moveTo(ox, oy);
     g.bezierCurveTo(
-      midX + perpX * bendDir, midY + perpY * bendDir,
-      midX + perpX * bendDir * 0.5, midY + perpY * bendDir * 0.5,
-      sx, sy,
+      midX + perpX * bendDir,
+      midY + perpY * bendDir,
+      midX + perpX * bendDir * 0.5,
+      midY + perpY * bendDir * 0.5,
+      sx,
+      sy,
     );
-    g.stroke({ color: s.filamentColor, width: Math.max(0.4, scale * 0.022), alpha: alpha * 0.75 });
+    g.stroke({
+      color: s.filamentColor,
+      width: Math.max(0.4, scale * 0.022),
+      alpha: alpha * 0.75,
+    });
 
     const ar = s.antherRadius * scale;
     g.circle(sx, sy, ar);
     g.fill({ color: s.antherColor, alpha });
     g.circle(sx, sy, ar);
-    g.stroke({ color: darkenColor(s.antherColor, 0.5), width: Math.max(0.2, scale * 0.004), alpha: alpha * 0.4 });
+    g.stroke({
+      color: darkenColor(s.antherColor, 0.5),
+      width: Math.max(0.2, scale * 0.004),
+      alpha: alpha * 0.4,
+    });
     g.circle(sx - ar * 0.25, sy - ar * 0.25, ar * 0.35);
     g.fill({ color: 0xffffff, alpha: alpha * 0.25 });
   }
@@ -206,8 +293,12 @@ export function drawStamens(
 
 /** Draw center disc with outline, radial depth, stippling, and pistil highlight. */
 export function drawCenterDisc(
-  g: Graphics, center: FlowerPlan["center"],
-  scale: number, alpha: number, ox = 0, oy = 0,
+  g: Graphics,
+  center: FlowerPlan["center"],
+  scale: number,
+  alpha: number,
+  ox = 0,
+  oy = 0,
 ) {
   const discR = center.discRadius * scale;
   const discColor = center.discColor;
@@ -215,7 +306,11 @@ export function drawCenterDisc(
   g.circle(ox, oy, discR);
   g.fill({ color: discColor, alpha });
   g.circle(ox, oy, discR);
-  g.stroke({ color: darkenColor(discColor, 0.45), width: Math.max(0.3, scale * 0.006), alpha: alpha * 0.4 });
+  g.stroke({
+    color: darkenColor(discColor, 0.45),
+    width: Math.max(0.3, scale * 0.006),
+    alpha: alpha * 0.4,
+  });
 
   g.circle(ox, oy, discR * 0.75);
   g.fill({ color: lightenColor(discColor, 0.08), alpha: alpha * 0.3 });
@@ -230,7 +325,8 @@ export function drawCenterDisc(
     const dotX = ox + Math.cos(theta) * r2;
     const dotY = oy + Math.sin(theta) * r2;
     const dotR = Math.max(0.3, scale * 0.008 * (1 - t * 0.4));
-    const dotColor = i % 2 === 0 ? darkenColor(discColor, 0.6) : lightenColor(discColor, 0.1);
+    const dotColor =
+      i % 2 === 0 ? darkenColor(discColor, 0.6) : lightenColor(discColor, 0.1);
     g.circle(dotX, dotY, dotR);
     g.fill({ color: dotColor, alpha: alpha * (0.35 + t * 0.2) });
   }
@@ -241,7 +337,12 @@ export function drawCenterDisc(
 }
 
 /** Draw aura on a SEPARATE Graphics to avoid rectangular bounding-box artifacts. */
-export function drawAura(g: Graphics, plan: FlowerPlan, r: number, alpha: number) {
+export function drawAura(
+  g: Graphics,
+  plan: FlowerPlan,
+  r: number,
+  alpha: number,
+) {
   if (!plan.aura) return;
   const scale = r;
   const now = performance.now();
@@ -267,7 +368,10 @@ export function drawAura(g: Graphics, plan: FlowerPlan, r: number, alpha: number
         g.moveTo(0, 0);
         g.lineTo(Math.cos(a1) * auraR, Math.sin(a1) * auraR);
         g.lineTo(Math.cos(a2) * auraR, Math.sin(a2) * auraR);
-        g.fill({ color: plan.aura!.color, alpha: auraAlpha * (0.3 + 0.1 * Math.sin(now / 400 + i)) });
+        g.fill({
+          color: plan.aura!.color,
+          alpha: auraAlpha * (0.3 + 0.1 * Math.sin(now / 400 + i)),
+        });
       }
       break;
     }
@@ -335,13 +439,21 @@ export function drawFlowerFromPlan(
     drawCmds(g, plan.stem.cmds, scale);
     g.fill({ color: plan.stem.color, alpha: alpha * 0.9 });
     drawCmds(g, plan.stem.cmds, scale);
-    g.stroke({ color: darkenColor(plan.stem.color, 0.5), width: Math.max(0.4, scale * 0.008), alpha: alpha * 0.45 });
+    g.stroke({
+      color: darkenColor(plan.stem.color, 0.5),
+      width: Math.max(0.4, scale * 0.008),
+      alpha: alpha * 0.45,
+    });
 
     for (const thorn of plan.stem.thorns) {
       drawCmds(g, thorn.cmds, scale);
       g.fill({ color: thorn.color, alpha: alpha * 0.85 });
       drawCmds(g, thorn.cmds, scale);
-      g.stroke({ color: darkenColor(thorn.color, 0.4), width: Math.max(0.3, scale * 0.005), alpha: alpha * 0.5 });
+      g.stroke({
+        color: darkenColor(thorn.color, 0.4),
+        width: Math.max(0.3, scale * 0.005),
+        alpha: alpha * 0.5,
+      });
     }
   }
 
@@ -350,9 +462,17 @@ export function drawFlowerFromPlan(
     drawCmds(g, leaf.cmds, scale);
     g.fill({ color: leaf.color, alpha: alpha * 0.9 });
     drawCmds(g, leaf.cmds, scale);
-    g.stroke({ color: darkenColor(leaf.color, 0.45), width: Math.max(0.3, scale * 0.006), alpha: alpha * 0.4 });
+    g.stroke({
+      color: darkenColor(leaf.color, 0.45),
+      width: Math.max(0.3, scale * 0.006),
+      alpha: alpha * 0.4,
+    });
     drawCmds(g, leaf.veins, scale);
-    g.stroke({ color: darkenColor(leaf.color, 0.5), width: Math.max(0.4, scale * 0.012), alpha: alpha * 0.65 });
+    g.stroke({
+      color: darkenColor(leaf.color, 0.5),
+      width: Math.max(0.4, scale * 0.012),
+      alpha: alpha * 0.65,
+    });
   }
 
   // Sepals
@@ -360,7 +480,11 @@ export function drawFlowerFromPlan(
     drawCmds(g, sepal.cmds, scale);
     g.fill({ color: sepal.color, alpha: alpha * 0.85 });
     drawCmds(g, sepal.cmds, scale);
-    g.stroke({ color: darkenColor(sepal.color, 0.5), width: Math.max(0.3, scale * 0.005), alpha: alpha * 0.35 });
+    g.stroke({
+      color: darkenColor(sepal.color, 0.5),
+      width: Math.max(0.3, scale * 0.005),
+      alpha: alpha * 0.35,
+    });
   }
 
   // Petal layers, dewdrops, stamens, center disc
@@ -402,14 +526,20 @@ export function drawFlowerFromPlan(
         const wingSpread = pr * 2;
         const flapAngle = Math.sin(t * 8 + p.x * 15) * 0.3;
         g.moveTo(px, py);
-        g.lineTo(px - wingSpread * Math.cos(flapAngle), py - wingSpread * Math.sin(flapAngle));
+        g.lineTo(
+          px - wingSpread * Math.cos(flapAngle),
+          py - wingSpread * Math.sin(flapAngle),
+        );
         g.lineTo(px, py - pr * 0.5);
-        g.lineTo(px + wingSpread * Math.cos(flapAngle), py - wingSpread * Math.sin(flapAngle));
+        g.lineTo(
+          px + wingSpread * Math.cos(flapAngle),
+          py - wingSpread * Math.sin(flapAngle),
+        );
         g.fill({ color: p.color, alpha: alpha * 0.6 });
         break;
       }
       case "Snowflakes": {
-        const fallY = py + (t * 0.02 * scale) % (scale * 0.5);
+        const fallY = py + ((t * 0.02 * scale) % (scale * 0.5));
         g.circle(px, fallY, pr);
         g.fill({ color: 0xffffff, alpha: alpha * 0.5 });
         break;
@@ -436,7 +566,11 @@ export function drawArrangementFromPlan(
     drawCmds(g, member.stem.cmds, scale);
     g.fill({ color: member.stem.color, alpha: alpha * 0.9 });
     drawCmds(g, member.stem.cmds, scale);
-    g.stroke({ color: darkenColor(member.stem.color, 0.5), width: Math.max(0.4, scale * 0.008), alpha: alpha * 0.45 });
+    g.stroke({
+      color: darkenColor(member.stem.color, 0.5),
+      width: Math.max(0.4, scale * 0.008),
+      alpha: alpha * 0.45,
+    });
   }
 
   // Pass 2: Adornment
@@ -460,7 +594,11 @@ export function drawArrangementFromPlan(
       drawCmds(g, leaf.cmds, scale);
       g.fill({ color: leaf.color, alpha: alpha * 0.85 });
       drawCmds(g, leaf.cmds, scale);
-      g.stroke({ color: darkenColor(leaf.color, 0.45), width: Math.max(0.3, scale * 0.006), alpha: alpha * 0.4 });
+      g.stroke({
+        color: darkenColor(leaf.color, 0.45),
+        width: Math.max(0.3, scale * 0.006),
+        alpha: alpha * 0.4,
+      });
     }
   }
 
@@ -474,11 +612,22 @@ export function drawArrangementFromPlan(
       drawCmds(g, sepal.cmds, flowerScale, ox, oy);
       g.fill({ color: sepal.color, alpha: alpha * 0.85 });
       drawCmds(g, sepal.cmds, flowerScale, ox, oy);
-      g.stroke({ color: darkenColor(sepal.color, 0.5), width: Math.max(0.3, flowerScale * 0.005), alpha: alpha * 0.35 });
+      g.stroke({
+        color: darkenColor(sepal.color, 0.5),
+        width: Math.max(0.3, flowerScale * 0.005),
+        alpha: alpha * 0.35,
+      });
     }
 
     drawPetals(g, member.flowerPlan.layers, flowerScale, alpha, ox, oy);
-    drawStamens(g, member.flowerPlan.center.stamens, flowerScale, alpha, ox, oy);
+    drawStamens(
+      g,
+      member.flowerPlan.center.stamens,
+      flowerScale,
+      alpha,
+      ox,
+      oy,
+    );
     drawCenterDisc(g, member.flowerPlan.center, flowerScale, alpha, ox, oy);
   }
 }
