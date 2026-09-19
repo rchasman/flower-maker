@@ -1,4 +1,4 @@
-// All 46 flower templates mirrored from crates/flower-core/src/templates.rs.
+// Flower templates mirrored from crates/flower-core/src/templates.rs.
 // This is the client-side reference for the template picker UI.
 
 export interface TemplateInfo {
