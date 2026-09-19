@@ -7,6 +7,7 @@
  */
 
 import { parse as parseYaml } from "yaml";
+import { run } from "../lib/utils.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types
@@ -102,7 +103,12 @@ export type FlowerPlan = {
       texture: string;
       textureHighlight: number;
       textureEdge: number;
-      gradientStops: ReadonlyArray<{ position: number; color: number; blendedColor: number; cmds: DrawCmd[] }>;
+      gradientStops: ReadonlyArray<{
+        position: number;
+        color: number;
+        blendedColor: number;
+        cmds: DrawCmd[];
+      }>;
     }>;
     opacity: number;
   }>;
@@ -177,13 +183,26 @@ function scatterColor(color: number, amount: number, seed: number): number {
 }
 
 /** Directional light tint — petals facing the light source appear brighter. */
-function lightTint(color: number, petalAngle: number, lightAngle = -Math.PI / 4): number {
+function lightTint(
+  color: number,
+  petalAngle: number,
+  lightAngle = -Math.PI / 4,
+): number {
   // Cosine falloff: petals facing the light get up to 10% brightness boost
   const dot = Math.cos(petalAngle - lightAngle);
   const boost = dot * 0.1; // [-0.1, 0.1]
-  const r = Math.min(255, Math.max(0, Math.floor(((color >> 16) & 0xff) * (1 + boost))));
-  const g = Math.min(255, Math.max(0, Math.floor(((color >> 8) & 0xff) * (1 + boost))));
-  const b = Math.min(255, Math.max(0, Math.floor((color & 0xff) * (1 + boost))));
+  const r = Math.min(
+    255,
+    Math.max(0, Math.floor(((color >> 16) & 0xff) * (1 + boost))),
+  );
+  const g = Math.min(
+    255,
+    Math.max(0, Math.floor(((color >> 8) & 0xff) * (1 + boost))),
+  );
+  const b = Math.min(
+    255,
+    Math.max(0, Math.floor((color & 0xff) * (1 + boost))),
+  );
   return (r << 16) | (g << 8) | b;
 }
 
@@ -244,30 +263,29 @@ function colorToHex(
 
 const SHAPE_PROFILES: Record<string, (t: number) => number> = {
   // Classic egg-shaped — widest at ~35% from base, gentle taper to tip
-  Ovate: (t) => Math.sin(Math.PI * Math.pow(t, 0.7)),
+  Ovate: t => Math.sin(Math.PI * Math.pow(t, 0.7)),
 
   // Narrow lance — widest near 25%, long gradual taper to pointed tip
-  Lanceolate: (t) =>
-    Math.sin(Math.PI * t) * Math.pow(1 - t, 0.25) * 1.1,
+  Lanceolate: t => Math.sin(Math.PI * t) * Math.pow(1 - t, 0.25) * 1.1,
 
   // Spoon/spatula — narrow stalk at base, wide rounded top
-  Spatulate: (t) =>
+  Spatulate: t =>
     t < 0.3
       ? (t / 0.3) * 0.3
       : 0.3 + 0.7 * Math.sin((Math.PI * (t - 0.3)) / 0.7),
 
   // Rectangular — nearly parallel sides with rounded ends
-  Oblong: (t) => {
+  Oblong: t => {
     if (t < 0.1) return Math.sin((Math.PI * t) / 0.2) * 0.88;
     if (t > 0.9) return Math.sin((Math.PI * (1 - t)) / 0.2) * 0.88;
     return 0.88;
   },
 
   // Nearly circular — very wide, widest at center
-  Orbicular: (t) => Math.sqrt(Math.max(0, Math.sin(Math.PI * t))),
+  Orbicular: t => Math.sqrt(Math.max(0, Math.sin(Math.PI * t))),
 
   // Heart-shaped — wide, with a notch at the tip
-  Cordate: (t) => {
+  Cordate: t => {
     const base = Math.sin(Math.PI * Math.pow(t, 0.6));
     return t > 0.85
       ? base * (1 - 0.4 * Math.pow((t - 0.85) / 0.15, 0.5))
@@ -275,21 +293,20 @@ const SHAPE_PROFILES: Record<string, (t: number) => number> = {
   },
 
   // Triangular — widest at base, linear taper to point
-  Deltoid: (t) =>
-    Math.max(0, 1 - t * 0.95) * Math.sqrt(Math.min(1, t * 5)),
+  Deltoid: t => Math.max(0, 1 - t * 0.95) * Math.sqrt(Math.min(1, t * 5)),
 
   // Sickle-curved — handled via asymmetry in generation, profile is narrower
-  Falcate: (t) => Math.sin(Math.PI * t) * 0.7,
+  Falcate: t => Math.sin(Math.PI * t) * 0.7,
 
   // Strap-shaped — uniform narrow width, blunt tip (daisy ray petals)
-  Ligulate: (t) => {
+  Ligulate: t => {
     if (t < 0.08) return (t / 0.08) * 0.45;
     if (t > 0.85) return 0.45 * Math.cos((Math.PI * 0.5 * (t - 0.85)) / 0.15);
     return 0.45;
   },
 
   // Very narrow tube — disc florets
-  Tubular: (t) => {
+  Tubular: t => {
     if (t < 0.05) return (t / 0.05) * 0.22;
     if (t > 0.88)
       return 0.22 * (1 + 0.6 * Math.sin((Math.PI * (t - 0.88)) / 0.12));
@@ -297,62 +314,62 @@ const SHAPE_PROFILES: Record<string, (t: number) => number> = {
   },
 
   // Fringed ovate — base shape is ovate, edges get intrinsic fringe
-  Fimbriate: (t) => Math.sin(Math.PI * Math.pow(t, 0.7)),
+  Fimbriate: t => Math.sin(Math.PI * Math.pow(t, 0.7)),
 
   // Deeply cut/slashed ovate — base shape, intrinsic lacerate edge
-  Laciniate: (t) => Math.sin(Math.PI * Math.pow(t, 0.7)),
+  Laciniate: t => Math.sin(Math.PI * Math.pow(t, 0.7)),
 
   // Backward-toothed — base shape, intrinsic serrate edge
-  Runcinate: (t) => Math.sin(Math.PI * Math.pow(t, 0.7)),
+  Runcinate: t => Math.sin(Math.PI * Math.pow(t, 0.7)),
 
   // ── v2 shapes ──
 
   // Wedge — narrow base, widest at the very tip, abrupt end
-  Cuneate: (t) => t < 0.85 ? Math.pow(t / 0.85, 1.5) * 0.95 : 0.95 * Math.cos((Math.PI * 0.5 * (t - 0.85)) / 0.15),
+  Cuneate: t =>
+    t < 0.85
+      ? Math.pow(t / 0.85, 1.5) * 0.95
+      : 0.95 * Math.cos((Math.PI * 0.5 * (t - 0.85)) / 0.15),
 
   // Long-tapered pointed tip — like lanceolate but with exaggerated tip
-  Acuminate: (t) => Math.sin(Math.PI * t) * Math.pow(1 - t, 0.6) * 1.3,
+  Acuminate: t => Math.sin(Math.PI * t) * Math.pow(1 - t, 0.6) * 1.3,
 
   // Fiddle/violin — pinched waist at ~50%
-  Panduriform: (t) => {
+  Panduriform: t => {
     const base = Math.sin(Math.PI * Math.pow(t, 0.65));
     const pinch = 1 - 0.4 * Math.exp(-Math.pow((t - 0.5) / 0.12, 2));
     return base * pinch;
   },
 
   // Clawed base (narrow stalk) widening into broad blade
-  Unguiculate: (t) =>
+  Unguiculate: t =>
     t < 0.25
       ? (t / 0.25) * 0.2
       : 0.2 + 0.8 * Math.sin((Math.PI * (t - 0.25)) / 0.75),
 
   // Fan-shaped — very wide at the outer edge, narrow base
-  Flabellate: (t) =>
+  Flabellate: t =>
     t < 0.15
       ? (t / 0.15) * 0.15
       : 0.15 + 0.85 * Math.pow(Math.sin((Math.PI * (t - 0.15)) / 0.85), 0.5),
 
   // Reverse egg — widest at ~65% from base
-  Obovate: (t) => Math.sin(Math.PI * Math.pow(t, 1.4)),
+  Obovate: t => Math.sin(Math.PI * Math.pow(t, 1.4)),
 
   // Diamond — widest at exact center, angular taper both ways
-  Rhomboid: (t) =>
-    t < 0.5
-      ? t * 2 * 0.85
-      : (1 - t) * 2 * 0.85,
+  Rhomboid: t => (t < 0.5 ? t * 2 * 0.85 : (1 - t) * 2 * 0.85),
 
   // Thread-like — extremely narrow throughout
-  Filiform: (t) => {
+  Filiform: t => {
     if (t < 0.05) return (t / 0.05) * 0.12;
     if (t > 0.9) return 0.12 * (1 - (t - 0.9) / 0.1);
     return 0.12;
   },
 
   // Kidney-shaped — very wide and short, almost wider than long
-  Reniform: (t) => Math.sqrt(Math.max(0, Math.sin(Math.PI * t))) * 1.4,
+  Reniform: t => Math.sqrt(Math.max(0, Math.sin(Math.PI * t))) * 1.4,
 
   // Arrow-shaped — barbed backward-pointing base lobes
-  Sagittate: (t) => {
+  Sagittate: t => {
     if (t < 0.12) return 0.7 + (1 - t / 0.12) * 0.5;
     return Math.sin(Math.PI * Math.pow(t, 0.7)) * 0.85;
   },
@@ -375,7 +392,7 @@ function edgeModifier(style: string, t: number, seed: number): number {
     case "Fringed":
       return 1 + (Math.sin(t * 24 + seed * 3) > 0.2 ? 0.14 : -0.07);
     case "Serrated":
-      return 1 + (((t * 10 + seed * 0.1) % 1) < 0.5 ? 0.12 : -0.06);
+      return 1 + ((t * 10 + seed * 0.1) % 1 < 0.5 ? 0.12 : -0.06);
     case "Rolled":
       return 1 - t * 0.12;
     case "Undulate":
@@ -384,8 +401,7 @@ function edgeModifier(style: string, t: number, seed: number): number {
       return 1 + Math.sin(t * 20 + seed * 4) * 0.09;
     case "Lacerate":
       return (
-        1 +
-        Math.sin(t * 9 + seed * 3) * Math.cos(t * 13 + seed * 7) * 0.18
+        1 + Math.sin(t * 9 + seed * 3) * Math.cos(t * 13 + seed * 7) * 0.18
       );
     // ── v2 edge styles ──
     case "Lobed":
@@ -395,9 +411,11 @@ function edgeModifier(style: string, t: number, seed: number): number {
     case "Revolute":
       return t > 0.3 ? 1 - (t - 0.3) * 0.18 : 1;
     case "Dentate":
-      return 1 + (((t * 16 + seed * 0.1) % 1) < 0.4 ? 0.14 : -0.04);
+      return 1 + ((t * 16 + seed * 0.1) % 1 < 0.4 ? 0.14 : -0.04);
     case "Erose":
-      return 1 + (Math.sin(t * 31 + seed * 11) * Math.cos(t * 19 + seed * 5)) * 0.13;
+      return (
+        1 + Math.sin(t * 31 + seed * 11) * Math.cos(t * 19 + seed * 5) * 0.13
+      );
     default:
       return 1;
   }
@@ -420,21 +438,6 @@ function intrinsicEdge(shape: string): string | null {
 // ═══════════════════════════════════════════════════════════════════════════
 // Smooth curve generation — Catmull-Rom → cubic Bézier
 // ═══════════════════════════════════════════════════════════════════════════
-
-/** Offset a DrawCmd by (dx, dy) in unit space. */
-function offsetCmd(cmd: DrawCmd, dx: number, dy: number): DrawCmd {
-  switch (cmd.op) {
-    case "M": return { op: "M", x: cmd.x + dx, y: cmd.y + dy };
-    case "L": return { op: "L", x: cmd.x + dx, y: cmd.y + dy };
-    case "C": return {
-      op: "C",
-      c1x: cmd.c1x + dx, c1y: cmd.c1y + dy,
-      c2x: cmd.c2x + dx, c2y: cmd.c2y + dy,
-      x: cmd.x + dx, y: cmd.y + dy,
-    };
-    case "Z": return cmd;
-  }
-}
 
 /** Convert a point sequence into smooth cubic Bézier draw commands. */
 function smoothCmds(points: Vec2[]): DrawCmd[] {
@@ -477,7 +480,8 @@ const BASE_OFFSET = 0.08;
 function normalizePetalDims(length: number, width: number, radialOffset = 1.0) {
   return {
     petalLen: Math.max(0.18, Math.min(0.7, length * 0.25)) * radialOffset,
-    petalW: Math.max(0.05, Math.min(0.3, width * 0.1)) * (0.7 + 0.3 * radialOffset),
+    petalW:
+      Math.max(0.05, Math.min(0.3, width * 0.1)) * (0.7 + 0.3 * radialOffset),
   };
 }
 
@@ -486,13 +490,21 @@ function normalizePetalDims(length: number, width: number, radialOffset = 1.0) {
  * Shared by generatePetal and generatePetalPartial.
  */
 function generatePetalPoints(
-  angle: number, shape: string, edge: string,
-  length: number, width: number, curvature: number, curl: number,
-  seed: number, radialOffset: number = 1.0, startIdx: number = 0,
+  angle: number,
+  shape: string,
+  edge: string,
+  length: number,
+  width: number,
+  curvature: number,
+  curl: number,
+  seed: number,
+  radialOffset: number = 1.0,
+  startIdx: number = 0,
 ): { leftPts: Vec2[]; rightPts: Vec2[] } {
   const { petalLen, petalW } = normalizePetalDims(length, width, radialOffset);
   const baseOff = BASE_OFFSET * radialOffset;
-  const effectiveEdge = edge !== "Smooth" ? edge : (intrinsicEdge(shape) ?? "Smooth");
+  const effectiveEdge =
+    edge !== "Smooth" ? edge : (intrinsicEdge(shape) ?? "Smooth");
 
   const cosA = Math.cos(angle);
   const sinA = Math.sin(angle);
@@ -506,18 +518,20 @@ function generatePetalPoints(
     // +curvature = cupped, -curvature = recurved
     const bend = curvature * 0.15 * Math.sin(Math.PI * t);
     const curlDisp =
-      curl > 0 && t > 0.65
-        ? curl * Math.pow((t - 0.65) / 0.35, 2) * -0.3
-        : 0;
+      curl > 0 && t > 0.65 ? curl * Math.pow((t - 0.65) / 0.35, 2) * -0.3 : 0;
 
     const localX = along + curlDisp;
     const localY = bend;
     // Cupped petals foreshorten — appear narrower toward the tip when viewed from above
-    const cupNarrow = curvature > 0
-      ? Math.max(0.1, 1 - curvature * 0.35 * Math.pow(t, 1.5))
-      : 1;
+    const cupNarrow =
+      curvature > 0
+        ? Math.max(0.1, 1 - curvature * 0.35 * Math.pow(t, 1.5))
+        : 1;
     const baseW =
-      petalW * shapeProfile(shape, t) * edgeModifier(effectiveEdge, t, seed) * cupNarrow;
+      petalW *
+      shapeProfile(shape, t) *
+      edgeModifier(effectiveEdge, t, seed) *
+      cupNarrow;
     const asym = shape === "Falcate" ? 0.3 * Math.sin(Math.PI * t) : 0;
     const lw = baseW * (1 + asym);
     const rw = baseW * (1 - asym);
@@ -574,7 +588,15 @@ function generatePetal(
   radialOffset: number = 1.0, // phyllotaxis: 0..1, scales length + base distance
 ): DrawCmd[] {
   const { leftPts, rightPts } = generatePetalPoints(
-    angle, shape, edge, length, width, curvature, curl, seed, radialOffset,
+    angle,
+    shape,
+    edge,
+    length,
+    width,
+    curvature,
+    curl,
+    seed,
+    radialOffset,
   );
   return assembleOutline(leftPts, rightPts);
 }
@@ -598,7 +620,16 @@ function generatePetalPartial(
 ): DrawCmd[] {
   const startIdx = Math.max(0, Math.floor(startT * PETAL_SEGMENTS));
   const { leftPts, rightPts } = generatePetalPoints(
-    angle, shape, edge, length, width, curvature, curl, seed, radialOffset, startIdx,
+    angle,
+    shape,
+    edge,
+    length,
+    width,
+    curvature,
+    curl,
+    seed,
+    radialOffset,
+    startIdx,
   );
   return assembleOutline(leftPts, rightPts);
 }
@@ -608,39 +639,45 @@ function generatePetalPartial(
  * t ∈ [0,1] maps from base to tip.
  */
 function midribPoint(
-  t: number, petalLen: number, curvature: number, curl: number,
-  cosA: number, sinA: number,
+  t: number,
+  petalLen: number,
+  curvature: number,
+  curl: number,
+  cosA: number,
+  sinA: number,
 ): Vec2 {
   const along = BASE_OFFSET + t * petalLen;
   const bend = curvature * 0.15 * Math.sin(Math.PI * t);
-  const curlDisp = curl > 0 && t > 0.65
-    ? curl * Math.pow((t - 0.65) / 0.35, 2) * -0.12
-    : 0;
+  const curlDisp =
+    curl > 0 && t > 0.65 ? curl * Math.pow((t - 0.65) / 0.35, 2) * -0.12 : 0;
   const localX = along + curlDisp;
   const localY = bend;
-  return [
-    cosA * localX - sinA * localY,
-    sinA * localX + cosA * localY,
-  ];
+  return [cosA * localX - sinA * localY, sinA * localX + cosA * localY];
 }
 
 /** Compute a point offset laterally from the midrib at parameter t. */
 function offsetPoint(
-  t: number, lateralFrac: number, petalLen: number, petalW: number,
-  curvature: number, curl: number, cosA: number, sinA: number,
+  t: number,
+  lateralFrac: number,
+  petalLen: number,
+  petalW: number,
+  curvature: number,
+  curl: number,
+  cosA: number,
+  sinA: number,
 ): Vec2 {
   const [mx, my] = midribPoint(t, petalLen, curvature, curl, cosA, sinA);
   const offset = lateralFrac * petalW * 0.7;
-  return [
-    mx - sinA * offset,
-    my + cosA * offset,
-  ];
+  return [mx - sinA * offset, my + cosA * offset];
 }
 
 /** Generate a midrib from 5% to 80% of petal length. */
 function generateMidrib(
-  petalLen: number, curvature: number, curl: number,
-  cosA: number, sinA: number,
+  petalLen: number,
+  curvature: number,
+  curl: number,
+  cosA: number,
+  sinA: number,
 ): DrawCmd[] {
   const pts: Vec2[] = Array.from({ length: 5 }, (_, i) =>
     midribPoint(0.05 + (i / 4) * 0.75, petalLen, curvature, curl, cosA, sinA),
@@ -654,17 +691,30 @@ function generateMidrib(
  * branchAngle = angle from midrib in radians, branchLen = fraction of petal width to extend.
  */
 function generateLateral(
-  branchT: number, lateralSign: number, branchAngle: number, branchLen: number,
-  petalLen: number, petalW: number, curvature: number, curl: number,
-  cosA: number, sinA: number,
+  branchT: number,
+  lateralSign: number,
+  branchAngle: number,
+  branchLen: number,
+  petalLen: number,
+  petalW: number,
+  curvature: number,
+  curl: number,
+  cosA: number,
+  sinA: number,
 ): DrawCmd[] {
   // 3 points: start on midrib, mid-branch, end near edge
   const pts: Vec2[] = [0, 0.5, 1].map(frac => {
     const t = branchT + frac * branchLen * 0.3 * Math.cos(branchAngle);
     const lateral = lateralSign * frac * branchLen;
     return offsetPoint(
-      Math.min(0.95, Math.max(0.05, t)), lateral,
-      petalLen, petalW, curvature, curl, cosA, sinA,
+      Math.min(0.95, Math.max(0.05, t)),
+      lateral,
+      petalLen,
+      petalW,
+      curvature,
+      curl,
+      cosA,
+      sinA,
     );
   });
   return smoothCmds(pts);
@@ -672,8 +722,13 @@ function generateLateral(
 
 /** Generate vein DrawCmd[] appropriate to the given VeinPattern. */
 function generatePetalVein(
-  angle: number, length: number, curvature: number, curl: number,
-  veinPattern: string, width: number, seed: number,
+  angle: number,
+  length: number,
+  curvature: number,
+  curl: number,
+  veinPattern: string,
+  width: number,
+  seed: number,
   radialOffset: number = 1.0,
 ): DrawCmd[] {
   const { petalLen, petalW } = normalizePetalDims(length, width, radialOffset);
@@ -691,7 +746,16 @@ function generatePetalVein(
         const frac = ((i + 1) / (count + 1)) * 2 - 1; // spread from -1 to 1
         const pts: Vec2[] = Array.from({ length: 5 }, (__, j) => {
           const t = 0.08 + (j / 4) * 0.72;
-          return offsetPoint(t, frac * 0.6, petalLen, petalW, curvature, curl, cosA, sinA);
+          return offsetPoint(
+            t,
+            frac * 0.6,
+            petalLen,
+            petalW,
+            curvature,
+            curl,
+            cosA,
+            sinA,
+          );
         });
         return smoothCmds(pts);
       }).flat();
@@ -706,8 +770,30 @@ function generatePetalVein(
         const branchLen = 0.8 * (1 - branchT * 0.6); // shorter toward tip
         const branchAngle = 0.7 + sidHash(seed, 73 + i) * 0.17; // ~40-50°
         return [
-          ...generateLateral(branchT, 1, branchAngle, branchLen, petalLen, petalW, curvature, curl, cosA, sinA),
-          ...generateLateral(branchT, -1, branchAngle, branchLen, petalLen, petalW, curvature, curl, cosA, sinA),
+          ...generateLateral(
+            branchT,
+            1,
+            branchAngle,
+            branchLen,
+            petalLen,
+            petalW,
+            curvature,
+            curl,
+            cosA,
+            sinA,
+          ),
+          ...generateLateral(
+            branchT,
+            -1,
+            branchAngle,
+            branchLen,
+            petalLen,
+            petalW,
+            curvature,
+            curl,
+            cosA,
+            sinA,
+          ),
         ];
       }).flat();
       return [...midrib, ...laterals];
@@ -721,7 +807,16 @@ function generatePetalVein(
         const pts: Vec2[] = Array.from({ length: 5 }, (__, j) => {
           const t = 0.05 + (j / 4) * 0.75;
           const lateral = spread * t * 1.2; // fan out progressively
-          return offsetPoint(t, lateral, petalLen, petalW, curvature, curl, cosA, sinA);
+          return offsetPoint(
+            t,
+            lateral,
+            petalLen,
+            petalW,
+            curvature,
+            curl,
+            cosA,
+            sinA,
+          );
         });
         return smoothCmds(pts);
       }).flat();
@@ -731,48 +826,108 @@ function generatePetalVein(
       // Midrib + laterals + cross-connections
       const midrib = generateMidrib(petalLen, curvature, curl, cosA, sinA);
       const pairCount = 4;
-      const lateralTs = Array.from({ length: pairCount }, (_, i) =>
-        0.15 + (i / (pairCount - 1)) * 0.55,
+      const lateralTs = Array.from(
+        { length: pairCount },
+        (_, i) => 0.15 + (i / (pairCount - 1)) * 0.55,
       );
-      const laterals = lateralTs.map((branchT) => {
-        const branchLen = 0.7 * (1 - branchT * 0.5);
-        return [
-          ...generateLateral(branchT, 1, 0.75, branchLen, petalLen, petalW, curvature, curl, cosA, sinA),
-          ...generateLateral(branchT, -1, 0.75, branchLen, petalLen, petalW, curvature, curl, cosA, sinA),
-        ];
-      }).flat();
-      // Cross-connections between adjacent laterals on each side
-      const crossLinks = lateralTs.slice(0, -1).map((t1, i) => {
-        const t2 = lateralTs[i + 1]!;
-        const midT = (t1 + t2) / 2;
-        return [-1, 1].map(side => {
-          const lateralFrac = side * 0.35;
-          const pts: Vec2[] = [t1, midT, t2].map(t =>
-            offsetPoint(
-              Math.min(0.9, t + 0.05), lateralFrac,
-              petalLen, petalW, curvature, curl, cosA, sinA,
+      const laterals = lateralTs
+        .map(branchT => {
+          const branchLen = 0.7 * (1 - branchT * 0.5);
+          return [
+            ...generateLateral(
+              branchT,
+              1,
+              0.75,
+              branchLen,
+              petalLen,
+              petalW,
+              curvature,
+              curl,
+              cosA,
+              sinA,
             ),
-          );
-          return smoothCmds(pts);
-        }).flat();
-      }).flat();
+            ...generateLateral(
+              branchT,
+              -1,
+              0.75,
+              branchLen,
+              petalLen,
+              petalW,
+              curvature,
+              curl,
+              cosA,
+              sinA,
+            ),
+          ];
+        })
+        .flat();
+      // Cross-connections between adjacent laterals on each side
+      const crossLinks = lateralTs
+        .slice(0, -1)
+        .map((t1, i) => {
+          const t2 = lateralTs[i + 1]!;
+          const midT = (t1 + t2) / 2;
+          return [-1, 1]
+            .map(side => {
+              const lateralFrac = side * 0.35;
+              const pts: Vec2[] = [t1, midT, t2].map(t =>
+                offsetPoint(
+                  Math.min(0.9, t + 0.05),
+                  lateralFrac,
+                  petalLen,
+                  petalW,
+                  curvature,
+                  curl,
+                  cosA,
+                  sinA,
+                ),
+              );
+              return smoothCmds(pts);
+            })
+            .flat();
+        })
+        .flat();
       return [...midrib, ...laterals, ...crossLinks];
     }
 
     case "Dichotomous": {
       // Y-forking: 1 vein splits into 2 at ~30%, each splits again at ~60%
-      const fork = (startT: number, endT: number, lateral: number, depth: number): DrawCmd[] => {
+      const fork = (
+        startT: number,
+        endT: number,
+        lateral: number,
+        depth: number,
+      ): DrawCmd[] => {
         const pts: Vec2[] = Array.from({ length: 3 }, (_, i) => {
           const t = startT + (i / 2) * (endT - startT);
-          return offsetPoint(t, lateral, petalLen, petalW, curvature, curl, cosA, sinA);
+          return offsetPoint(
+            t,
+            lateral,
+            petalLen,
+            petalW,
+            curvature,
+            curl,
+            cosA,
+            sinA,
+          );
         });
         const cmds = smoothCmds(pts);
         if (depth >= 2) return cmds;
         const spread = 0.25 * (1 / (depth + 1));
         return [
           ...cmds,
-          ...fork(endT, endT + (endT - startT) * 0.7, lateral + spread, depth + 1),
-          ...fork(endT, endT + (endT - startT) * 0.7, lateral - spread, depth + 1),
+          ...fork(
+            endT,
+            endT + (endT - startT) * 0.7,
+            lateral + spread,
+            depth + 1,
+          ),
+          ...fork(
+            endT,
+            endT + (endT - startT) * 0.7,
+            lateral - spread,
+            depth + 1,
+          ),
         ];
       };
       return fork(0.05, 0.3, 0, 0);
@@ -787,7 +942,16 @@ function generatePetalVein(
           const t = 0.08 + (j / 5) * 0.7;
           // Arc bows out toward the edge, stronger for outer arcs
           const bow = arcFrac * Math.sin(Math.PI * t) * 0.8;
-          return offsetPoint(t, bow, petalLen, petalW, curvature, curl, cosA, sinA);
+          return offsetPoint(
+            t,
+            bow,
+            petalLen,
+            petalW,
+            curvature,
+            curl,
+            cosA,
+            sinA,
+          );
         });
         return smoothCmds(pts);
       }).flat();
@@ -801,7 +965,18 @@ function generatePetalVein(
         const branchT = 0.1 + (i / (pairCount - 1)) * 0.65;
         const branchLen = 0.7 * (1 - branchT * 0.5);
         const side = i % 2 === 0 ? 1 : -1; // alternating
-        return generateLateral(branchT, side, 1.05, branchLen, petalLen, petalW, curvature, curl, cosA, sinA);
+        return generateLateral(
+          branchT,
+          side,
+          1.05,
+          branchLen,
+          petalLen,
+          petalW,
+          curvature,
+          curl,
+          cosA,
+          sinA,
+        );
       }).flat();
       return [...midrib, ...laterals];
     }
@@ -812,19 +987,31 @@ function generatePetalVein(
       const pairCount = 4;
       const laterals = Array.from({ length: pairCount }, (_, i) => {
         const branchT = 0.15 + (i / (pairCount - 1)) * 0.5;
-        const nextT = i < pairCount - 1
-          ? 0.15 + ((i + 1) / (pairCount - 1)) * 0.5
-          : branchT + 0.15;
+        const nextT =
+          i < pairCount - 1
+            ? 0.15 + ((i + 1) / (pairCount - 1)) * 0.5
+            : branchT + 0.15;
         const branchLen = 0.6 * (1 - branchT * 0.5);
         // Each lateral loops out and reconnects to the midrib at the next branch point
-        return [-1, 1].map(side => {
-          const pts: Vec2[] = [0, 0.33, 0.66, 1].map(frac => {
-            const t = branchT + frac * (nextT - branchT);
-            const bow = side * branchLen * Math.sin(Math.PI * frac);
-            return offsetPoint(t, bow, petalLen, petalW, curvature, curl, cosA, sinA);
-          });
-          return smoothCmds(pts);
-        }).flat();
+        return [-1, 1]
+          .map(side => {
+            const pts: Vec2[] = [0, 0.33, 0.66, 1].map(frac => {
+              const t = branchT + frac * (nextT - branchT);
+              const bow = side * branchLen * Math.sin(Math.PI * frac);
+              return offsetPoint(
+                t,
+                bow,
+                petalLen,
+                petalW,
+                curvature,
+                curl,
+                cosA,
+                sinA,
+              );
+            });
+            return smoothCmds(pts);
+          })
+          .flat();
       }).flat();
       return [...midrib, ...laterals];
     }
@@ -890,7 +1077,11 @@ type ParsedSpec = {
 function parseSymmetry(raw: any): ParsedSymmetry {
   if (!raw) return { type: "Radial" };
   if (typeof raw === "string") return { type: raw };
-  if (raw.Spiral) return { type: "Spiral", divergenceAngle: raw.Spiral.divergence_angle ?? 137.5 };
+  if (raw.Spiral)
+    return {
+      type: "Spiral",
+      divergenceAngle: raw.Spiral.divergence_angle ?? 137.5,
+    };
   if (raw.Radial) return { type: "Radial", order: raw.Radial.order };
   return { type: raw.type ?? "Radial" };
 }
@@ -898,13 +1089,22 @@ function parseSymmetry(raw: any): ParsedSymmetry {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseRawSpec(raw: string | undefined): any {
   if (!raw) return null;
-  try { return parseYaml(raw); } catch { return null; }
+  try {
+    return parseYaml(raw);
+  } catch {
+    return null;
+  }
 }
 
+function leafSide(raw: unknown, index: number): "left" | "right" {
+  if (raw === "left" || raw === "right") return raw;
+  return index % 2 === 0 ? "left" : "right";
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseFlowerSpec(spec: any): ParsedSpec | null {
   if (!spec) return null;
   try {
-
     const layers: ParsedLayer[] = (spec.petals?.layers ?? []).map(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (layer: any) => ({
@@ -923,8 +1123,14 @@ function parseFlowerSpec(spec: any): ParsedSpec | null {
         color: colorToHex(layer.color?.stops?.[0]?.color),
         gradientStops: (layer.color?.stops ?? [])
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .map((s: any) => ({ position: s.position ?? 0, color: colorToHex(s.color) }))
-          .filter((s: { color: number | null }) => s.color !== null) as Array<{ position: number; color: number }>,
+          .map((s: any) => ({
+            position: s.position ?? 0,
+            color: colorToHex(s.color),
+          }))
+          .filter((s: { color: number | null }) => s.color !== null) as Array<{
+          position: number;
+          color: number;
+        }>,
         veinPattern: layer.vein_pattern ?? "None",
       }),
     );
@@ -966,6 +1172,21 @@ function parseFlowerSpec(spec: any): ParsedSpec | null {
 // Effect parsing — thorns, dewdrops, aura, particles
 // ═══════════════════════════════════════════════════════════════════════════
 
+type RawLeaf = {
+  position?: number;
+  side?: unknown;
+  size?: number;
+  angle_offset?: number;
+};
+type RawDewdrop = { size?: number; count?: number; placement?: string };
+type RawParticle = {
+  kind?: string;
+  density?: number;
+  color?: { r?: number; g?: number; b?: number };
+  drift_speed?: number;
+  gravity?: number;
+};
+
 type ParsedThorns = {
   density: number;
   size: number;
@@ -1003,7 +1224,6 @@ function parseEffects(spec: any): {
   const empty = { thorns: null, dewdrops: [], aura: null, particles: [] };
   if (!spec) return empty;
   try {
-
     // Thorns
     const rawThorns = spec.structure?.stem?.thorns;
     const thorns: ParsedThorns | null = rawThorns
@@ -1015,12 +1235,13 @@ function parseEffects(spec: any): {
       : null;
 
     // Dewdrops
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const dewdrops: ParsedDewdrops[] = (spec.ornamentation?.dewdrops ?? []).map((d: any) => ({
-      size: d.size ?? 0.05,
-      count: d.count ?? 3,
-      placement: d.placement ?? "Random",
-    }));
+    const dewdrops: ParsedDewdrops[] = (spec.ornamentation?.dewdrops ?? []).map(
+      (d: RawDewdrop) => ({
+        size: d.size ?? 0.05,
+        count: d.count ?? 3,
+        placement: d.placement ?? "Random",
+      }),
+    );
 
     // Aura
     const rawAura = spec.aura;
@@ -1034,8 +1255,9 @@ function parseEffects(spec: any): {
       : null;
 
     // Particles
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const particles: ParsedParticles[] = (spec.ornamentation?.particles ?? []).map((p: any) => ({
+    const particles: ParsedParticles[] = (
+      spec.ornamentation?.particles ?? []
+    ).map((p: RawParticle) => ({
       kind: p.kind ?? "Pollen",
       density: p.density ?? 5,
       color: colorToHex(p.color) ?? 0xfbbf24,
@@ -1051,8 +1273,10 @@ function parseEffects(spec: any): {
 
 /** Generate thorn shapes along a stem path. */
 function generateThorns(
-  fromX: number, fromY: number,
-  toX: number, toY: number,
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
   curvature: number,
   thorns: ParsedThorns,
 ): ThornPlan[] {
@@ -1068,8 +1292,10 @@ function generateThorns(
 
     const bx = pt.x + Math.cos(perpAngle) * baseOffset;
     const by = pt.y + Math.sin(perpAngle) * baseOffset;
-    const tx = pt.x + Math.cos(perpAngle - side * 0.4) * (baseOffset + thornSize);
-    const ty = pt.y + Math.sin(perpAngle - side * 0.4) * (baseOffset + thornSize);
+    const tx =
+      pt.x + Math.cos(perpAngle - side * 0.4) * (baseOffset + thornSize);
+    const ty =
+      pt.y + Math.sin(perpAngle - side * 0.4) * (baseOffset + thornSize);
     const bx2 = pt.x + Math.cos(perpAngle + side * 0.3) * (baseOffset * 0.5);
     const by2 = pt.y + Math.sin(perpAngle + side * 0.3) * (baseOffset * 0.5);
 
@@ -1088,7 +1314,13 @@ function generateThorns(
 /** Generate dewdrop positions on the flower head. */
 function generateDewdrops(
   dewdrops: ParsedDewdrops[],
-  layers: ReadonlyArray<{ petals: ReadonlyArray<{ cmds: DrawCmd[]; angle: number; veinCmds: DrawCmd[] }> }>,
+  layers: ReadonlyArray<{
+    petals: ReadonlyArray<{
+      cmds: DrawCmd[];
+      angle: number;
+      veinCmds: DrawCmd[];
+    }>;
+  }>,
   sid: number,
 ): DewdropPlan[] {
   const plans: DewdropPlan[] = [];
@@ -1105,7 +1337,9 @@ function generateDewdrops(
         Center: s => s * 0.15,
         Edge: s => 0.3 + s * 0.2,
       };
-      const dist = (PLACEMENT_DIST[dd.placement] ?? (s => 0.1 + s * 0.35))(seed);
+      const dist = (PLACEMENT_DIST[dd.placement] ?? (s => 0.1 + s * 0.35))(
+        seed,
+      );
 
       plans.push({
         x: Math.cos(angle) * dist,
@@ -1151,10 +1385,18 @@ function generateParticleSeeds(
 // ═══════════════════════════════════════════════════════════════════════════
 
 const EMPTY_CENTER: CenterPlan = {
-  discRadius: 0, discColor: 0, highlightRadius: 0, highlightColor: 0, stamens: [],
+  discRadius: 0,
+  discColor: 0,
+  highlightRadius: 0,
+  highlightColor: 0,
+  stamens: [],
 };
 
-function buildCenter(parsed: NonNullable<ReturnType<typeof parseFlowerSpec>>, baseColor: number, sid: number): CenterPlan {
+function buildCenter(
+  parsed: NonNullable<ReturnType<typeof parseFlowerSpec>>,
+  baseColor: number,
+  sid: number,
+): CenterPlan {
   if (parsed.layers.length === 0) return EMPTY_CENTER;
 
   const layerFactor = Math.max(0.4, 1 - parsed.layers.length * 0.15);
@@ -1212,21 +1454,23 @@ function computePetalAngles(
       const sqrtCount = Math.sqrt(count);
       return Array.from({ length: count }, (_, i) => ({
         angle: baseOffset + i * divergence,
-        radialOffset: 0.65 + 0.35 * Math.sqrt(i + 1) / sqrtCount,
+        radialOffset: 0.65 + (0.35 * Math.sqrt(i + 1)) / sqrtCount,
       }));
     }
 
     case "Bilateral": {
       // Mirror symmetry — petals concentrated on two sides
       // Top half gets most petals, bottom has fewer/none (like orchids, sweet peas)
-      return uniform(Array.from({ length: count }, (_, i) => {
-        const t = i / Math.max(1, count - 1); // 0..1
-        // Spread across ~180° (top half), mirrored
-        const halfSpread = Math.PI * 0.7;
-        const angle = baseOffset - halfSpread / 2 + t * halfSpread;
-        // Add slight wobble for organic feel
-        return angle + sidHash(sid, 30 + layerIdx * 50 + i) * 0.15;
-      }));
+      return uniform(
+        Array.from({ length: count }, (_, i) => {
+          const t = i / Math.max(1, count - 1); // 0..1
+          // Spread across ~180° (top half), mirrored
+          const halfSpread = Math.PI * 0.7;
+          const angle = baseOffset - halfSpread / 2 + t * halfSpread;
+          // Add slight wobble for organic feel
+          return angle + sidHash(sid, 30 + layerIdx * 50 + i) * 0.15;
+        }),
+      );
     }
 
     case "Papilionaceous": {
@@ -1241,25 +1485,32 @@ function computePetalAngles(
         return uniform([banner, wingL, wingR, keelL, keelR].slice(0, count));
       }
       // More petals: fill radially
-      return uniform(Array.from({ length: count }, (_, i) => baseOffset + (i / count) * TAU));
+      return uniform(
+        Array.from({ length: count }, (_, i) => baseOffset + (i / count) * TAU),
+      );
     }
 
     case "Cruciform": {
       // Cross-shaped — petals at exact 90° intervals
       // Works best with count = 4, but handles others
-      return uniform(Array.from({ length: count }, (_, i) =>
-        baseOffset + (i / Math.max(count, 4)) * TAU,
-      ));
+      return uniform(
+        Array.from(
+          { length: count },
+          (_, i) => baseOffset + (i / Math.max(count, 4)) * TAU,
+        ),
+      );
     }
 
     case "Zygomorphic": {
       // Irregular — one plane of symmetry, clustered toward one side
-      return uniform(Array.from({ length: count }, (_, i) => {
-        const t = i / Math.max(1, count - 1);
-        // Cluster in upper 240° arc, leaving bottom open
-        const arcSpan = Math.PI * 1.33;
-        return baseOffset - arcSpan / 2 + t * arcSpan;
-      }));
+      return uniform(
+        Array.from({ length: count }, (_, i) => {
+          const t = i / Math.max(1, count - 1);
+          // Cluster in upper 240° arc, leaving bottom open
+          const arcSpan = Math.PI * 1.33;
+          return baseOffset - arcSpan / 2 + t * arcSpan;
+        }),
+      );
     }
 
     case "Imbricate": {
@@ -1267,44 +1518,52 @@ function computePetalAngles(
       // Creates a pinwheel/twisted look
       const step = TAU / count;
       const twist = 0.08; // slight twist per petal
-      return uniform(Array.from({ length: count }, (_, i) =>
-        baseOffset + i * step + i * twist,
-      ));
+      return uniform(
+        Array.from(
+          { length: count },
+          (_, i) => baseOffset + i * step + i * twist,
+        ),
+      );
     }
 
     case "Contorted": {
       // Each petal overlaps the next in one direction — like a pinwheel
       const step = TAU / count;
       const twist = step * 0.15;
-      return uniform(Array.from({ length: count }, (_, i) =>
-        baseOffset + i * (step + twist),
-      ));
+      return uniform(
+        Array.from(
+          { length: count },
+          (_, i) => baseOffset + i * (step + twist),
+        ),
+      );
     }
 
     case "Whorled": {
       // Multiple whorls — cluster petals in groups
       const whorlSize = Math.max(2, Math.ceil(count / 3));
-      return uniform(Array.from({ length: count }, (_, i) => {
-        const whorl = Math.floor(i / whorlSize);
-        const posInWhorl = i % whorlSize;
-        const whorlOffset = whorl * 0.3; // offset between whorls
-        return baseOffset + (posInWhorl / whorlSize) * TAU + whorlOffset;
-      }));
+      return uniform(
+        Array.from({ length: count }, (_, i) => {
+          const whorl = Math.floor(i / whorlSize);
+          const posInWhorl = i % whorlSize;
+          const whorlOffset = whorl * 0.3; // offset between whorls
+          return baseOffset + (posInWhorl / whorlSize) * TAU + whorlOffset;
+        }),
+      );
     }
 
     case "Valvate": {
       // Edge-to-edge, no overlap — evenly spaced (same as radial)
-      return uniform(Array.from({ length: count }, (_, i) =>
-        baseOffset + (i / count) * TAU,
-      ));
+      return uniform(
+        Array.from({ length: count }, (_, i) => baseOffset + (i / count) * TAU),
+      );
     }
 
     case "Radial":
     default: {
       // Standard even distribution
-      return uniform(Array.from({ length: count }, (_, i) =>
-        baseOffset + (i / count) * TAU,
-      ));
+      return uniform(
+        Array.from({ length: count }, (_, i) => baseOffset + (i / count) * TAU),
+      );
     }
   }
 }
@@ -1312,26 +1571,47 @@ function computePetalAngles(
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
 
 /** Compute texture-specific highlight and edge colors for a petal. */
-function textureColors(texture: string, color: number): { textureHighlight: number; textureEdge: number } {
+function textureColors(
+  texture: string,
+  color: number,
+): { textureHighlight: number; textureEdge: number } {
   switch (texture) {
     case "Velvet":
       return { textureHighlight: color, textureEdge: darkenColor(color, 0.3) };
     case "Silk":
       return { textureHighlight: lightenColor(color, 0.3), textureEdge: color };
     case "Waxy":
-      return { textureHighlight: lightenColor(color, 0.4), textureEdge: darkenColor(color, 0.6) };
+      return {
+        textureHighlight: lightenColor(color, 0.4),
+        textureEdge: darkenColor(color, 0.6),
+      };
     case "Metallic":
-      return { textureHighlight: lightenColor(color, 0.45), textureEdge: darkenColor(coolShift(color), 0.8) };
+      return {
+        textureHighlight: lightenColor(color, 0.45),
+        textureEdge: darkenColor(coolShift(color), 0.8),
+      };
     case "Papery":
-      return { textureHighlight: desaturate(color, 0.3), textureEdge: lightenColor(color, 0.1) };
+      return {
+        textureHighlight: desaturate(color, 0.3),
+        textureEdge: lightenColor(color, 0.1),
+      };
     case "Glassy":
       return { textureHighlight: 0xffffff, textureEdge: color };
     case "Crystalline":
-      return { textureHighlight: 0xffffff, textureEdge: lightenColor(color, 0.2) };
+      return {
+        textureHighlight: 0xffffff,
+        textureEdge: lightenColor(color, 0.2),
+      };
     case "Pearlescent":
-      return { textureHighlight: warmShift(lightenColor(color, 0.2)), textureEdge: coolShift(color) };
+      return {
+        textureHighlight: warmShift(lightenColor(color, 0.2)),
+        textureEdge: coolShift(color),
+      };
     case "Frosted":
-      return { textureHighlight: 0xffffff, textureEdge: lightenColor(color, 0.3) };
+      return {
+        textureHighlight: 0xffffff,
+        textureEdge: lightenColor(color, 0.3),
+      };
     default:
       return { textureHighlight: color, textureEdge: color };
   }
@@ -1352,17 +1632,25 @@ export function createFlowerPlan(
 
   if (!parsed) {
     // Unparseable spec — return empty plan.
-    return { sepals: [], layers: [], center: EMPTY_CENTER, stem: null, leaves: [], dewdrops: [], aura: null, particles: [] };
+    return {
+      sepals: [],
+      layers: [],
+      center: EMPTY_CENTER,
+      stem: null,
+      leaves: [],
+      dewdrops: [],
+      aura: null,
+      particles: [],
+    };
   }
 
-  const stemProgress   = phaseProgress(growthProgress, 0.1,  0.3);
-  const leafProgress   = phaseProgress(growthProgress, 0.3,  0.5);
-  const sepalProgress  = phaseProgress(growthProgress, 0.5,  0.6);
+  const stemProgress = phaseProgress(growthProgress, 0.1, 0.3);
+  const leafProgress = phaseProgress(growthProgress, 0.3, 0.5);
+  const sepalProgress = phaseProgress(growthProgress, 0.5, 0.6);
   const centerProgress = phaseProgress(growthProgress, 0.85, 0.95);
   const effectProgress = phaseProgress(growthProgress, 0.95, 1.0);
 
-  const baseColor =
-    parsed.layers[0]?.color ?? fallbackColor(sid);
+  const baseColor = parsed.layers[0]?.color ?? fallbackColor(sid);
 
   // ── Petal layers (outer first for correct z-order) ──
   let cumulativeOffset = sidHash(sid, 5) * Math.PI * 2;
@@ -1370,7 +1658,11 @@ export function createFlowerPlan(
   const totalLayers = parsed.layers.length;
   const layers = parsed.layers.map((layer, layerIdx) => {
     const layerStart = 0.6 + (layerIdx / Math.max(1, totalLayers)) * 0.15;
-    const layerProgress = phaseProgress(growthProgress, layerStart, layerStart + 0.1);
+    const layerProgress = phaseProgress(
+      growthProgress,
+      layerStart,
+      layerStart + 0.1,
+    );
 
     const count = Math.max(1, Math.min(55, layer.count));
     cumulativeOffset += layer.angularOffset;
@@ -1381,185 +1673,266 @@ export function createFlowerPlan(
 
     // ── Petal angle computation — arrangement-aware ──
     const petalAngles = computePetalAngles(
-      count, cumulativeOffset, layer.arrangement, parsed.symmetry, sid, layerIdx,
+      count,
+      cumulativeOffset,
+      layer.arrangement,
+      parsed.symmetry,
+      sid,
+      layerIdx,
     );
 
     const petalLenScale = 0.3 + 0.7 * layerProgress;
     const budCurvatureBoost = 0.8 * (1 - layerProgress);
 
     // Skip geometry generation entirely when layer hasn't started opening
-    const petals = layerProgress > 0
-      ? petalAngles.map(({ angle, radialOffset }, i) => {
-          const scattered = scatterColor(layerColor, 0.06, i * 7.3 + layerIdx * 13.1);
-          const lit = lightTint(scattered, angle);
+    const petals =
+      layerProgress > 0
+        ? petalAngles.map(({ angle, radialOffset }, i) => {
+            const scattered = scatterColor(
+              layerColor,
+              0.06,
+              i * 7.3 + layerIdx * 13.1,
+            );
+            const lit = lightTint(scattered, angle);
 
-          const lenJitter = 1 + (sidHash(sid, 400 + layerIdx * 100 + i) * 0.08 - 0.04);
-          const widJitter = 1 + (sidHash(sid, 500 + layerIdx * 100 + i) * 0.06 - 0.03);
-          const curvJitter = sidHash(sid, 600 + layerIdx * 100 + i) * 0.1 - 0.05;
-          const curlJitter = sidHash(sid, 700 + layerIdx * 100 + i) * 0.06 - 0.03;
+            const lenJitter =
+              1 + (sidHash(sid, 400 + layerIdx * 100 + i) * 0.08 - 0.04);
+            const widJitter =
+              1 + (sidHash(sid, 500 + layerIdx * 100 + i) * 0.06 - 0.03);
+            const curvJitter =
+              sidHash(sid, 600 + layerIdx * 100 + i) * 0.1 - 0.05;
+            const curlJitter =
+              sidHash(sid, 700 + layerIdx * 100 + i) * 0.06 - 0.03;
 
-          const effLen = layer.length * lenJitter * petalLenScale;
-          const effWid = layer.width * widJitter * petalLenScale;
-          const effCurv = layer.curvature + layer.droop * 0.3 + curvJitter + budCurvatureBoost;
-          const effCurl = layer.curl + curlJitter;
+            const effLen = layer.length * lenJitter * petalLenScale;
+            const effWid = layer.width * widJitter * petalLenScale;
+            const effCurv =
+              layer.curvature +
+              layer.droop * 0.3 +
+              curvJitter +
+              budCurvatureBoost;
+            const effCurl = layer.curl + curlJitter;
 
-          const petalSeed = sidHash(sid, 10 + layerIdx * 100 + i);
+            const petalSeed = sidHash(sid, 10 + layerIdx * 100 + i);
 
-          // Build gradient stops with scatter+lightTint applied per-petal,
-          // and generate partial sub-paths for each stop beyond the first
-          const gradientStops = layer.gradientStops.length >= 2
-            ? layer.gradientStops.map((stop, si) => {
-                const stopScattered = scatterColor(stop.color, 0.04, i * 5.1 + si * 3.7);
-                const stopLit = lightTint(stopScattered, angle);
-                const cmds = si === 0
-                  ? [] as DrawCmd[]
-                  : generatePetalPartial(
-                      angle, layer.shape, layer.edgeStyle,
-                      effLen, effWid, effCurv, effCurl,
-                      petalSeed, radialOffset, stop.position,
+            // Build gradient stops with scatter+lightTint applied per-petal,
+            // and generate partial sub-paths for each stop beyond the first
+            const gradientStops =
+              layer.gradientStops.length >= 2
+                ? layer.gradientStops.map((stop, si) => {
+                    const stopScattered = scatterColor(
+                      stop.color,
+                      0.04,
+                      i * 5.1 + si * 3.7,
                     );
-                return {
-                  position: stop.position,
-                  color: stopLit,
-                  blendedColor: si === 0 ? stopLit : lerpColor(lit, stopLit, 0.5 + (si - 1) * 0.15),
-                  cmds,
-                };
-              })
-            : [];
+                    const stopLit = lightTint(stopScattered, angle);
+                    const cmds =
+                      si === 0
+                        ? ([] as DrawCmd[])
+                        : generatePetalPartial(
+                            angle,
+                            layer.shape,
+                            layer.edgeStyle,
+                            effLen,
+                            effWid,
+                            effCurv,
+                            effCurl,
+                            petalSeed,
+                            radialOffset,
+                            stop.position,
+                          );
+                    return {
+                      position: stop.position,
+                      color: stopLit,
+                      blendedColor:
+                        si === 0
+                          ? stopLit
+                          : lerpColor(lit, stopLit, 0.5 + (si - 1) * 0.15),
+                      cmds,
+                    };
+                  })
+                : [];
 
-          return {
-            cmds: generatePetal(
+            return {
+              cmds: generatePetal(
+                angle,
+                layer.shape,
+                layer.edgeStyle,
+                effLen,
+                effWid,
+                effCurv,
+                effCurl,
+                petalSeed,
+                radialOffset,
+              ),
               angle,
-              layer.shape,
-              layer.edgeStyle,
-              effLen,
-              effWid,
-              effCurv,
-              effCurl,
-              petalSeed,
-              radialOffset,
-            ),
-            angle,
-            veinCmds: generatePetalVein(angle, effLen, effCurv, effCurl, layer.veinPattern, layer.width, sidHash(sid, 50 + layerIdx * 100 + i), radialOffset),
-            color: lit,
-            highlightColor: lightenColor(lit, 0.18),
-            outlineColor: darkenColor(lit, 0.55),
-            veinColor: darkenColor(lit, 0.6),
-            lightColor: lightenColor(lit, 0.15),
-            shadowColor: darkenColor(lit, 0.8),
-            midribGlowColor: lightenColor(lit, 0.2),
-            texture: layer.texture,
-            ...textureColors(layer.texture, lit),
-            gradientStops,
-          };
-        })
-      : [];
+              veinCmds: generatePetalVein(
+                angle,
+                effLen,
+                effCurv,
+                effCurl,
+                layer.veinPattern,
+                layer.width,
+                sidHash(sid, 50 + layerIdx * 100 + i),
+                radialOffset,
+              ),
+              color: lit,
+              highlightColor: lightenColor(lit, 0.18),
+              outlineColor: darkenColor(lit, 0.55),
+              veinColor: darkenColor(lit, 0.6),
+              lightColor: lightenColor(lit, 0.15),
+              shadowColor: darkenColor(lit, 0.8),
+              midribGlowColor: lightenColor(lit, 0.2),
+              texture: layer.texture,
+              ...textureColors(layer.texture, lit),
+              gradientStops,
+            };
+          })
+        : [];
 
     return { petals, opacity: layer.opacity * layerProgress };
   });
 
-  const builtCenter = centerProgress > 0 ? buildCenter(parsed, baseColor, sid) : EMPTY_CENTER;
-  const center: CenterPlan = centerProgress <= 0
-    ? EMPTY_CENTER
-    : {
-        discRadius: builtCenter.discRadius * centerProgress,
-        discColor: builtCenter.discColor,
-        highlightRadius: builtCenter.highlightRadius * centerProgress,
-        highlightColor: builtCenter.highlightColor,
-        stamens: builtCenter.stamens.map(s => ({
-          ...s,
-          length: s.length * centerProgress,
-          antherRadius: s.antherRadius * centerProgress,
-        })),
-      };
+  const builtCenter =
+    centerProgress > 0 ? buildCenter(parsed, baseColor, sid) : EMPTY_CENTER;
+  const center: CenterPlan =
+    centerProgress <= 0
+      ? EMPTY_CENTER
+      : {
+          discRadius: builtCenter.discRadius * centerProgress,
+          discColor: builtCenter.discColor,
+          highlightRadius: builtCenter.highlightRadius * centerProgress,
+          highlightColor: builtCenter.highlightColor,
+          stamens: builtCenter.stamens.map(s => ({
+            ...s,
+            length: s.length * centerProgress,
+            antherRadius: s.antherRadius * centerProgress,
+          })),
+        };
 
   // ── Sepals (behind petals) — fade in with sepalProgress ──
   const sepalCount = parsed.sepals.length;
-  const sepals = sepalProgress > 0
-    ? parsed.sepals.map((s, i) => {
-        const angle =
-          (i / Math.max(1, sepalCount)) * Math.PI * 2 + cumulativeOffset * 0.5;
-        const sepalLen = 0.3 + s.length * 0.6;
-        return {
-          cmds: generatePetal(
-            angle,
-            "Lanceolate",
-            "Smooth",
-            sepalLen,
-            0.3,
-            0.1,
-            0,
-            sidHash(sid, 50 + i),
-          ),
-          color: s.color ?? 0x2d5a27,
-        };
-      })
-    : [];
+  const sepals =
+    sepalProgress > 0
+      ? parsed.sepals.map((s, i) => {
+          const angle =
+            (i / Math.max(1, sepalCount)) * Math.PI * 2 +
+            cumulativeOffset * 0.5;
+          const sepalLen = 0.3 + s.length * 0.6;
+          return {
+            cmds: generatePetal(
+              angle,
+              "Lanceolate",
+              "Smooth",
+              sepalLen,
+              0.3,
+              0.1,
+              0,
+              sidHash(sid, 50 + i),
+            ),
+            color: s.color ?? 0x2d5a27,
+          };
+        })
+      : [];
 
   // ── Stem + leaves (only when spec contains stem/foliage data) ──
   const stemData = parseSpecStem(raw);
   const foliage = parseFoliage(raw);
-  const fullStemLen = stemData ? Math.max(0.6, Math.min(1.8, stemData.height * 1.4)) : 0;
+  const fullStemLen = stemData
+    ? Math.max(0.6, Math.min(1.8, stemData.height * 1.4))
+    : 0;
   const stemLen = fullStemLen * stemProgress;
 
   const effects = parseEffects(raw);
 
   // ── Stem + thorns — only visible when stem is growing ──
-  const thornPlans: ThornPlan[] = stemData && effects.thorns && stemProgress > 0
-    ? generateThorns(0, stemLen, 0, 0, stemData.curvature, effects.thorns)
-    : [];
+  const thornPlans: ThornPlan[] =
+    stemData && effects.thorns && stemProgress > 0
+      ? generateThorns(0, stemLen, 0, 0, stemData.curvature, effects.thorns)
+      : [];
 
-  const stem: StemPlan | null = stemData && stemProgress > 0
-    ? {
-        cmds: generateStem(0, stemLen, 0, 0, stemData.curvature ?? 0.1, Math.max(0.03, Math.min(0.08, (stemData.thickness ?? 0.3) * 0.08)), stemData.color ?? 0x2d5a27, stemData.style),
-        color: stemData.color ?? 0x2d5a27,
-        thorns: thornPlans,
-      }
-    : null;
+  const stem: StemPlan | null =
+    stemData && stemProgress > 0
+      ? {
+          cmds: generateStem(
+            0,
+            stemLen,
+            0,
+            0,
+            stemData.curvature ?? 0.1,
+            Math.max(0.03, Math.min(0.08, (stemData.thickness ?? 0.3) * 0.08)),
+            stemData.color ?? 0x2d5a27,
+            stemData.style,
+          ),
+          color: stemData.color ?? 0x2d5a27,
+          thorns: thornPlans,
+        }
+      : null;
 
   // Place leaves — use space colonization for organic arrangement when the
   // spec doesn't provide explicit positions (the common AI-generated case).
   // Scaled by leafProgress for growth-driven reveal.
-  const leafInstances: ParsedLeafInstance[] = stemData && foliage
-    ? (foliage.hasExplicitPositions
-        ? foliage.leaves
-        : colonizeLeafPlacements(
+  const leafInstances: ParsedLeafInstance[] = run(() => {
+    if (!stemData || !foliage) return [];
+    if (foliage.hasExplicitPositions) return foliage.leaves;
+    return colonizeLeafPlacements(
+      stemLen,
+      stemData.curvature,
+      foliage.leaves.length,
+      sid,
+      foliage.leaves.map(l => l.size),
+    );
+  });
+
+  const leaves: LeafPlan[] =
+    stemData && foliage && leafProgress > 0
+      ? leafInstances.map(l => {
+          const pt = stemPointAt(
+            0,
             stemLen,
+            0,
+            0,
             stemData.curvature,
-            foliage.leaves.length,
-            sid,
-            foliage.leaves.map(l => l.size),
-          ))
-    : [];
+            l.position,
+          );
+          const side = l.side === "right" ? -1 : 1;
+          const leafAngle = pt.angle + side * (Math.PI * 0.35) + l.angleOffset;
+          const scale = (0.3 + l.size * 0.25) * leafProgress;
+          const leaf = generateLeaf(pt.x, pt.y, leafAngle, scale, foliage);
+          return {
+            cmds: leaf.outline,
+            veins: leaf.veins,
+            color: foliage.color,
+          };
+        })
+      : [];
 
-  const leaves: LeafPlan[] = stemData && foliage && leafProgress > 0
-    ? leafInstances.map(l => {
-        const pt = stemPointAt(0, stemLen, 0, 0, stemData.curvature, l.position);
-        const side = l.side === "right" ? -1 : 1;
-        const leafAngle = pt.angle + side * (Math.PI * 0.35) + l.angleOffset;
-        const scale = (0.3 + l.size * 0.25) * leafProgress;
-        const leaf = generateLeaf(pt.x, pt.y, leafAngle, scale, foliage);
-        return { cmds: leaf.outline, veins: leaf.veins, color: foliage.color };
-      })
-    : [];
+  const allDewdrops =
+    centerProgress > 0 ? generateDewdrops(effects.dewdrops, layers, sid) : [];
+  const dewdrops =
+    centerProgress >= 1
+      ? allDewdrops
+      : allDewdrops.slice(0, Math.ceil(allDewdrops.length * centerProgress));
 
-  const allDewdrops = centerProgress > 0 ? generateDewdrops(effects.dewdrops, layers, sid) : [];
-  const dewdrops = centerProgress >= 1
-    ? allDewdrops
-    : allDewdrops.slice(0, Math.ceil(allDewdrops.length * centerProgress));
+  const aura: AuraPlan | null =
+    effects.aura && effectProgress > 0
+      ? {
+          kind: effects.aura.kind,
+          color: effects.aura.color,
+          opacity: effects.aura.opacity * effectProgress,
+          radius: effects.aura.radius,
+        }
+      : null;
 
-  const aura: AuraPlan | null = effects.aura && effectProgress > 0
-    ? { kind: effects.aura.kind, color: effects.aura.color, opacity: effects.aura.opacity * effectProgress, radius: effects.aura.radius }
-    : null;
-
-  const allParticles = effectProgress > 0 ? generateParticleSeeds(effects.particles, sid) : [];
-  const particles = effectProgress >= 1
-    ? allParticles
-    : allParticles.slice(0, Math.ceil(allParticles.length * effectProgress));
+  const allParticles =
+    effectProgress > 0 ? generateParticleSeeds(effects.particles, sid) : [];
+  const particles =
+    effectProgress >= 1
+      ? allParticles
+      : allParticles.slice(0, Math.ceil(allParticles.length * effectProgress));
 
   return { sepals, layers, center, stem, leaves, dewdrops, aura, particles };
 }
-
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SVG path conversion
@@ -1573,7 +1946,7 @@ export function cmdsToSvgD(
   scale: number,
 ): string {
   return cmds
-    .map((cmd) => {
+    .map(cmd => {
       switch (cmd.op) {
         case "M":
           return `M ${cx + cmd.x * scale} ${cy + cmd.y * scale}`;
@@ -1626,7 +1999,11 @@ export type ArrangementPlan = {
 export type ArrangementMeta = {
   name?: string;
   adornments?: string[];
-  sprite_hints?: { dominant_color?: string; secondary_color?: string; accent_style?: string };
+  sprite_hints?: {
+    dominant_color?: string;
+    secondary_color?: string;
+    accent_style?: string;
+  };
   harmony_note?: string;
   adornment_spec?: AdornmentSpec;
 };
@@ -1635,7 +2012,14 @@ export type ArrangementMeta = {
 export type AdornmentSpec = {
   container: {
     type: "tie" | "wrap" | "basket" | "vase" | "urn";
-    material: "kraft" | "tissue" | "silk" | "ceramic" | "glass" | "wicker" | "metal";
+    material:
+      | "kraft"
+      | "tissue"
+      | "silk"
+      | "ceramic"
+      | "glass"
+      | "wicker"
+      | "metal";
     color: { r: number; g: number; b: number };
   };
   accent: {
@@ -1652,13 +2036,21 @@ export type AdornmentSpec = {
 
 /** Parse raw JSON into ArrangementMeta, stripping adornment_spec if it
  *  fails structural validation (legacy records from before Output.object). */
-export function parseArrangementMeta(raw_str: string): ArrangementMeta | undefined {
+export function parseArrangementMeta(
+  raw_str: string,
+): ArrangementMeta | undefined {
   try {
     const raw = parseYaml(raw_str) as ArrangementMeta;
     if (raw.adornment_spec) {
       const s = raw.adornment_spec;
-      if (!s.container?.type || !s.container.material || !s.container.color
-        || !s.accent?.type || !s.accent.color || !s.mood) {
+      if (
+        !s.container?.type ||
+        !s.container.material ||
+        !s.container.color ||
+        !s.accent?.type ||
+        !s.accent.color ||
+        !s.mood
+      ) {
         return { ...raw, adornment_spec: undefined };
       }
     }
@@ -1697,7 +2089,7 @@ function parseSpecStem(spec: any): ParsedStem | null {
 }
 
 type ParsedLeafInstance = {
-  position: number;  // 0-1 along stem
+  position: number; // 0-1 along stem
   side: "left" | "right";
   size: number;
   angleOffset: number;
@@ -1713,8 +2105,10 @@ type ParsedFoliage = {
 };
 
 const DEFAULT_FOLIAGE: ParsedFoliage = {
-  shape: "Ovate", color: 0x3a7d32,
-  serration: "None", droop: 0.15,
+  shape: "Ovate",
+  color: 0x3a7d32,
+  serration: "None",
+  droop: 0.15,
   leaves: [
     { position: 0.35, side: "left", size: 0.5, angleOffset: 0.05 },
     { position: 0.6, side: "right", size: 0.42, angleOffset: -0.08 },
@@ -1750,61 +2144,68 @@ function colonizeLeafPlacements(
   const { leaves } = Array.from({ length: count }).reduce<{
     leaves: ParsedLeafInstance[];
     dead: Set<number>;
-  }>((acc, _, leafIdx) => {
-    const best = Array.from({ length: stemSamples }, (_, si) => {
-      const t = 0.2 + (si / (stemSamples - 1)) * 0.65;
-      const pt = stemPointAt(0, stemLen, 0, 0, curvature, t);
+  }>(
+    (acc, _, leafIdx) => {
+      const best = Array.from({ length: stemSamples }, (_, si) => {
+        const t = 0.2 + (si / (stemSamples - 1)) * 0.65;
+        const pt = stemPointAt(0, stemLen, 0, 0, curvature, t);
 
-      const { vx, vy, score } = attractors.reduce(
-        (sum, a, ai) => {
-          if (acc.dead.has(ai)) return sum;
-          const dx = a.x - pt.x;
-          const dy = a.y - pt.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist >= 0.5 || dist <= 0.01) return sum;
-          const weight = 1 / (dist * dist);
-          return {
-            vx: sum.vx + (dx / dist) * weight,
-            vy: sum.vy + (dy / dist) * weight,
-            score: sum.score + weight,
-          };
-        },
-        { vx: 0, vy: 0, score: 0 },
+        const { vx, vy, score } = attractors.reduce(
+          (sum, a, ai) => {
+            if (acc.dead.has(ai)) return sum;
+            const dx = a.x - pt.x;
+            const dy = a.y - pt.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist >= 0.5 || dist <= 0.01) return sum;
+            const weight = 1 / (dist * dist);
+            return {
+              vx: sum.vx + (dx / dist) * weight,
+              vy: sum.vy + (dy / dist) * weight,
+              score: sum.score + weight,
+            };
+          },
+          { vx: 0, vy: 0, score: 0 },
+        );
+
+        return { t, score, angle: Math.atan2(vy, vx) };
+      }).reduce((best, cur) => (cur.score > best.score ? cur : best));
+
+      const stemPt = stemPointAt(0, stemLen, 0, 0, curvature, best.t);
+      const relAngle = best.angle - stemPt.angle;
+      const side: "left" | "right" = Math.sin(relAngle) > 0 ? "left" : "right";
+      const perpAngle = side === "left" ? Math.PI * 0.35 : -Math.PI * 0.35;
+      const angleOffset = Math.max(
+        -0.3,
+        Math.min(0.3, (best.angle - stemPt.angle - perpAngle) * 0.5),
       );
 
-      return { t, score, angle: Math.atan2(vy, vx) };
-    }).reduce((best, cur) => (cur.score > best.score ? cur : best));
+      // Kill attractors near this leaf's projected position
+      const leafX = stemPt.x + Math.cos(best.angle) * 0.2;
+      const leafY = stemPt.y + Math.sin(best.angle) * 0.2;
+      const newDead = attractors.reduce<Set<number>>((killed, a, ai) => {
+        if (acc.dead.has(ai)) return killed;
+        const dx = a.x - leafX;
+        const dy = a.y - leafY;
+        return dx * dx + dy * dy < KILL_RADIUS_SQ
+          ? new Set([...killed, ai])
+          : killed;
+      }, acc.dead);
 
-    const stemPt = stemPointAt(0, stemLen, 0, 0, curvature, best.t);
-    const relAngle = best.angle - stemPt.angle;
-    const side: "left" | "right" = Math.sin(relAngle) > 0 ? "left" : "right";
-    const perpAngle = side === "left" ? Math.PI * 0.35 : -Math.PI * 0.35;
-    const angleOffset = Math.max(-0.3, Math.min(0.3,
-      (best.angle - stemPt.angle - perpAngle) * 0.5,
-    ));
-
-    // Kill attractors near this leaf's projected position
-    const leafX = stemPt.x + Math.cos(best.angle) * 0.2;
-    const leafY = stemPt.y + Math.sin(best.angle) * 0.2;
-    const newDead = attractors.reduce<Set<number>>((killed, a, ai) => {
-      if (acc.dead.has(ai)) return killed;
-      const dx = a.x - leafX;
-      const dy = a.y - leafY;
-      return dx * dx + dy * dy < KILL_RADIUS_SQ
-        ? new Set([...killed, ai])
-        : killed;
-    }, acc.dead);
-
-    return {
-      leaves: [...acc.leaves, {
-        position: best.t,
-        side,
-        size: sizes[leafIdx] ?? (0.3 + sidHash(sid, 830 + leafIdx) * 0.4),
-        angleOffset,
-      }],
-      dead: newDead,
-    };
-  }, { leaves: [], dead: new Set<number>() });
+      return {
+        leaves: [
+          ...acc.leaves,
+          {
+            position: best.t,
+            side,
+            size: sizes[leafIdx] ?? 0.3 + sidHash(sid, 830 + leafIdx) * 0.4,
+            angleOffset,
+          },
+        ],
+        dead: newDead,
+      };
+    },
+    { leaves: [], dead: new Set<number>() },
+  );
 
   return leaves;
 }
@@ -1821,29 +2222,36 @@ function parseFoliage(spec: any): ParsedFoliage | null {
     // Detect whether spec provides explicit leaf positions (AI format with
     // position/side) vs Rust-serialized format (shape/size only). When positions
     // are missing, createFlowerPlan will use space colonization instead.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const hasExplicitPositions = rawLeaves.some((l: any) => l.position != null && l.side != null);
+    const hasExplicitPositions = rawLeaves.some(
+      (l: RawLeaf) => l.position != null && l.side != null,
+    );
     const count = Math.min(rawLeaves.length, 6);
-    const leaves: ParsedLeafInstance[] = rawLeaves.slice(0, 6).map((l: any, i: number) => ({
-      position: Math.max(0.25, Math.min(0.85,
-        l.position ?? 0.25 + (i / Math.max(1, count - 1)) * 0.55)),
-      side: l.side === "right" || l.side === "left"
-        ? l.side as "left" | "right"
-        : (i % 2 === 0 ? "left" as const : "right" as const),
-      size: Math.max(0.2, Math.min(1.0, l.size ?? 0.5)),
-      angleOffset: Math.max(-0.3, Math.min(0.3,
-        l.angle_offset ?? (i % 2 === 0 ? 0.05 : -0.08))),
-    }));
+    const leaves: ParsedLeafInstance[] = rawLeaves
+      .slice(0, 6)
+      .map((l: RawLeaf, i: number) => ({
+        position: Math.max(
+          0.25,
+          Math.min(
+            0.85,
+            l.position ?? 0.25 + (i / Math.max(1, count - 1)) * 0.55,
+          ),
+        ),
+        side: leafSide(l.side, i),
+        size: Math.max(0.2, Math.min(1.0, l.size ?? 0.5)),
+        angleOffset: Math.max(
+          -0.3,
+          Math.min(0.3, l.angle_offset ?? (i % 2 === 0 ? 0.05 : -0.08)),
+        ),
+      }));
 
     // leaf_shape/leaf_color come from AI format; Rust serializes shape/color
     // on individual Leaf objects — pull from first leaf as fallback
     const firstLeaf = rawLeaves[0];
-    const leafShape = foliage.leaf_shape
-      ?? firstLeaf?.shape
-      ?? "Ovate";
-    const leafColor = colorToHex(foliage.leaf_color)
-      ?? colorToHex(firstLeaf?.color?.stops?.[0]?.color)
-      ?? 0x3a7d32;
+    const leafShape = foliage.leaf_shape ?? firstLeaf?.shape ?? "Ovate";
+    const leafColor =
+      colorToHex(foliage.leaf_color) ??
+      colorToHex(firstLeaf?.color?.stops?.[0]?.color) ??
+      0x3a7d32;
 
     return {
       shape: leafShape,
@@ -1861,24 +2269,61 @@ function parseFoliage(spec: any): ParsedFoliage | null {
 // ── Stem generation ──
 
 /** Apply stem style modifiers — returns adjusted curvature, halfWidth, and taperRatio. */
-function stemStyleModifiers(style: string, curvature: number, halfWidth: number): {
-  curvature: number; halfWidth: number; tipRatio: number; segments: number;
+function stemStyleModifiers(
+  style: string,
+  curvature: number,
+  halfWidth: number,
+): {
+  curvature: number;
+  halfWidth: number;
+  tipRatio: number;
+  segments: number;
 } {
   switch (style) {
     case "Arching":
-      return { curvature: Math.max(0.2, curvature + 0.15), halfWidth, tipRatio: 0.45, segments: 2 };
+      return {
+        curvature: Math.max(0.2, curvature + 0.15),
+        halfWidth,
+        tipRatio: 0.45,
+        segments: 2,
+      };
     case "Sinuous":
       return { curvature, halfWidth, tipRatio: 0.5, segments: 3 }; // S-curve uses 3 segments
     case "Zigzag":
-      return { curvature: 0, halfWidth: halfWidth * 0.9, tipRatio: 0.6, segments: 4 }; // angular
+      return {
+        curvature: 0,
+        halfWidth: halfWidth * 0.9,
+        tipRatio: 0.6,
+        segments: 4,
+      }; // angular
     case "Succulent":
-      return { curvature: curvature * 0.5, halfWidth: halfWidth * 2.2, tipRatio: 0.8, segments: 2 };
+      return {
+        curvature: curvature * 0.5,
+        halfWidth: halfWidth * 2.2,
+        tipRatio: 0.8,
+        segments: 2,
+      };
     case "Woody":
-      return { curvature: curvature * 0.7, halfWidth: halfWidth * 1.6, tipRatio: 0.35, segments: 2 };
+      return {
+        curvature: curvature * 0.7,
+        halfWidth: halfWidth * 1.6,
+        tipRatio: 0.35,
+        segments: 2,
+      };
     case "Trailing":
-      return { curvature: Math.min(-0.2, curvature - 0.3), halfWidth, tipRatio: 0.55, segments: 2 };
+      return {
+        curvature: Math.min(-0.2, curvature - 0.3),
+        halfWidth,
+        tipRatio: 0.55,
+        segments: 2,
+      };
     case "Twining":
-      return { curvature, halfWidth: halfWidth * 0.85, tipRatio: 0.5, segments: 3 };
+      return {
+        curvature,
+        halfWidth: halfWidth * 0.85,
+        tipRatio: 0.5,
+        segments: 3,
+      };
     default: // Straight
       return { curvature, halfWidth, tipRatio: 0.5, segments: 2 };
   }
@@ -1886,8 +2331,10 @@ function stemStyleModifiers(style: string, curvature: number, halfWidth: number)
 
 /** Generate a stem outline as a closed path (two parallel bezier curves). */
 function generateStem(
-  fromX: number, fromY: number,
-  toX: number, toY: number,
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
   curvature: number,
   halfWidth: number,
   _color: number,
@@ -1909,7 +2356,8 @@ function generateStem(
   // ── Sinuous / Twining: S-curve with two midpoints ──
   if ((style === "Sinuous" || style === "Twining") && len > 0.1) {
     const sway = style === "Twining" ? len * 0.18 : len * 0.22;
-    const t1 = 0.33, t2 = 0.66;
+    const t1 = 0.33,
+      t2 = 0.66;
     const m1x = fromX + dx * t1 + nx * sway;
     const m1y = fromY + dy * t1 + ny * sway;
     const m2x = fromX + dx * t2 - nx * sway;
@@ -1922,12 +2370,19 @@ function generateStem(
 
     // Simplified S-curve: base → m1 → m2 → tip, each side
     const pts: Vec2[] = [
-      [fromX, fromY], [m1x, m1y], [m2x, m2y], [toX, toY],
+      [fromX, fromY],
+      [m1x, m1y],
+      [m2x, m2y],
+      [toX, toY],
     ];
     const ws = [baseW, w1, w2, tipW];
 
-    const left = pts.map((p, i) => [p[0] + nx * ws[i]!, p[1] + ny * ws[i]!] as Vec2);
-    const right = pts.map((p, i) => [p[0] - nx * ws[i]!, p[1] - ny * ws[i]!] as Vec2);
+    const left = pts.map(
+      (p, i) => [p[0] + nx * ws[i]!, p[1] + ny * ws[i]!] as Vec2,
+    );
+    const right = pts.map(
+      (p, i) => [p[0] - nx * ws[i]!, p[1] - ny * ws[i]!] as Vec2,
+    );
     return assembleOutline(left, right);
   }
 
@@ -1959,8 +2414,14 @@ function generateStem(
 
     // Use line segments for the angular look
     const cmds: DrawCmd[] = [{ op: "M", x: left[0]![0], y: left[0]![1] }];
-    left.slice(1).map(p => { cmds.push({ op: "L", x: p[0], y: p[1] }); return null; });
-    right.toReversed().map(p => { cmds.push({ op: "L", x: p[0], y: p[1] }); return null; });
+    left.slice(1).map(p => {
+      cmds.push({ op: "L", x: p[0], y: p[1] });
+      return null;
+    });
+    right.toReversed().map(p => {
+      cmds.push({ op: "L", x: p[0], y: p[1] });
+      return null;
+    });
     cmds.push({ op: "Z" });
     return cmds;
   }
@@ -1991,11 +2452,43 @@ function generateStem(
 
   return [
     { op: "M", x: lb1x, y: lb1y },
-    { op: "C", c1x: lb1x, c1y: lb1y + (lm1y - lb1y) * 0.5, c2x: lm1x, c2y: lm1y - (lm1y - lb1y) * 0.5, x: lm1x, y: lm1y },
-    { op: "C", c1x: lm1x, c1y: lm1y + (lt1y - lm1y) * 0.5, c2x: lt1x, c2y: lt1y - (lt1y - lm1y) * 0.5, x: lt1x, y: lt1y },
+    {
+      op: "C",
+      c1x: lb1x,
+      c1y: lb1y + (lm1y - lb1y) * 0.5,
+      c2x: lm1x,
+      c2y: lm1y - (lm1y - lb1y) * 0.5,
+      x: lm1x,
+      y: lm1y,
+    },
+    {
+      op: "C",
+      c1x: lm1x,
+      c1y: lm1y + (lt1y - lm1y) * 0.5,
+      c2x: lt1x,
+      c2y: lt1y - (lt1y - lm1y) * 0.5,
+      x: lt1x,
+      y: lt1y,
+    },
     { op: "L", x: rt1x, y: rt1y },
-    { op: "C", c1x: rt1x, c1y: rt1y + (rm1y - rt1y) * 0.5, c2x: rm1x, c2y: rm1y - (rm1y - rt1y) * 0.5, x: rm1x, y: rm1y },
-    { op: "C", c1x: rm1x, c1y: rm1y + (rb1y - rm1y) * 0.5, c2x: rb1x, c2y: rb1y - (rb1y - rm1y) * 0.5, x: rb1x, y: rb1y },
+    {
+      op: "C",
+      c1x: rt1x,
+      c1y: rt1y + (rm1y - rt1y) * 0.5,
+      c2x: rm1x,
+      c2y: rm1y - (rm1y - rt1y) * 0.5,
+      x: rm1x,
+      y: rm1y,
+    },
+    {
+      op: "C",
+      c1x: rm1x,
+      c1y: rm1y + (rb1y - rm1y) * 0.5,
+      c2x: rb1x,
+      c2y: rb1y - (rb1y - rm1y) * 0.5,
+      x: rb1x,
+      y: rb1y,
+    },
     { op: "Z" },
   ];
 }
@@ -2004,8 +2497,10 @@ function generateStem(
 
 /** Get a point and tangent angle along a curved stem at parameter t ∈ [0,1] (base → tip). */
 function stemPointAt(
-  fromX: number, fromY: number,
-  toX: number, toY: number,
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
   curvature: number,
   t: number,
 ): { x: number; y: number; angle: number } {
@@ -2037,48 +2532,48 @@ function stemPointAt(
 
 const LEAF_PROFILES: Record<string, (t: number) => number> = {
   // Egg-shaped — widest at ~35%
-  Ovate: (t) => Math.sin(Math.PI * Math.pow(t, 0.65)),
+  Ovate: t => Math.sin(Math.PI * Math.pow(t, 0.65)),
   // Narrow lance — widest near 25%, long taper
-  Lanceolate: (t) => Math.sin(Math.PI * t) * Math.pow(1 - t, 0.2) * 1.1,
+  Lanceolate: t => Math.sin(Math.PI * t) * Math.pow(1 - t, 0.2) * 1.1,
   // Heart-shaped — very wide base, notched tip
-  Cordate: (t) => {
+  Cordate: t => {
     const base = Math.sin(Math.PI * Math.pow(t, 0.5)) * 1.2;
     return t < 0.1 ? base * (0.4 + t * 6) : base;
   },
   // Hand-shaped — wide with undulations suggesting lobes
-  Palmate: (t) => {
+  Palmate: t => {
     const base = Math.sin(Math.PI * Math.pow(t, 0.55));
     const lobes = 1 + Math.sin(t * Math.PI * 5) * 0.15 * Math.sin(Math.PI * t);
     return base * lobes;
   },
   // Feather-like — narrow, with slight scallops
-  Pinnate: (t) => {
+  Pinnate: t => {
     const base = Math.sin(Math.PI * t) * 0.7;
     const scallop = 1 + Math.sin(t * Math.PI * 8) * 0.1;
     return base * scallop;
   },
   // Grass-like — uniform narrow width
-  Linear: (t) => {
+  Linear: t => {
     if (t < 0.05) return (t / 0.05) * 0.35;
     if (t > 0.9) return 0.35 * (1 - (t - 0.9) / 0.1);
     return 0.35;
   },
   // Kidney-shaped — very wide and rounded
-  Reniform: (t) => Math.sqrt(Math.max(0, Math.sin(Math.PI * t))) * 1.3,
+  Reniform: t => Math.sqrt(Math.max(0, Math.sin(Math.PI * t))) * 1.3,
   // Arrow-shaped — barbed base
-  Sagittate: (t) => {
+  Sagittate: t => {
     if (t < 0.15) return 0.6 + (1 - t / 0.15) * 0.5;
     return Math.sin(Math.PI * Math.pow(t, 0.7)) * 0.9;
   },
   // Shield-shaped — round
-  Peltate: (t) => Math.sqrt(Math.max(0, Math.sin(Math.PI * t))) * 1.1,
+  Peltate: t => Math.sqrt(Math.max(0, Math.sin(Math.PI * t))) * 1.1,
   // Needle — very narrow
-  Acicular: (t) => {
+  Acicular: t => {
     if (t < 0.05) return (t / 0.05) * 0.18;
     return 0.18 * (1 - Math.pow(t, 2));
   },
   // Halberd-shaped
-  Hastate: (t) => {
+  Hastate: t => {
     if (t < 0.12) return 0.5 + (1 - t / 0.12) * 0.4;
     return Math.sin(Math.PI * Math.pow(t, 0.65)) * 0.85;
   },
@@ -2086,44 +2581,44 @@ const LEAF_PROFILES: Record<string, (t: number) => number> = {
   // ── v2 leaf shapes ──
 
   // Reverse egg — widest near tip (~65%)
-  Obovate: (t) => Math.sin(Math.PI * Math.pow(t, 1.4)),
+  Obovate: t => Math.sin(Math.PI * Math.pow(t, 1.4)),
 
   // Evenly oval — symmetric, widest at center
-  Elliptic: (t) => Math.sin(Math.PI * t) * 0.95,
+  Elliptic: t => Math.sin(Math.PI * t) * 0.95,
 
   // Reverse lance — widest near tip, long basal taper
-  Oblanceolate: (t) => Math.sin(Math.PI * t) * Math.pow(t, 0.3) * 1.05,
+  Oblanceolate: t => Math.sin(Math.PI * t) * Math.pow(t, 0.3) * 1.05,
 
   // Triangular — widest at base, straight taper
-  Deltoid: (t) => Math.max(0, 1 - t * 0.9) * Math.sqrt(Math.min(1, t * 6)),
+  Deltoid: t => Math.max(0, 1 - t * 0.9) * Math.sqrt(Math.min(1, t * 6)),
 
   // Spoon-shaped — narrow stalk, rounded broad tip
-  Spatulate: (t) =>
+  Spatulate: t =>
     t < 0.35
       ? (t / 0.35) * 0.25
       : 0.25 + 0.75 * Math.sin((Math.PI * (t - 0.35)) / 0.65),
 
   // Round — nearly circular outline
-  Orbicular: (t) => Math.sqrt(Math.max(0, Math.sin(Math.PI * t))) * 1.3,
+  Orbicular: t => Math.sqrt(Math.max(0, Math.sin(Math.PI * t))) * 1.3,
 
   // Lyre-shaped — large terminal lobe, smaller basal lobes
-  Lyrate: (t) => {
+  Lyrate: t => {
     if (t < 0.15) return 0.5 + Math.sin((Math.PI * t) / 0.15) * 0.3;
-    if (t < 0.35) return 0.3 + (t - 0.15) / 0.2 * 0.2;
+    if (t < 0.35) return 0.3 + ((t - 0.15) / 0.2) * 0.2;
     return 0.5 + 0.5 * Math.sin((Math.PI * (t - 0.35)) / 0.65);
   },
 
   // Wedge — narrow base, widens steadily to blunt tip
-  Cuneate: (t) =>
+  Cuneate: t =>
     t < 0.85
       ? Math.pow(t / 0.85, 1.3) * 0.9
       : 0.9 * Math.cos((Math.PI * 0.5 * (t - 0.85)) / 0.15),
 
   // Sickle-shaped — asymmetric curve (handled via the profile + noise)
-  Falcate: (t) => Math.sin(Math.PI * t) * 0.6,
+  Falcate: t => Math.sin(Math.PI * t) * 0.6,
 
   // Doubly feathered — fern-like with pronounced scallops
-  Bipinnate: (t) => {
+  Bipinnate: t => {
     const base = Math.sin(Math.PI * t) * 0.65;
     const fronds = 1 + Math.sin(t * Math.PI * 12) * 0.2 * Math.sin(Math.PI * t);
     return base * fronds;
@@ -2131,7 +2626,9 @@ const LEAF_PROFILES: Record<string, (t: number) => number> = {
 };
 
 function leafProfile(shape: string, t: number): number {
-  return (LEAF_PROFILES[shape] ?? LEAF_PROFILES.Ovate!)(Math.max(0, Math.min(1, t)));
+  return (LEAF_PROFILES[shape] ?? LEAF_PROFILES.Ovate!)(
+    Math.max(0, Math.min(1, t)),
+  );
 }
 
 /** Edge serration modifier for leaves. */
@@ -2146,11 +2643,13 @@ function leafSerration(style: string, t: number, seed: number): number {
     case "Crenate":
       return 1 + (Math.sin(t * 16 + seed) > 0 ? 0.08 : -0.04);
     case "Dentate":
-      return 1 + (((t * 14 + seed * 0.1) % 1) < 0.5 ? 0.1 : -0.05);
+      return 1 + ((t * 14 + seed * 0.1) % 1 < 0.5 ? 0.1 : -0.05);
     case "Doubly":
-      return 1 + Math.sin(t * 20 + seed) * 0.07 + Math.sin(t * 8 + seed * 2) * 0.1;
+      return (
+        1 + Math.sin(t * 20 + seed) * 0.07 + Math.sin(t * 8 + seed * 2) * 0.1
+      );
     case "Spinose":
-      return 1 + (((t * 8 + seed * 0.1) % 1) < 0.3 ? 0.18 : -0.02);
+      return 1 + ((t * 8 + seed * 0.1) % 1 < 0.3 ? 0.18 : -0.02);
     case "Ciliate":
       return 1 + Math.sin(t * 40 + seed) * 0.04;
     default:
@@ -2168,7 +2667,8 @@ function leafNoise(t: number, seed: number): number {
 }
 
 function generateLeaf(
-  x: number, y: number,
+  x: number,
+  y: number,
   angle: number,
   size: number,
   foliage?: ParsedFoliage,
@@ -2200,7 +2700,8 @@ function generateLeaf(
     const t = i / N;
 
     // Width profile from shape enum
-    const baseW = halfW * leafProfile(ld.shape, t) * leafSerration(ld.serration, t, seed);
+    const baseW =
+      halfW * leafProfile(ld.shape, t) * leafSerration(ld.serration, t, seed);
 
     // Organic edge irregularity (like gaia's p.noise)
     const noise = leafNoise(t, seed) * halfW * 0.08;
@@ -2214,7 +2715,8 @@ function generateLeaf(
   // Return path: tip back to base on the other side
   for (let i = N; i >= 0; i--) {
     const t = i / N;
-    const baseW = halfW * leafProfile(ld.shape, t) * leafSerration(ld.serration, t, seed);
+    const baseW =
+      halfW * leafProfile(ld.shape, t) * leafSerration(ld.serration, t, seed);
     const noise = leafNoise(t, seed + 5) * halfW * 0.08;
     const w = (baseW + noise) * (t < 0.5 ? 0.96 : 1.04);
     outlinePts.push(toWorld(t * len, -w));
@@ -2266,7 +2768,9 @@ type LayoutSlot = {
 function layoutForLevel(count: number, level: number): LayoutSlot[] {
   if (count <= 1) {
     // Single stem — straight down
-    return [{ offsetX: 0, offsetY: -0.7, stemAngle: 0, scale: 1.0, stemLength: 0.7 }];
+    return [
+      { offsetX: 0, offsetY: -0.7, stemAngle: 0, scale: 1.0, stemLength: 0.7 },
+    ];
   }
 
   return Array.from({ length: count }, (_, i) => {
@@ -2319,25 +2823,43 @@ function layoutForLevel(count: number, level: number): LayoutSlot[] {
 // ── Adornment generators ──
 // Each returns DrawCmd[] in unit space, centered on x=0, anchored at baseY.
 
-const WRAP_KRAFT = 0x8B7355;    // warm kraft brown
-const WRAP_TISSUE = 0xD4C5B0;   // soft tissue beige
-const RIBBON_COLOR = 0xC4A882;  // natural twine
-const VASE_COLOR = 0x6B7B8D;    // slate ceramic
-const VASE_RIM = 0x8899A6;      // lighter ceramic rim
-const STAND_COLOR = 0x5A5A5A;   // stone gray
-const STAND_TOP = 0x707070;     // lighter stone
+const WRAP_KRAFT = 0x8b7355; // warm kraft brown
+const RIBBON_COLOR = 0xc4a882; // natural twine
+const VASE_COLOR = 0x6b7b8d; // slate ceramic
+const VASE_RIM = 0x8899a6; // lighter ceramic rim
+const STAND_COLOR = 0x5a5a5a; // stone gray
+const STAND_TOP = 0x707070; // lighter stone
 
 /** Simple tie/band around stems — Group level (2-3 flowers). */
-function generateTieAdornment(baseY: number, colors?: { main: number; accent: number }): AdornmentPlan {
-  const bandY = baseY - 0.18;  // just above convergence point
+function generateTieAdornment(
+  baseY: number,
+  colors?: { main: number; accent: number },
+): AdornmentPlan {
+  const bandY = baseY - 0.18; // just above convergence point
   const bandH = 0.025;
   const bandW = 0.08;
 
   const cmds: DrawCmd[] = [
     { op: "M", x: -bandW, y: bandY - bandH },
-    { op: "C", c1x: -bandW, c1y: bandY - bandH * 2, c2x: bandW, c2y: bandY - bandH * 2, x: bandW, y: bandY - bandH },
+    {
+      op: "C",
+      c1x: -bandW,
+      c1y: bandY - bandH * 2,
+      c2x: bandW,
+      c2y: bandY - bandH * 2,
+      x: bandW,
+      y: bandY - bandH,
+    },
     { op: "L", x: bandW, y: bandY + bandH },
-    { op: "C", c1x: bandW, c1y: bandY + bandH * 2, c2x: -bandW, c2y: bandY + bandH * 2, x: -bandW, y: bandY + bandH },
+    {
+      op: "C",
+      c1x: bandW,
+      c1y: bandY + bandH * 2,
+      c2x: -bandW,
+      c2y: bandY + bandH * 2,
+      x: -bandW,
+      y: bandY + bandH,
+    },
     { op: "Z" },
   ];
 
@@ -2345,8 +2867,24 @@ function generateTieAdornment(baseY: number, colors?: { main: number; accent: nu
   const knotR = 0.015;
   const accent: DrawCmd[] = [
     { op: "M", x: -knotR, y: bandY },
-    { op: "C", c1x: -knotR, c1y: bandY - knotR * 2, c2x: knotR, c2y: bandY - knotR * 2, x: knotR, y: bandY },
-    { op: "C", c1x: knotR, c1y: bandY + knotR * 2, c2x: -knotR, c2y: bandY + knotR * 2, x: -knotR, y: bandY },
+    {
+      op: "C",
+      c1x: -knotR,
+      c1y: bandY - knotR * 2,
+      c2x: knotR,
+      c2y: bandY - knotR * 2,
+      x: knotR,
+      y: bandY,
+    },
+    {
+      op: "C",
+      c1x: knotR,
+      c1y: bandY + knotR * 2,
+      c2x: -knotR,
+      c2y: bandY + knotR * 2,
+      x: -knotR,
+      y: bandY,
+    },
     { op: "Z" },
   ];
 
@@ -2362,28 +2900,55 @@ function generateTieAdornment(baseY: number, colors?: { main: number; accent: nu
 }
 
 /** Paper wrap cone — Bunch level (4-6 flowers). */
-function generateWrapAdornment(baseY: number, colors?: { main: number; accent: number }): AdornmentPlan {
-  const topY = baseY - 0.35;   // wrap opens wide near the flower heads
-  const botY = baseY + 0.05;   // wraps slightly past the base
-  const topW = 0.35;           // wide opening
-  const botW = 0.06;           // narrow bottom point
+function generateWrapAdornment(
+  baseY: number,
+  colors?: { main: number; accent: number },
+): AdornmentPlan {
+  const topY = baseY - 0.35; // wrap opens wide near the flower heads
+  const botY = baseY + 0.05; // wraps slightly past the base
+  const topW = 0.35; // wide opening
+  const botW = 0.06; // narrow bottom point
 
   // Wrap body — tapered cone with curved edges
   const cmds: DrawCmd[] = [
     { op: "M", x: -topW, y: topY },
-    { op: "C", c1x: -topW * 0.9, c1y: topY + (botY - topY) * 0.4,
-      c2x: -botW * 1.5, c2y: botY - (botY - topY) * 0.2,
-      x: -botW, y: botY },
-    { op: "C", c1x: -botW * 0.3, c1y: botY + 0.02,
-      c2x: botW * 0.3, c2y: botY + 0.02,
-      x: botW, y: botY },
-    { op: "C", c1x: botW * 1.5, c1y: botY - (botY - topY) * 0.2,
-      c2x: topW * 0.9, c2y: topY + (botY - topY) * 0.4,
-      x: topW, y: topY },
+    {
+      op: "C",
+      c1x: -topW * 0.9,
+      c1y: topY + (botY - topY) * 0.4,
+      c2x: -botW * 1.5,
+      c2y: botY - (botY - topY) * 0.2,
+      x: -botW,
+      y: botY,
+    },
+    {
+      op: "C",
+      c1x: -botW * 0.3,
+      c1y: botY + 0.02,
+      c2x: botW * 0.3,
+      c2y: botY + 0.02,
+      x: botW,
+      y: botY,
+    },
+    {
+      op: "C",
+      c1x: botW * 1.5,
+      c1y: botY - (botY - topY) * 0.2,
+      c2x: topW * 0.9,
+      c2y: topY + (botY - topY) * 0.4,
+      x: topW,
+      y: topY,
+    },
     // Curved top edge (paper fold)
-    { op: "C", c1x: topW * 0.7, c1y: topY - 0.03,
-      c2x: -topW * 0.7, c2y: topY - 0.03,
-      x: -topW, y: topY },
+    {
+      op: "C",
+      c1x: topW * 0.7,
+      c1y: topY - 0.03,
+      c2x: -topW * 0.7,
+      c2y: topY - 0.03,
+      x: -topW,
+      y: topY,
+    },
     { op: "Z" },
   ];
 
@@ -2411,11 +2976,14 @@ function generateWrapAdornment(baseY: number, colors?: { main: number; accent: n
 }
 
 /** Vase — Arrangement/Bouquet level (7-19 flowers). */
-function generateVaseAdornment(baseY: number, colors?: { main: number; accent: number }): AdornmentPlan {
-  const lipY = baseY - 0.3;    // vase lip
-  const neckY = baseY - 0.22;  // narrow neck
+function generateVaseAdornment(
+  baseY: number,
+  colors?: { main: number; accent: number },
+): AdornmentPlan {
+  const lipY = baseY - 0.3; // vase lip
+  const neckY = baseY - 0.22; // narrow neck
   const bulgeY = baseY - 0.05; // widest body point
-  const footY = baseY + 0.08;  // vase foot
+  const footY = baseY + 0.08; // vase foot
   const lipW = 0.16;
   const neckW = 0.1;
   const bulgeW = 0.22;
@@ -2425,35 +2993,77 @@ function generateVaseAdornment(baseY: number, colors?: { main: number; accent: n
   const cmds: DrawCmd[] = [
     { op: "M", x: -lipW, y: lipY },
     // Neck narrows
-    { op: "C", c1x: -lipW, c1y: lipY + 0.03,
-      c2x: -neckW, c2y: neckY - 0.02,
-      x: -neckW, y: neckY },
+    {
+      op: "C",
+      c1x: -lipW,
+      c1y: lipY + 0.03,
+      c2x: -neckW,
+      c2y: neckY - 0.02,
+      x: -neckW,
+      y: neckY,
+    },
     // Body bulges out
-    { op: "C", c1x: -neckW * 1.1, c1y: neckY + (bulgeY - neckY) * 0.3,
-      c2x: -bulgeW, c2y: bulgeY - (bulgeY - neckY) * 0.3,
-      x: -bulgeW, y: bulgeY },
+    {
+      op: "C",
+      c1x: -neckW * 1.1,
+      c1y: neckY + (bulgeY - neckY) * 0.3,
+      c2x: -bulgeW,
+      c2y: bulgeY - (bulgeY - neckY) * 0.3,
+      x: -bulgeW,
+      y: bulgeY,
+    },
     // Taper to foot
-    { op: "C", c1x: -bulgeW, c1y: bulgeY + (footY - bulgeY) * 0.5,
-      c2x: -footW, c2y: footY - 0.02,
-      x: -footW, y: footY },
+    {
+      op: "C",
+      c1x: -bulgeW,
+      c1y: bulgeY + (footY - bulgeY) * 0.5,
+      c2x: -footW,
+      c2y: footY - 0.02,
+      x: -footW,
+      y: footY,
+    },
     // Flat bottom
     { op: "L", x: footW, y: footY },
     // Right side up — foot to bulge
-    { op: "C", c1x: footW, c1y: footY - 0.02,
-      c2x: bulgeW, c2y: bulgeY + (footY - bulgeY) * 0.5,
-      x: bulgeW, y: bulgeY },
+    {
+      op: "C",
+      c1x: footW,
+      c1y: footY - 0.02,
+      c2x: bulgeW,
+      c2y: bulgeY + (footY - bulgeY) * 0.5,
+      x: bulgeW,
+      y: bulgeY,
+    },
     // Bulge to neck
-    { op: "C", c1x: bulgeW, c1y: bulgeY - (bulgeY - neckY) * 0.3,
-      c2x: neckW * 1.1, c2y: neckY + (bulgeY - neckY) * 0.3,
-      x: neckW, y: neckY },
+    {
+      op: "C",
+      c1x: bulgeW,
+      c1y: bulgeY - (bulgeY - neckY) * 0.3,
+      c2x: neckW * 1.1,
+      c2y: neckY + (bulgeY - neckY) * 0.3,
+      x: neckW,
+      y: neckY,
+    },
     // Neck to lip
-    { op: "C", c1x: neckW, c1y: neckY - 0.02,
-      c2x: lipW, c2y: lipY + 0.03,
-      x: lipW, y: lipY },
+    {
+      op: "C",
+      c1x: neckW,
+      c1y: neckY - 0.02,
+      c2x: lipW,
+      c2y: lipY + 0.03,
+      x: lipW,
+      y: lipY,
+    },
     // Lip top edge
-    { op: "C", c1x: lipW * 0.5, c1y: lipY - 0.015,
-      c2x: -lipW * 0.5, c2y: lipY - 0.015,
-      x: -lipW, y: lipY },
+    {
+      op: "C",
+      c1x: lipW * 0.5,
+      c1y: lipY - 0.015,
+      c2x: -lipW * 0.5,
+      c2y: lipY - 0.015,
+      x: -lipW,
+      y: lipY,
+    },
     { op: "Z" },
   ];
 
@@ -2461,12 +3071,24 @@ function generateVaseAdornment(baseY: number, colors?: { main: number; accent: n
   const rimH = 0.012;
   const accent: DrawCmd[] = [
     { op: "M", x: -lipW * 0.95, y: lipY },
-    { op: "C", c1x: -lipW * 0.5, c1y: lipY - rimH,
-      c2x: lipW * 0.5, c2y: lipY - rimH,
-      x: lipW * 0.95, y: lipY },
-    { op: "C", c1x: lipW * 0.5, c1y: lipY + rimH,
-      c2x: -lipW * 0.5, c2y: lipY + rimH,
-      x: -lipW * 0.95, y: lipY },
+    {
+      op: "C",
+      c1x: -lipW * 0.5,
+      c1y: lipY - rimH,
+      c2x: lipW * 0.5,
+      c2y: lipY - rimH,
+      x: lipW * 0.95,
+      y: lipY,
+    },
+    {
+      op: "C",
+      c1x: lipW * 0.5,
+      c1y: lipY + rimH,
+      c2x: -lipW * 0.5,
+      c2y: lipY + rimH,
+      x: -lipW * 0.95,
+      y: lipY,
+    },
     { op: "Z" },
   ];
 
@@ -2492,12 +3114,15 @@ function generateVaseAdornment(baseY: number, colors?: { main: number; accent: n
 }
 
 /** Pedestal/stand — Centerpiece+ level (20+ flowers). */
-function generatePedestalAdornment(baseY: number, colors?: { main: number; accent: number }): AdornmentPlan {
+function generatePedestalAdornment(
+  baseY: number,
+  colors?: { main: number; accent: number },
+): AdornmentPlan {
   // Pedestal sits below a vase shape
-  const topY = baseY + 0.06;   // top of pedestal (just under the vase foot)
-  const midY = baseY + 0.18;   // column midsection
+  const topY = baseY + 0.06; // top of pedestal (just under the vase foot)
+  const midY = baseY + 0.18; // column midsection
   const baseTopY = baseY + 0.22; // base platform top
-  const botY = baseY + 0.26;   // very bottom
+  const botY = baseY + 0.26; // very bottom
   const topW = 0.13;
   const colW = 0.08;
   const baseW = 0.2;
@@ -2509,25 +3134,49 @@ function generatePedestalAdornment(baseY: number, colors?: { main: number; accen
     { op: "L", x: topW, y: topY },
     { op: "L", x: topW, y: topY + 0.02 },
     // Column right side
-    { op: "C", c1x: topW * 0.8, c1y: topY + 0.04,
-      c2x: colW, c2y: midY - 0.02,
-      x: colW, y: midY },
+    {
+      op: "C",
+      c1x: topW * 0.8,
+      c1y: topY + 0.04,
+      c2x: colW,
+      c2y: midY - 0.02,
+      x: colW,
+      y: midY,
+    },
     // Flare to base
-    { op: "C", c1x: colW, c1y: midY + 0.02,
-      c2x: baseW * 0.7, c2y: baseTopY - 0.01,
-      x: baseW, y: baseTopY },
+    {
+      op: "C",
+      c1x: colW,
+      c1y: midY + 0.02,
+      c2x: baseW * 0.7,
+      c2y: baseTopY - 0.01,
+      x: baseW,
+      y: baseTopY,
+    },
     // Base bottom
     { op: "L", x: baseW, y: botY },
     { op: "L", x: -baseW, y: botY },
     { op: "L", x: -baseW, y: baseTopY },
     // Left flare up
-    { op: "C", c1x: -baseW * 0.7, c1y: baseTopY - 0.01,
-      c2x: -colW, c2y: midY + 0.02,
-      x: -colW, y: midY },
+    {
+      op: "C",
+      c1x: -baseW * 0.7,
+      c1y: baseTopY - 0.01,
+      c2x: -colW,
+      c2y: midY + 0.02,
+      x: -colW,
+      y: midY,
+    },
     // Left column up
-    { op: "C", c1x: -colW, c1y: midY - 0.02,
-      c2x: -topW * 0.8, c2y: topY + 0.04,
-      x: -topW, y: topY + 0.02 },
+    {
+      op: "C",
+      c1x: -colW,
+      c1y: midY - 0.02,
+      c2x: -topW * 0.8,
+      c2y: topY + 0.04,
+      x: -topW,
+      y: topY + 0.02,
+    },
     { op: "L", x: -topW, y: topY },
     { op: "Z" },
   ];
@@ -2555,18 +3204,27 @@ function generatePedestalAdornment(baseY: number, colors?: { main: number; accen
 // ── Material modifiers ──
 // Each material adjusts opacity and color feel for the container.
 
-const MATERIAL_MODIFIERS: Record<string, { opacityMul: number; colorAdjust: (c: number) => number }> = {
-  kraft:   { opacityMul: 0.75, colorAdjust: c => desaturate(warmShift(c), 0.3) },
-  tissue:  { opacityMul: 0.45, colorAdjust: c => lightenColor(c, 0.25) },
-  silk:    { opacityMul: 0.85, colorAdjust: c => c },
-  ceramic: { opacityMul: 0.8,  colorAdjust: c => coolShift(desaturate(c, 0.4)) },
-  glass:   { opacityMul: 0.35, colorAdjust: c => lightenColor(c, 0.3) },
-  wicker:  { opacityMul: 0.8,  colorAdjust: c => warmShift(desaturate(c, 0.5)) },
-  metal:   { opacityMul: 0.9,  colorAdjust: c => darkenColor(desaturate(c, 0.6), 0.5) },
+const MATERIAL_MODIFIERS: Record<
+  string,
+  { opacityMul: number; colorAdjust: (c: number) => number }
+> = {
+  kraft: { opacityMul: 0.75, colorAdjust: c => desaturate(warmShift(c), 0.3) },
+  tissue: { opacityMul: 0.45, colorAdjust: c => lightenColor(c, 0.25) },
+  silk: { opacityMul: 0.85, colorAdjust: c => c },
+  ceramic: { opacityMul: 0.8, colorAdjust: c => coolShift(desaturate(c, 0.4)) },
+  glass: { opacityMul: 0.35, colorAdjust: c => lightenColor(c, 0.3) },
+  wicker: { opacityMul: 0.8, colorAdjust: c => warmShift(desaturate(c, 0.5)) },
+  metal: {
+    opacityMul: 0.9,
+    colorAdjust: c => darkenColor(desaturate(c, 0.6), 0.5),
+  },
 };
 
 /** Basket — wider than wrap, woven look. */
-function generateBasketAdornment(baseY: number, colors?: { main: number; accent: number }): AdornmentPlan {
+function generateBasketAdornment(
+  baseY: number,
+  colors?: { main: number; accent: number },
+): AdornmentPlan {
   const topY = baseY - 0.32;
   const botY = baseY + 0.06;
   const topW = 0.38;
@@ -2576,15 +3234,33 @@ function generateBasketAdornment(baseY: number, colors?: { main: number; accent:
   // Basket body — wider, rounded bottom
   const cmds: DrawCmd[] = [
     { op: "M", x: -topW, y: topY },
-    { op: "C", c1x: -topW * 0.95, c1y: topY + (botY - topY) * 0.3,
-      c2x: -botW * 1.8, c2y: botY - (botY - topY) * 0.15,
-      x: -botW, y: botY },
-    { op: "C", c1x: -botW * 0.5, c1y: botY + 0.03,
-      c2x: botW * 0.5, c2y: botY + 0.03,
-      x: botW, y: botY },
-    { op: "C", c1x: botW * 1.8, c1y: botY - (botY - topY) * 0.15,
-      c2x: topW * 0.95, c2y: topY + (botY - topY) * 0.3,
-      x: topW, y: topY },
+    {
+      op: "C",
+      c1x: -topW * 0.95,
+      c1y: topY + (botY - topY) * 0.3,
+      c2x: -botW * 1.8,
+      c2y: botY - (botY - topY) * 0.15,
+      x: -botW,
+      y: botY,
+    },
+    {
+      op: "C",
+      c1x: -botW * 0.5,
+      c1y: botY + 0.03,
+      c2x: botW * 0.5,
+      c2y: botY + 0.03,
+      x: botW,
+      y: botY,
+    },
+    {
+      op: "C",
+      c1x: botW * 1.8,
+      c1y: botY - (botY - topY) * 0.15,
+      c2x: topW * 0.95,
+      c2y: topY + (botY - topY) * 0.3,
+      x: topW,
+      y: topY,
+    },
     { op: "L", x: -topW, y: topY },
     { op: "Z" },
   ];
@@ -2592,12 +3268,24 @@ function generateBasketAdornment(baseY: number, colors?: { main: number; accent:
   // Handle arch
   const accent: DrawCmd[] = [
     { op: "M", x: -topW * 0.7, y: topY },
-    { op: "C", c1x: -topW * 0.6, c1y: topY - handleH,
-      c2x: topW * 0.6, c2y: topY - handleH,
-      x: topW * 0.7, y: topY },
-    { op: "C", c1x: topW * 0.55, c1y: topY - handleH + 0.025,
-      c2x: -topW * 0.55, c2y: topY - handleH + 0.025,
-      x: -topW * 0.7, y: topY },
+    {
+      op: "C",
+      c1x: -topW * 0.6,
+      c1y: topY - handleH,
+      c2x: topW * 0.6,
+      c2y: topY - handleH,
+      x: topW * 0.7,
+      y: topY,
+    },
+    {
+      op: "C",
+      c1x: topW * 0.55,
+      c1y: topY - handleH + 0.025,
+      c2x: -topW * 0.55,
+      c2y: topY - handleH + 0.025,
+      x: -topW * 0.7,
+      y: topY,
+    },
     { op: "Z" },
   ];
 
@@ -2613,7 +3301,10 @@ function generateBasketAdornment(baseY: number, colors?: { main: number; accent:
 }
 
 /** Urn — wide mouth, heavy body, grand presence. */
-function generateUrnAdornment(baseY: number, colors?: { main: number; accent: number }): AdornmentPlan {
+function generateUrnAdornment(
+  baseY: number,
+  colors?: { main: number; accent: number },
+): AdornmentPlan {
   const lipY = baseY - 0.32;
   const neckY = baseY - 0.26;
   const bulgeY = baseY - 0.06;
@@ -2626,33 +3317,75 @@ function generateUrnAdornment(baseY: number, colors?: { main: number; accent: nu
   const cmds: DrawCmd[] = [
     { op: "M", x: -lipW, y: lipY },
     // Lip flare outward
-    { op: "C", c1x: -lipW * 1.1, c1y: lipY + 0.02,
-      c2x: -neckW * 0.9, c2y: neckY - 0.01,
-      x: -neckW, y: neckY },
+    {
+      op: "C",
+      c1x: -lipW * 1.1,
+      c1y: lipY + 0.02,
+      c2x: -neckW * 0.9,
+      c2y: neckY - 0.01,
+      x: -neckW,
+      y: neckY,
+    },
     // Body bulges wide
-    { op: "C", c1x: -neckW * 1.2, c1y: neckY + (bulgeY - neckY) * 0.25,
-      c2x: -bulgeW * 1.05, c2y: bulgeY - (bulgeY - neckY) * 0.25,
-      x: -bulgeW, y: bulgeY },
+    {
+      op: "C",
+      c1x: -neckW * 1.2,
+      c1y: neckY + (bulgeY - neckY) * 0.25,
+      c2x: -bulgeW * 1.05,
+      c2y: bulgeY - (bulgeY - neckY) * 0.25,
+      x: -bulgeW,
+      y: bulgeY,
+    },
     // Taper to foot
-    { op: "C", c1x: -bulgeW, c1y: bulgeY + (footY - bulgeY) * 0.6,
-      c2x: -footW * 1.1, c2y: footY - 0.02,
-      x: -footW, y: footY },
+    {
+      op: "C",
+      c1x: -bulgeW,
+      c1y: bulgeY + (footY - bulgeY) * 0.6,
+      c2x: -footW * 1.1,
+      c2y: footY - 0.02,
+      x: -footW,
+      y: footY,
+    },
     // Flat bottom
     { op: "L", x: footW, y: footY },
     // Right side — mirror
-    { op: "C", c1x: footW * 1.1, c1y: footY - 0.02,
-      c2x: bulgeW, c2y: bulgeY + (footY - bulgeY) * 0.6,
-      x: bulgeW, y: bulgeY },
-    { op: "C", c1x: bulgeW * 1.05, c1y: bulgeY - (bulgeY - neckY) * 0.25,
-      c2x: neckW * 1.2, c2y: neckY + (bulgeY - neckY) * 0.25,
-      x: neckW, y: neckY },
-    { op: "C", c1x: neckW * 0.9, c1y: neckY - 0.01,
-      c2x: lipW * 1.1, c2y: lipY + 0.02,
-      x: lipW, y: lipY },
+    {
+      op: "C",
+      c1x: footW * 1.1,
+      c1y: footY - 0.02,
+      c2x: bulgeW,
+      c2y: bulgeY + (footY - bulgeY) * 0.6,
+      x: bulgeW,
+      y: bulgeY,
+    },
+    {
+      op: "C",
+      c1x: bulgeW * 1.05,
+      c1y: bulgeY - (bulgeY - neckY) * 0.25,
+      c2x: neckW * 1.2,
+      c2y: neckY + (bulgeY - neckY) * 0.25,
+      x: neckW,
+      y: neckY,
+    },
+    {
+      op: "C",
+      c1x: neckW * 0.9,
+      c1y: neckY - 0.01,
+      c2x: lipW * 1.1,
+      c2y: lipY + 0.02,
+      x: lipW,
+      y: lipY,
+    },
     // Lip top
-    { op: "C", c1x: lipW * 0.6, c1y: lipY - 0.018,
-      c2x: -lipW * 0.6, c2y: lipY - 0.018,
-      x: -lipW, y: lipY },
+    {
+      op: "C",
+      c1x: lipW * 0.6,
+      c1y: lipY - 0.018,
+      c2x: -lipW * 0.6,
+      c2y: lipY - 0.018,
+      x: -lipW,
+      y: lipY,
+    },
     { op: "Z" },
   ];
 
@@ -2660,12 +3393,24 @@ function generateUrnAdornment(baseY: number, colors?: { main: number; accent: nu
   const rimH = 0.015;
   const accent: DrawCmd[] = [
     { op: "M", x: -lipW * 0.95, y: lipY },
-    { op: "C", c1x: -lipW * 0.5, c1y: lipY - rimH,
-      c2x: lipW * 0.5, c2y: lipY - rimH,
-      x: lipW * 0.95, y: lipY },
-    { op: "C", c1x: lipW * 0.5, c1y: lipY + rimH,
-      c2x: -lipW * 0.5, c2y: lipY + rimH,
-      x: -lipW * 0.95, y: lipY },
+    {
+      op: "C",
+      c1x: -lipW * 0.5,
+      c1y: lipY - rimH,
+      c2x: lipW * 0.5,
+      c2y: lipY - rimH,
+      x: lipW * 0.95,
+      y: lipY,
+    },
+    {
+      op: "C",
+      c1x: lipW * 0.5,
+      c1y: lipY + rimH,
+      c2x: -lipW * 0.5,
+      c2y: lipY + rimH,
+      x: -lipW * 0.95,
+      y: lipY,
+    },
     { op: "Z" },
   ];
 
@@ -2720,7 +3465,8 @@ function extractAdornmentColors(
     const main = parseHexColor(meta.sprite_hints.dominant_color);
     if (main === null) return undefined;
     const accent = meta.sprite_hints.secondary_color
-      ? (parseHexColor(meta.sprite_hints.secondary_color) ?? lightenColor(main, 0.15))
+      ? (parseHexColor(meta.sprite_hints.secondary_color) ??
+        lightenColor(main, 0.15))
       : lightenColor(main, 0.15);
     return { main, accent };
   }
@@ -2735,19 +3481,32 @@ function resolveOpacityMul(spec: AdornmentSpec | undefined): number {
 }
 
 /** Apply material opacity to an adornment plan. */
-function applyMaterialOpacity(plan: AdornmentPlan, opacityMul: number): AdornmentPlan {
+function applyMaterialOpacity(
+  plan: AdornmentPlan,
+  opacityMul: number,
+): AdornmentPlan {
   if (opacityMul === 1) return plan;
   return {
     ...plan,
     opacity: plan.opacity * opacityMul,
-    accent: plan.accent ? { ...plan.accent, opacity: plan.accent.opacity * opacityMul } : undefined,
-    detail: plan.detail ? { ...plan.detail, opacity: plan.detail.opacity * opacityMul } : undefined,
+    accent: plan.accent
+      ? { ...plan.accent, opacity: plan.accent.opacity * opacityMul }
+      : undefined,
+    detail: plan.detail
+      ? { ...plan.detail, opacity: plan.detail.opacity * opacityMul }
+      : undefined,
   };
 }
 
-type AdornmentGenerator = (baseY: number, colors?: { main: number; accent: number }) => AdornmentPlan;
+type AdornmentGenerator = (
+  baseY: number,
+  colors?: { main: number; accent: number },
+) => AdornmentPlan;
 
-const CONTAINER_GENERATORS: Record<AdornmentSpec["container"]["type"], AdornmentGenerator> = {
+const CONTAINER_GENERATORS: Record<
+  AdornmentSpec["container"]["type"],
+  AdornmentGenerator
+> = {
   tie: generateTieAdornment,
   wrap: generateWrapAdornment,
   basket: generateBasketAdornment,
@@ -2756,36 +3515,50 @@ const CONTAINER_GENERATORS: Record<AdornmentSpec["container"]["type"], Adornment
 };
 
 /** Route to the correct shape generator based on AdornmentSpec container type. */
-function generateAdornmentFromSpec(baseY: number, spec: AdornmentSpec): AdornmentPlan {
+function generateAdornmentFromSpec(
+  baseY: number,
+  spec: AdornmentSpec,
+): AdornmentPlan {
   const colors = extractAdornmentColors({ adornment_spec: spec });
   const opacityMul = resolveOpacityMul(spec);
 
-  const gen = CONTAINER_GENERATORS[spec.container.type] ?? generateVaseAdornment;
+  const gen =
+    CONTAINER_GENERATORS[spec.container.type] ?? generateVaseAdornment;
   const plan = gen(baseY, colors);
 
   // Layer on a base if specified
   if (spec.base && spec.base.type !== "none" && spec.base.color) {
     const baseColor = rgbToNumber(spec.base.color);
-    const baseColors = { main: baseColor, accent: lightenColor(baseColor, 0.1) };
+    const baseColors = {
+      main: baseColor,
+      accent: lightenColor(baseColor, 0.1),
+    };
     const basePlan = generatePedestalAdornment(baseY, baseColors);
-    return applyMaterialOpacity({
-      cmds: basePlan.cmds,
-      color: basePlan.color,
-      opacity: basePlan.opacity,
-      accent: { cmds: plan.cmds, color: plan.color, opacity: plan.opacity },
-      detail: plan.accent,
-    }, opacityMul);
+    return applyMaterialOpacity(
+      {
+        cmds: basePlan.cmds,
+        color: basePlan.color,
+        opacity: basePlan.opacity,
+        accent: { cmds: plan.cmds, color: plan.color, opacity: plan.opacity },
+        detail: plan.accent,
+      },
+      opacityMul,
+    );
   }
 
   return applyMaterialOpacity(plan, opacityMul);
 }
 
 /** Pick the right adornment for an arrangement level. */
-function adornmentForLevel(level: number, baseY: number, colors?: { main: number; accent: number }): AdornmentPlan | null {
-  if (level <= 1) return null;                                      // single stem — no adornment
-  if (level <= 2) return generateTieAdornment(baseY, colors);       // group (2-3)
-  if (level <= 3) return generateWrapAdornment(baseY, colors);      // bunch (4-6)
-  if (level <= 5) return generateVaseAdornment(baseY, colors);      // arrangement/bouquet (7-19)
+function adornmentForLevel(
+  level: number,
+  baseY: number,
+  colors?: { main: number; accent: number },
+): AdornmentPlan | null {
+  if (level <= 1) return null; // single stem — no adornment
+  if (level <= 2) return generateTieAdornment(baseY, colors); // group (2-3)
+  if (level <= 3) return generateWrapAdornment(baseY, colors); // bunch (4-6)
+  if (level <= 5) return generateVaseAdornment(baseY, colors); // arrangement/bouquet (7-19)
   // centerpiece/installation (20+) — vase on a pedestal
   const vase = generateVaseAdornment(baseY, colors);
   const pedestal = generatePedestalAdornment(baseY, colors);
@@ -2828,12 +3601,20 @@ export function createArrangementPlan(
     const dy = slot.offsetY - baseY;
     const stemDist = Math.sqrt(dx * dx + dy * dy);
     const overshoot = 0.06; // push tip 6% of unit radius into the flower head
-    const tipX = stemDist > 0.01 ? slot.offsetX + (dx / stemDist) * overshoot : slot.offsetX;
-    const tipY = stemDist > 0.01 ? slot.offsetY + (dy / stemDist) * overshoot : slot.offsetY;
+    const tipX =
+      stemDist > 0.01
+        ? slot.offsetX + (dx / stemDist) * overshoot
+        : slot.offsetX;
+    const tipY =
+      stemDist > 0.01
+        ? slot.offsetY + (dy / stemDist) * overshoot
+        : slot.offsetY;
     const stemStyle = stemData?.style ?? "Straight";
     const stemCmds = generateStem(
-      0, baseY,
-      tipX, tipY,
+      0,
+      baseY,
+      tipX,
+      tipY,
       stemCurvature,
       stemHalfW,
       stemColor,
@@ -2843,18 +3624,37 @@ export function createArrangementPlan(
     const stem: StemPlan = { cmds: stemCmds, color: stemColor, thorns: [] };
 
     // One leaf per arrangement stem, placed mid-stem, smaller to avoid overlap
-    const leaves: LeafPlan[] = foliage && foliage.leaves.length > 0
-      ? [foliage.leaves[0]!].map(l => {
-          // Place at 40-60% up the stem (avoid crowded base area)
-          const pos = Math.max(0.4, Math.min(0.6, l.position));
-          const pt = stemPointAt(0, baseY, slot.offsetX, slot.offsetY, stemCurvature, pos);
-          const side = l.side === "right" ? -1 : 1;
-          const leafAngle = pt.angle + side * (Math.PI * 0.35) + l.angleOffset;
-          const leafScale = (0.2 + l.size * 0.15) * slot.scale;
-          const leaf = generateLeaf(pt.x, pt.y, leafAngle, leafScale, foliage);
-          return { cmds: leaf.outline, veins: leaf.veins, color: foliage.color };
-        })
-      : [];
+    const leaves: LeafPlan[] =
+      foliage && foliage.leaves.length > 0
+        ? [foliage.leaves[0]!].map(l => {
+            // Place at 40-60% up the stem (avoid crowded base area)
+            const pos = Math.max(0.4, Math.min(0.6, l.position));
+            const pt = stemPointAt(
+              0,
+              baseY,
+              slot.offsetX,
+              slot.offsetY,
+              stemCurvature,
+              pos,
+            );
+            const side = l.side === "right" ? -1 : 1;
+            const leafAngle =
+              pt.angle + side * (Math.PI * 0.35) + l.angleOffset;
+            const leafScale = (0.2 + l.size * 0.15) * slot.scale;
+            const leaf = generateLeaf(
+              pt.x,
+              pt.y,
+              leafAngle,
+              leafScale,
+              foliage,
+            );
+            return {
+              cmds: leaf.outline,
+              veins: leaf.veins,
+              color: foliage.color,
+            };
+          })
+        : [];
 
     return {
       flowerPlan,

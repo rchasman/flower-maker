@@ -1,5 +1,18 @@
-import { useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from "react";
-import { Application, Graphics, Container, Circle, Filter, GraphicsContextSystem } from "pixi.js";
+import {
+  useRef,
+  useEffect,
+  useCallback,
+  useImperativeHandle,
+  forwardRef,
+} from "react";
+import {
+  Application,
+  Graphics,
+  Container,
+  Circle,
+  Filter,
+  GraphicsContextSystem,
+} from "pixi.js";
 import type { FlowerRenderData } from "../wasm/loop.ts";
 import {
   fallbackColor,
@@ -15,9 +28,16 @@ import {
   drawFlowerFromPlan,
   drawArrangementFromPlan,
 } from "../flower/pixi-draw.ts";
-import { setCanvasViewport, getCanvasViewport } from "../spacetime/bridge.ts";
-import { createMergeGlowFilter, createDarkFantasyDitherFilter } from "../canvas/shaders.ts";
-import { createMergeEffect, tickMergeEffect, type MergeEffectState } from "../canvas/MergeEffect.ts";
+import { setCanvasViewport } from "../spacetime/bridge.ts";
+import {
+  createMergeGlowFilter,
+  createDarkFantasyDitherFilter,
+} from "../canvas/shaders.ts";
+import {
+  createMergeEffect,
+  tickMergeEffect,
+  type MergeEffectState,
+} from "../canvas/MergeEffect.ts";
 
 export type ConstituentEntry = { spec: string; sid: number };
 
@@ -50,7 +70,6 @@ function resolveColor(flower: FlowerRenderData): number {
 // ── Module-scope constants (hoisted from hot loops) ──
 const MERGE_GLOW_DURATION = 2000;
 
-
 const FRAME_DT = 1 / 60;
 const FLOWER_BASE_RADIUS = 70;
 const SELECTION_RING_PAD = 6;
@@ -60,7 +79,10 @@ const BLOOM_DURATION = 500;
 const BLOOM_SENTINEL_WINDOW = 2000;
 const SHAKE_DURATION = 200;
 const CONNECTOR_SEGMENTS = 8;
-const CONNECTOR_DASH_INDICES = Array.from({ length: CONNECTOR_SEGMENTS / 2 }, (_, i) => i * 2);
+const CONNECTOR_DASH_INDICES = Array.from(
+  { length: CONNECTOR_SEGMENTS / 2 },
+  (_, i) => i * 2,
+);
 
 // ── Module-level reusable Set for hot-path sid tracking (zero per-frame allocation) ──
 const _activeSids = new Set<number>();
@@ -75,12 +97,21 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const flowerGraphicsRef = useRef<Map<number, Graphics>>(new Map());
     const stageContainerRef = useRef<Container | null>(null);
     const selectedIdRef = useRef(selectedId);
-    const dragRef = useRef<{ sid: number; started: boolean; originX: number; originY: number } | null>(null);
+    const dragRef = useRef<{
+      sid: number;
+      started: boolean;
+      originX: number;
+      originY: number;
+    } | null>(null);
     const onFlowerClickRef = useRef(onFlowerClick);
     const onFlowerDragRef = useRef(onFlowerDrag);
     const onFlowerDragEndRef = useRef(onFlowerDragEnd);
     const onMergeDropRef = useRef(onMergeDrop);
-    const mergeTargetRef = useRef<{ dragSid: number; targetSid: number; distance: number } | null>(null);
+    const mergeTargetRef = useRef<{
+      dragSid: number;
+      targetSid: number;
+      distance: number;
+    } | null>(null);
     const mergeOverlayRef = useRef<Graphics | null>(null);
     const mergeOverlayOpacityRef = useRef(0);
     const mergeBloomRef = useRef<Map<number, number>>(new Map()); // sid → startTime
@@ -89,19 +120,36 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const auraGraphicsRef = useRef<Map<number, Graphics>>(new Map());
 
     // Shader filter refs
-    const mergeGlowFiltersRef = useRef<Map<number, { filter: Filter; startTime: number }>>(new Map());
+    const mergeGlowFiltersRef = useRef<
+      Map<number, { filter: Filter; startTime: number }>
+    >(new Map());
     const mergeEffectsRef = useRef<MergeEffectState[]>([]);
     const mergeParticleGfxRef = useRef<Graphics | null>(null);
     const resizeObsRef = useRef<ResizeObserver | null>(null);
 
     // Spec map, constituent map, arrangement meta, and cached plans
     const specMapRef = useRef<Map<number, string>>(new Map());
-    const constituentMapRef = useRef<Map<number, ConstituentEntry[]>>(new Map());
-    const arrangementMetaMapRef = useRef<Map<number, ArrangementMeta>>(new Map());
-    const planCacheRef = useRef<Map<number, { key: string; plan: FlowerPlan | ArrangementPlan; isArrangement: boolean }>>(new Map());
+    const constituentMapRef = useRef<Map<number, ConstituentEntry[]>>(
+      new Map(),
+    );
+    const arrangementMetaMapRef = useRef<Map<number, ArrangementMeta>>(
+      new Map(),
+    );
+    const planCacheRef = useRef<
+      Map<
+        number,
+        {
+          key: string;
+          plan: FlowerPlan | ArrangementPlan;
+          isArrangement: boolean;
+        }
+      >
+    >(new Map());
 
     // Dirty-flag tracking: skip expensive g.clear() + redraw when nothing visual changed.
-    const drawnStateRef = useRef<Map<number, { scale: number; alpha: number; selected: boolean }>>(new Map());
+    const drawnStateRef = useRef<
+      Map<number, { scale: number; alpha: number; selected: boolean }>
+    >(new Map());
 
     // Keep refs in sync without re-running effects
     selectedIdRef.current = selectedId;
@@ -111,54 +159,82 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     onMergeDropRef.current = onMergeDrop;
 
     /** Get or create the cached plan for a given sid. Returns cache key for dirty tracking. */
-    const getPlan = useCallback((sid: number): { plan: FlowerPlan | ArrangementPlan; isArrangement: boolean; key: string } => {
-      // Fast path: if plan is cached and data hasn't changed since last cache write, skip key recomputation
-      const cached = planCacheRef.current.get(sid);
-      if (cached) {
-        return { plan: cached.plan, isArrangement: cached.isArrangement, key: cached.key };
-      }
+    const getPlan = useCallback(
+      (
+        sid: number,
+      ): {
+        plan: FlowerPlan | ArrangementPlan;
+        isArrangement: boolean;
+        key: string;
+      } => {
+        // Fast path: if plan is cached and data hasn't changed since last cache write, skip key recomputation
+        const cached = planCacheRef.current.get(sid);
+        if (cached) {
+          return {
+            plan: cached.plan,
+            isArrangement: cached.isArrangement,
+            key: cached.key,
+          };
+        }
 
-      const spec = specMapRef.current.get(sid) ?? "";
-      const constituents = constituentMapRef.current.get(sid);
-      const meta = arrangementMetaMapRef.current.get(sid);
-      const isArrangement = !!constituents && constituents.length > 1;
+        const spec = specMapRef.current.get(sid) ?? "";
+        const constituents = constituentMapRef.current.get(sid);
+        const meta = arrangementMetaMapRef.current.get(sid);
+        const isArrangement = !!constituents && constituents.length > 1;
 
-      const metaKey = meta ? JSON.stringify(meta) : "";
-      const cacheKey = isArrangement
-        ? `arr:${constituents.length}:${constituents.map(c => c.spec).join("|")}:${metaKey}`
-        : spec;
+        const metaKey = meta ? JSON.stringify(meta) : "";
+        const cacheKey = isArrangement
+          ? `arr:${constituents.length}:${constituents.map(c => c.spec).join("|")}:${metaKey}`
+          : spec;
 
-      if (isArrangement) {
-        const plan = createArrangementPlan(constituents, Math.min(7, Math.ceil(constituents.length / 3)), meta);
-        planCacheRef.current.set(sid, { key: cacheKey, plan, isArrangement: true });
-        return { plan, isArrangement: true, key: cacheKey };
-      }
+        if (isArrangement) {
+          const plan = createArrangementPlan(
+            constituents,
+            Math.min(7, Math.ceil(constituents.length / 3)),
+            meta,
+          );
+          planCacheRef.current.set(sid, {
+            key: cacheKey,
+            plan,
+            isArrangement: true,
+          });
+          return { plan, isArrangement: true, key: cacheKey };
+        }
 
-      const plan = createFlowerPlan(spec || undefined, sid);
-      planCacheRef.current.set(sid, { key: cacheKey, plan, isArrangement: false });
-      return { plan, isArrangement: false, key: cacheKey };
-    }, []);
+        const plan = createFlowerPlan(spec || undefined, sid);
+        planCacheRef.current.set(sid, {
+          key: cacheKey,
+          plan,
+          isArrangement: false,
+        });
+        return { plan, isArrangement: false, key: cacheKey };
+      },
+      [],
+    );
 
     const setSpecMap = useCallback((specs: Map<number, string>) => {
       specMapRef.current = specs;
       planCacheRef.current.clear();
       drawnStateRef.current.clear();
-
     }, []);
 
-    const setConstituentMap = useCallback((constituents: Map<number, ConstituentEntry[]>) => {
-      constituentMapRef.current = constituents;
-      planCacheRef.current.clear();
-      drawnStateRef.current.clear();
+    const setConstituentMap = useCallback(
+      (constituents: Map<number, ConstituentEntry[]>) => {
+        constituentMapRef.current = constituents;
+        planCacheRef.current.clear();
+        drawnStateRef.current.clear();
+      },
+      [],
+    );
 
-    }, []);
-
-    const setArrangementMetaMap = useCallback((meta: Map<number, ArrangementMeta>) => {
-      arrangementMetaMapRef.current = meta;
-      planCacheRef.current.clear();
-      drawnStateRef.current.clear();
-
-    }, []);
+    const setArrangementMetaMap = useCallback(
+      (meta: Map<number, ArrangementMeta>) => {
+        arrangementMetaMapRef.current = meta;
+        planCacheRef.current.clear();
+        drawnStateRef.current.clear();
+      },
+      [],
+    );
 
     const updateFlowers = useCallback(
       (pool: FlowerRenderData[], count: number) => {
@@ -179,7 +255,11 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           planCacheRef.current.delete(sid);
           drawnState.delete(sid);
           const ag = auras.get(sid);
-          if (ag) { stage.removeChild(ag); ag.destroy(); auras.delete(sid); }
+          if (ag) {
+            stage.removeChild(ag);
+            ag.destroy();
+            auras.delete(sid);
+          }
         });
 
         for (let fi = 0; fi < count; fi++) {
@@ -190,8 +270,13 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             g.eventMode = "static";
             g.cursor = "grab";
             const sid = flower.sid;
-            g.on("pointerdown", (e) => {
-              dragRef.current = { sid, started: false, originX: e.global.x, originY: e.global.y };
+            g.on("pointerdown", e => {
+              dragRef.current = {
+                sid,
+                started: false,
+                originX: e.global.x,
+                originY: e.global.y,
+              };
               e.stopPropagation();
             });
             g.on("pointerup", () => {
@@ -201,7 +286,10 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             stage.addChild(g);
 
             const bloomSentinel = mergeBloomRef.current.get(-1);
-            if (bloomSentinel && performance.now() - bloomSentinel < BLOOM_SENTINEL_WINDOW) {
+            if (
+              bloomSentinel &&
+              performance.now() - bloomSentinel < BLOOM_SENTINEL_WINDOW
+            ) {
               mergeBloomRef.current.delete(-1);
               mergeBloomRef.current.set(flower.sid, performance.now());
             }
@@ -213,16 +301,20 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           const isSelected = selectedIdRef.current === flower.sid;
 
           const flowerPlan = !isArrangement ? (plan as FlowerPlan) : null;
-          const hasParticles = flowerPlan != null && flowerPlan.particles.length > 0;
-          const hasAura = flower.has_glow || flower.has_aura
-            || (flowerPlan != null && flowerPlan.aura != null);
+          const hasParticles =
+            flowerPlan != null && flowerPlan.particles.length > 0;
+          const hasAura =
+            flower.has_glow ||
+            flower.has_aura ||
+            (flowerPlan != null && flowerPlan.aura != null);
 
           const prev = drawnState.get(flower.sid);
-          const needsRedraw = !prev
-            || prev.scale !== flower.scale
-            || prev.alpha !== flower.alpha
-            || prev.selected !== isSelected
-            || hasParticles; // particles animate every frame
+          const needsRedraw =
+            !prev ||
+            prev.scale !== flower.scale ||
+            prev.alpha !== flower.alpha ||
+            prev.selected !== isSelected ||
+            hasParticles; // particles animate every frame
 
           if (needsRedraw) {
             const hitRadius = isArrangement ? r * 2.5 : r * 1.8;
@@ -231,7 +323,9 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             g.clear();
 
             if (isSelected) {
-              const ringR = isArrangement ? r * 1.2 + SELECTION_RING_PAD : r * 0.55 + SELECTION_RING_PAD;
+              const ringR = isArrangement
+                ? r * 1.2 + SELECTION_RING_PAD
+                : r * 0.55 + SELECTION_RING_PAD;
               g.circle(0, 0, ringR);
               g.stroke({ color: 0xffffff, width: 2, alpha: 0.7 });
             }
@@ -242,7 +336,11 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
               drawFlowerFromPlan(g, plan as FlowerPlan, r, alpha);
             }
 
-            drawnState.set(flower.sid, { scale: flower.scale, alpha: flower.alpha, selected: isSelected });
+            drawnState.set(flower.sid, {
+              scale: flower.scale,
+              alpha: flower.alpha,
+              selected: isSelected,
+            });
           }
 
           // Auras render every frame (they use performance.now() for pulsing animation)
@@ -285,21 +383,26 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             const elapsed = performance.now() - bloomStart;
             if (elapsed < BLOOM_DURATION) {
               const progress = elapsed / BLOOM_DURATION;
-              const bloomScale = 1 + 0.15 * Math.sin(progress * Math.PI) * (1 - progress * 0.5);
+              const bloomScale =
+                1 + 0.15 * Math.sin(progress * Math.PI) * (1 - progress * 0.5);
               g.scale.set(bloomScale);
             } else {
               g.scale.set(1);
               mergeBloomRef.current.delete(flower.sid);
             }
           }
-
         }
 
         // ── Merge proximity detection (only when actively dragging) ──
         const drag = dragRef.current;
         let draggedFlower: FlowerRenderData | null = null;
         if (drag?.started) {
-          for (let i = 0; i < count; i++) { if (pool[i]!.sid === drag.sid) { draggedFlower = pool[i]!; break; } }
+          for (let i = 0; i < count; i++) {
+            if (pool[i]!.sid === drag.sid) {
+              draggedFlower = pool[i]!;
+              break;
+            }
+          }
         }
         if (drag?.started && draggedFlower) {
           // Single pass nearest-neighbor — no intermediate arrays
@@ -308,16 +411,24 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           for (let i = 0; i < count; i++) {
             const f = pool[i]!;
             if (f.sid === draggedFlower.sid) continue;
-            const dist = Math.hypot(f.x - draggedFlower.x, f.y - draggedFlower.y);
+            const dist = Math.hypot(
+              f.x - draggedFlower.x,
+              f.y - draggedFlower.y,
+            );
             if (dist < nearestDist) {
               nearestDist = dist;
               nearestSid = f.sid;
             }
           }
 
-          mergeTargetRef.current = nearestSid >= 0
-            ? { dragSid: draggedFlower.sid, targetSid: nearestSid, distance: nearestDist }
-            : null;
+          mergeTargetRef.current =
+            nearestSid >= 0
+              ? {
+                  dragSid: draggedFlower.sid,
+                  targetSid: nearestSid,
+                  distance: nearestDist,
+                }
+              : null;
 
           const g = flowerGraphicsRef.current.get(drag.sid);
           if (g) g.cursor = mergeTargetRef.current ? "cell" : "grabbing";
@@ -328,8 +439,11 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         // ── Merge overlay ring (smooth opacity lerp) ──
         const targetOpacity = mergeTargetRef.current ? 1 : 0;
         const lerpSpeed = targetOpacity > 0 ? 8.0 : 12.0; // faster fade-out
-        mergeOverlayOpacityRef.current += (targetOpacity - mergeOverlayOpacityRef.current) * Math.min(1, lerpSpeed * FRAME_DT);
-        if (mergeOverlayOpacityRef.current < 0.01) mergeOverlayOpacityRef.current = 0;
+        mergeOverlayOpacityRef.current +=
+          (targetOpacity - mergeOverlayOpacityRef.current) *
+          Math.min(1, lerpSpeed * FRAME_DT);
+        if (mergeOverlayOpacityRef.current < 0.01)
+          mergeOverlayOpacityRef.current = 0;
 
         if (!mergeOverlayRef.current && stage) {
           mergeOverlayRef.current = new Graphics();
@@ -341,7 +455,12 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           const mt = mergeTargetRef.current;
           if (mt && mergeOverlayOpacityRef.current > 0) {
             let targetFlower: FlowerRenderData | undefined;
-            for (let i = 0; i < count; i++) { if (pool[i]!.sid === mt.targetSid) { targetFlower = pool[i]!; break; } }
+            for (let i = 0; i < count; i++) {
+              if (pool[i]!.sid === mt.targetSid) {
+                targetFlower = pool[i]!;
+                break;
+              }
+            }
             if (targetFlower) {
               const proximity = 1 - mt.distance / MERGE_RANGE;
               const pulse = 0.3 + 0.2 * Math.sin(performance.now() / 200);
@@ -355,17 +474,25 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
 
               if (draggedFlower) {
                 for (let ci = 0; ci < CONNECTOR_DASH_INDICES.length; ci++) {
-                    const idx = CONNECTOR_DASH_INDICES[ci]!;
-                    const t0 = idx / CONNECTOR_SEGMENTS;
-                    const t1 = (idx + 1) / CONNECTOR_SEGMENTS;
-                    const x0 = draggedFlower.x + (targetFlower.x - draggedFlower.x) * t0;
-                    const y0 = draggedFlower.y + (targetFlower.y - draggedFlower.y) * t0;
-                    const x1 = draggedFlower.x + (targetFlower.x - draggedFlower.x) * t1;
-                    const y1 = draggedFlower.y + (targetFlower.y - draggedFlower.y) * t1;
-                    overlay.moveTo(x0, y0);
-                    overlay.lineTo(x1, y1);
-                    overlay.stroke({ color: 0xc4b5fd, width: 1, alpha: alpha * 0.5 });
-                  }
+                  const idx = CONNECTOR_DASH_INDICES[ci]!;
+                  const t0 = idx / CONNECTOR_SEGMENTS;
+                  const t1 = (idx + 1) / CONNECTOR_SEGMENTS;
+                  const x0 =
+                    draggedFlower.x + (targetFlower.x - draggedFlower.x) * t0;
+                  const y0 =
+                    draggedFlower.y + (targetFlower.y - draggedFlower.y) * t0;
+                  const x1 =
+                    draggedFlower.x + (targetFlower.x - draggedFlower.x) * t1;
+                  const y1 =
+                    draggedFlower.y + (targetFlower.y - draggedFlower.y) * t1;
+                  overlay.moveTo(x0, y0);
+                  overlay.lineTo(x1, y1);
+                  overlay.stroke({
+                    color: 0xc4b5fd,
+                    width: 1,
+                    alpha: alpha * 0.5,
+                  });
+                }
               }
             }
           }
@@ -379,7 +506,9 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             // Remove expired glow filter
             const g = graphics.get(sid);
             if (g) {
-              g.filters = ((g.filters ?? []) as Filter[]).filter(f => f !== filter);
+              g.filters = ((g.filters ?? []) as Filter[]).filter(
+                f => f !== filter,
+              );
             }
             mergeGlowFiltersRef.current.delete(sid);
           } else {
@@ -419,12 +548,16 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
       [getPlan],
     );
 
-    useImperativeHandle(ref, () => ({ updateFlowers, setSpecMap, setConstituentMap, setArrangementMetaMap }), [
-      updateFlowers,
-      setSpecMap,
-      setConstituentMap,
-      setArrangementMetaMap,
-    ]);
+    useImperativeHandle(
+      ref,
+      () => ({
+        updateFlowers,
+        setSpecMap,
+        setConstituentMap,
+        setArrangementMetaMap,
+      }),
+      [updateFlowers, setSpecMap, setConstituentMap, setArrangementMetaMap],
+    );
 
     useEffect(() => {
       const el = containerRef.current;
@@ -437,7 +570,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
       const app = new Application();
       let destroyed = false;
 
-      app
+      void app
         .init({
           background: 0x0d0d0d,
           resizeTo: el,
@@ -477,7 +610,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           resizeObs.observe(el);
           resizeObsRef.current = resizeObs;
 
-          app.stage.on("pointermove", (e) => {
+          app.stage.on("pointermove", e => {
             const drag = dragRef.current;
             if (!drag) return;
             const pos = e.global;
@@ -557,7 +690,11 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
                   requestAnimationFrame(shakeFrame);
                 }
               } else if (g) {
-                onFlowerDragEndRef.current?.(drag.sid, g.position.x, g.position.y);
+                onFlowerDragEndRef.current?.(
+                  drag.sid,
+                  g.position.x,
+                  g.position.y,
+                );
               }
 
               dragRef.current = null;

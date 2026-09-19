@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "../session/SessionProvider.tsx";
-import { useFlowerSessions, useFlowerSpecs, usePartOverrides } from "../spacetime/hooks.ts";
+import {
+  useFlowerSessions,
+  useFlowerSpecs,
+  usePartOverrides,
+} from "../spacetime/hooks.ts";
 import { PanelPopout } from "../ui/PanelPopout.tsx";
 import { TemplatePicker } from "./TemplatePicker.tsx";
 import { FlowerChat } from "../ai/FlowerChat.tsx";
@@ -12,7 +16,11 @@ import { FlowerCanvas } from "./FlowerCanvas.tsx";
 import type { FlowerCanvasHandle } from "./FlowerCanvas.tsx";
 import { loadWasm, type GardenSim } from "../wasm/loader.ts";
 import { startLoop, stopLoop } from "../wasm/loop.ts";
-import { wireToWasm, handleMerge, getCanvasViewport } from "../spacetime/bridge.ts";
+import {
+  wireToWasm,
+  handleMerge,
+  getCanvasViewport,
+} from "../spacetime/bridge.ts";
 import type { FlowerSession, FlowerPartOverride } from "../spacetime/types.ts";
 import { isVariant } from "../spacetime/types.ts";
 import { parseArrangementMeta } from "../flower/render.ts";
@@ -20,7 +28,10 @@ import { groupBy, setNestedValue, parseSpec } from "../lib/utils.ts";
 import { stringify } from "yaml";
 
 /** Merge field-level part overrides into a spec YAML string. */
-function applyFieldOverrides(specYaml: string, overrides: FlowerPartOverride[]): string {
+function applyFieldOverrides(
+  specYaml: string,
+  overrides: FlowerPartOverride[],
+): string {
   const fieldOverrides = overrides.filter(
     o => !o.partPath.startsWith("constituent:") && o.partPath !== "arrangement",
   );
@@ -64,9 +75,18 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
         setSelectedId(null);
         return;
       }
-      if ((e.key === "Delete" || e.key === "Backspace") && selectedIdRef.current !== null) {
-        if ((e.target as HTMLElement).tagName === "INPUT" || (e.target as HTMLElement).tagName === "TEXTAREA") return;
-        conn?.reducers.deleteSession({ sessionId: BigInt(selectedIdRef.current) });
+      if (
+        (e.key === "Delete" || e.key === "Backspace") &&
+        selectedIdRef.current !== null
+      ) {
+        if (
+          (e.target as HTMLElement).tagName === "INPUT" ||
+          (e.target as HTMLElement).tagName === "TEXTAREA"
+        )
+          return;
+        void conn?.reducers.deleteSession({
+          sessionId: BigInt(selectedIdRef.current),
+        });
         setSelectedId(null);
       }
     };
@@ -89,7 +109,17 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
   sessionsRef.current = mySessions;
 
   // Streaming state: track multiple concurrent generations by genId
-  const streamingRef = useRef<Map<string, { sid: number | null; spec: string | null; preCount: number; lastPushedSpec: string | null }>>(new Map());
+  const streamingRef = useRef<
+    Map<
+      string,
+      {
+        sid: number | null;
+        spec: string | null;
+        preCount: number;
+        lastPushedSpec: string | null;
+      }
+    >
+  >(new Map());
   const genCounter = useRef(0);
 
   // Push spec data to canvas whenever specs update, merging any streaming specs.
@@ -113,7 +143,10 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
             // SID just resolved — persist the spec to DB
             if (entry.spec && entry.spec !== entry.lastPushedSpec) {
               entry.lastPushedSpec = entry.spec;
-              conn?.reducers.updateFlowerSpec({ sessionId: BigInt(resolvedSid), spec: entry.spec });
+              void conn?.reducers.updateFlowerSpec({
+                sessionId: BigInt(resolvedSid),
+                spec: entry.spec,
+              });
             }
           }
         }
@@ -155,11 +188,14 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
 
     const arrangementMetaMap = partOverrides
       .filter(o => o.partPath === "arrangement")
-      .reduce<Map<number, import("../flower/render.ts").ArrangementMeta>>((acc, o) => {
-        const meta = parseArrangementMeta(o.overrideJson);
-        if (meta) acc.set(Number(o.sessionId), meta);
-        return acc;
-      }, new Map());
+      .reduce<Map<number, import("../flower/render.ts").ArrangementMeta>>(
+        (acc, o) => {
+          const meta = parseArrangementMeta(o.overrideJson);
+          if (meta) acc.set(Number(o.sessionId), meta);
+          return acc;
+        },
+        new Map(),
+      );
     canvasRef.current?.setArrangementMetaMap(arrangementMetaMap);
   }, [partOverrides]);
 
@@ -167,7 +203,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     if (!conn || wasmInitialized.current) return;
     wasmInitialized.current = true;
 
-    loadWasm().then(sim => {
+    void loadWasm().then(sim => {
       simRef.current = sim;
       wireToWasm(conn, sim);
       startLoop(
@@ -187,140 +223,184 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
 
   const pendingMergesRef = useRef<Set<string>>(new Set());
 
-  const handleMergeDrop = useCallback((dragSid: number, targetSid: number) => {
-    const key = [Math.min(dragSid, targetSid), Math.max(dragSid, targetSid)].join("+");
-    if (pendingMergesRef.current.has(key)) return;
-    pendingMergesRef.current.add(key);
-    handleMerge(conn!, dragSid, targetSid).finally(() => {
-      pendingMergesRef.current.delete(key);
-    });
-  }, [conn]);
+  const handleMergeDrop = useCallback(
+    (dragSid: number, targetSid: number) => {
+      const key = [
+        Math.min(dragSid, targetSid),
+        Math.max(dragSid, targetSid),
+      ].join("+");
+      if (pendingMergesRef.current.has(key)) return;
+      pendingMergesRef.current.add(key);
+      void handleMerge(conn!, dragSid, targetSid).finally(() => {
+        pendingMergesRef.current.delete(key);
+      });
+    },
+    [conn],
+  );
 
   const handleFlowerDrag = useCallback((sid: number, x: number, y: number) => {
     simRef.current?.set_body_position(BigInt(sid), x, y);
   }, []);
 
-  const handleFlowerDragEnd = useCallback((sid: number, x: number, y: number) => {
-    const { w, h, pad } = getCanvasViewport();
-    const nx = Math.max(0, Math.min(100, ((x - pad) / (w - pad * 2)) * 100));
-    const ny = Math.max(0, Math.min(100, ((y - pad) / (h - pad * 2)) * 100));
-    conn?.reducers.updatePosition({ sessionId: BigInt(sid), x: nx, y: ny });
-  }, [conn]);
+  const handleFlowerDragEnd = useCallback(
+    (sid: number, x: number, y: number) => {
+      const { w, h, pad } = getCanvasViewport();
+      const nx = Math.max(0, Math.min(100, ((x - pad) / (w - pad * 2)) * 100));
+      const ny = Math.max(0, Math.min(100, ((y - pad) / (h - pad * 2)) * 100));
+      void conn?.reducers.updatePosition({
+        sessionId: BigInt(sid),
+        x: nx,
+        y: ny,
+      });
+    },
+    [conn],
+  );
 
   // ── Streaming generation handlers ──
 
-  const handleGenerationStart = useCallback((prompt: string): string => {
-    const genId = `gen-${++genCounter.current}-${Date.now()}`;
-    streamingRef.current.set(genId, {
-      sid: null,
-      spec: null,
-      preCount: sessionsRef.current.length,
-      lastPushedSpec: null,
-    });
-    conn?.reducers.createSession({ prompt });
-    return genId;
-  }, [conn]);
+  const handleGenerationStart = useCallback(
+    (prompt: string): string => {
+      const genId = `gen-${++genCounter.current}-${Date.now()}`;
+      streamingRef.current.set(genId, {
+        sid: null,
+        spec: null,
+        preCount: sessionsRef.current.length,
+        lastPushedSpec: null,
+      });
+      void conn?.reducers.createSession({ prompt });
+      return genId;
+    },
+    [conn],
+  );
 
-  const resolveStreamingSid = useCallback((entry: { sid: number | null; preCount: number }) => {
-    if (entry.sid !== null) return entry.sid;
-    const claimedSids = new Set(
-      [...streamingRef.current.values()]
-        .filter(e => e.sid !== null)
-        .map(e => e.sid!),
-    );
-    const unclaimed = sessionsRef.current.filter(
-      s => !claimedSids.has(Number(s.id)),
-    );
-    if (unclaimed.length > 0 && sessionsRef.current.length > entry.preCount) {
-      const sid = Number(unclaimed[unclaimed.length - 1]!.id);
-      entry.sid = sid;
-      return sid;
-    }
-    return null;
-  }, []);
+  const resolveStreamingSid = useCallback(
+    (entry: { sid: number | null; preCount: number }) => {
+      if (entry.sid !== null) return entry.sid;
+      const claimedSids = new Set(
+        [...streamingRef.current.values()]
+          .filter(e => e.sid !== null)
+          .map(e => e.sid!),
+      );
+      const unclaimed = sessionsRef.current.filter(
+        s => !claimedSids.has(Number(s.id)),
+      );
+      if (unclaimed.length > 0 && sessionsRef.current.length > entry.preCount) {
+        const sid = Number(unclaimed[unclaimed.length - 1]!.id);
+        entry.sid = sid;
+        return sid;
+      }
+      return null;
+    },
+    [],
+  );
 
-  const handleSpecProgress = useCallback((genId: string, spec: string) => {
-    const entry = streamingRef.current.get(genId);
-    if (!entry) return;
+  const handleSpecProgress = useCallback(
+    (genId: string, spec: string) => {
+      const entry = streamingRef.current.get(genId);
+      if (!entry) return;
 
-    entry.spec = spec;
-    resolveStreamingSid(entry);
-
-    if (entry.sid === null) return;
-
-    const specMap = specsRef.current.reduce<Map<number, string>>(
-      (acc, s) => acc.set(Number(s.sessionId), s.spec),
-      new Map(),
-    );
-    for (const e of streamingRef.current.values()) {
-      if (e.sid !== null && e.spec) specMap.set(e.sid, e.spec);
-    }
-    canvasRef.current?.setSpecMap(specMap);
-
-    if (spec !== entry.lastPushedSpec) {
-      entry.lastPushedSpec = spec;
-      conn?.reducers.updateFlowerSpec({ sessionId: BigInt(entry.sid), spec });
-    }
-  }, [resolveStreamingSid, conn]);
-
-  const handleFlowerGenerated = useCallback((genId: string, spec: string) => {
-    const entry = streamingRef.current.get(genId);
-    if (entry) {
-      // Final SID resolution attempt
+      entry.spec = spec;
       resolveStreamingSid(entry);
 
-      // Persist the completed spec to DB — this is the authoritative save
-      if (entry.sid !== null) {
-        conn?.reducers.updateFlowerSpec({ sessionId: BigInt(entry.sid), spec });
+      if (entry.sid === null) return;
 
-        // Update canvas immediately with the final spec — don't wait for
-        // the DB round-trip, otherwise the flower reverts to the last partial
-        // streaming spec between delete and subscription update.
-        entry.spec = spec;
-        const specMap = specsRef.current.reduce<Map<number, string>>(
-          (acc, s) => acc.set(Number(s.sessionId), s.spec),
-          new Map(),
-        );
-        for (const e of streamingRef.current.values()) {
-          if (e.sid !== null && e.spec) specMap.set(e.sid, e.spec);
+      const specMap = specsRef.current.reduce<Map<number, string>>(
+        (acc, s) => acc.set(Number(s.sessionId), s.spec),
+        new Map(),
+      );
+      for (const e of streamingRef.current.values()) {
+        if (e.sid !== null && e.spec) specMap.set(e.sid, e.spec);
+      }
+      canvasRef.current?.setSpecMap(specMap);
+
+      if (spec !== entry.lastPushedSpec) {
+        entry.lastPushedSpec = spec;
+        void conn?.reducers.updateFlowerSpec({
+          sessionId: BigInt(entry.sid),
+          spec,
+        });
+      }
+    },
+    [resolveStreamingSid, conn],
+  );
+
+  const handleFlowerGenerated = useCallback(
+    (genId: string, spec: string) => {
+      const entry = streamingRef.current.get(genId);
+      if (entry) {
+        // Final SID resolution attempt
+        resolveStreamingSid(entry);
+
+        // Persist the completed spec to DB — this is the authoritative save
+        if (entry.sid !== null) {
+          void conn?.reducers.updateFlowerSpec({
+            sessionId: BigInt(entry.sid),
+            spec,
+          });
+
+          // Update canvas immediately with the final spec — don't wait for
+          // the DB round-trip, otherwise the flower reverts to the last partial
+          // streaming spec between delete and subscription update.
+          entry.spec = spec;
+          const specMap = specsRef.current.reduce<Map<number, string>>(
+            (acc, s) => acc.set(Number(s.sessionId), s.spec),
+            new Map(),
+          );
+          for (const e of streamingRef.current.values()) {
+            if (e.sid !== null && e.spec) specMap.set(e.sid, e.spec);
+          }
+          canvasRef.current?.setSpecMap(specMap);
+        } else {
+          // SID still unresolved — defer until session appears in subscription
+          entry.spec = spec;
+          setTimeout(() => {
+            resolveStreamingSid(entry);
+            if (entry.sid !== null) {
+              void conn?.reducers.updateFlowerSpec({
+                sessionId: BigInt(entry.sid),
+                spec,
+              });
+            }
+            streamingRef.current.delete(genId);
+          }, 3000);
+          return;
         }
-        canvasRef.current?.setSpecMap(specMap);
+      }
+      streamingRef.current.delete(genId);
+    },
+    [resolveStreamingSid, conn],
+  );
+
+  const handleGenerationFailed = useCallback(
+    (genId: string) => {
+      const entry = streamingRef.current.get(genId);
+      if (!entry) return;
+      resolveStreamingSid(entry);
+      if (entry.sid !== null) {
+        void conn?.reducers.deleteSession({ sessionId: BigInt(entry.sid) });
+        streamingRef.current.delete(genId);
       } else {
-        // SID still unresolved — defer until session appears in subscription
-        entry.spec = spec;
         setTimeout(() => {
           resolveStreamingSid(entry);
           if (entry.sid !== null) {
-            conn?.reducers.updateFlowerSpec({ sessionId: BigInt(entry.sid), spec });
+            void conn?.reducers.deleteSession({ sessionId: BigInt(entry.sid) });
           }
           streamingRef.current.delete(genId);
-        }, 3000);
-        return;
+        }, 2000);
       }
-    }
-    streamingRef.current.delete(genId);
-  }, [resolveStreamingSid, conn]);
-
-  const handleGenerationFailed = useCallback((genId: string) => {
-    const entry = streamingRef.current.get(genId);
-    if (!entry) return;
-    resolveStreamingSid(entry);
-    if (entry.sid !== null) {
-      conn?.reducers.deleteSession({ sessionId: BigInt(entry.sid) });
-      streamingRef.current.delete(genId);
-    } else {
-      setTimeout(() => {
-        resolveStreamingSid(entry);
-        if (entry.sid !== null) {
-          conn?.reducers.deleteSession({ sessionId: BigInt(entry.sid) });
-        }
-        streamingRef.current.delete(genId);
-      }, 2000);
-    }
-  }, [conn, resolveStreamingSid]);
+    },
+    [conn, resolveStreamingSid],
+  );
 
   return (
-    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
       {/* ── Top status bar ── */}
       <div
         style={{
@@ -336,12 +416,18 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
         <button
           onClick={onBackToGrid}
           className="tui-btn"
-          style={{ padding: "0.125rem 0.75ch", fontSize: "var(--tui-font-size-xs)" }}
+          style={{
+            padding: "0.125rem 0.75ch",
+            fontSize: "var(--tui-font-size-xs)",
+          }}
         >
           ← GRID
         </button>
         <span style={{ color: "var(--tui-border)" }}>│</span>
-        <span className="tui-glow-green" style={{ color: "var(--tui-green)", fontWeight: 600 }}>
+        <span
+          className="tui-glow-green"
+          style={{ color: "var(--tui-green)", fontWeight: 600 }}
+        >
           DESIGNER
         </span>
         <span style={{ color: "var(--tui-fg-4)" }}>
@@ -353,7 +439,14 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
       </div>
 
       {/* ── Full-width canvas ── */}
-      <div style={{ flex: 1, minHeight: 0, position: "relative", background: "var(--tui-bg-0)" }}>
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          position: "relative",
+          background: "var(--tui-bg-0)",
+        }}
+      >
         <FlowerCanvas
           ref={canvasRef}
           selectedId={selectedId}
@@ -373,9 +466,23 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
         panelClassName="popout-panel--compose"
       >
         <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-          <TemplatePicker conn={conn} model={model} onGenerationStart={handleGenerationStart} onSpecProgress={handleSpecProgress} onFlowerGenerated={handleFlowerGenerated} onGenerationFailed={handleGenerationFailed} />
+          <TemplatePicker
+            conn={conn}
+            model={model}
+            onGenerationStart={handleGenerationStart}
+            onSpecProgress={handleSpecProgress}
+            onFlowerGenerated={handleFlowerGenerated}
+            onGenerationFailed={handleGenerationFailed}
+          />
         </div>
-        <FlowerChat model={model} onGenerationStart={handleGenerationStart} onSpecProgress={handleSpecProgress} onFlowerGenerated={handleFlowerGenerated} onGenerationFailed={handleGenerationFailed} compact />
+        <FlowerChat
+          model={model}
+          onGenerationStart={handleGenerationStart}
+          onSpecProgress={handleSpecProgress}
+          onFlowerGenerated={handleFlowerGenerated}
+          onGenerationFailed={handleGenerationFailed}
+          compact
+        />
       </PanelPopout>
 
       {/* ── CANVAS popout (activity feed + order/taxonomy) ── */}
@@ -417,24 +524,31 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
               sessionId={Number(selected.id)}
               spec={selectedSpec?.spec ?? ""}
               constituents={partOverrides
-                .filter(o => o.sessionId === selected.id && o.partPath.startsWith("constituent:"))
+                .filter(
+                  o =>
+                    o.sessionId === selected.id &&
+                    o.partPath.startsWith("constituent:"),
+                )
                 .map(o => ({
                   index: parseInt(o.partPath.split(":")[1] ?? "0", 10),
                   spec: o.overrideJson,
                   forkedFrom: o.forkedFrom,
                 }))
-                .sort((a, b) => a.index - b.index)
-              }
+                .sort((a, b) => a.index - b.index)}
             />
           )}
           {rightPanel === "parts" && !selected && (
-            <div style={{ color: "var(--tui-fg-4)", fontSize: "var(--tui-font-size-sm)" }}>
+            <div
+              style={{
+                color: "var(--tui-fg-4)",
+                fontSize: "var(--tui-font-size-sm)",
+              }}
+            >
               select a flower to edit parts.
             </div>
           )}
         </div>
       </PanelPopout>
-
     </div>
   );
 }

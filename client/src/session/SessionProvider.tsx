@@ -1,4 +1,10 @@
-import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  type ReactNode,
+} from "react";
 import { useAuth } from "react-oidc-context";
 import { useSpacetimeDB, useUsers } from "../spacetime/hooks.ts";
 import {
@@ -50,25 +56,35 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   // After connecting with OIDC, claim the anonymous identity if one was saved
   useEffect(() => {
-    if (!conn || !oidcToken || state !== "connected" || claimAttempted.current) return;
+    if (!conn || !oidcToken || state !== "connected" || claimAttempted.current)
+      return;
 
     const anonHex = getSavedAnonIdentityHex();
     if (!anonHex) return;
 
     claimAttempted.current = true;
     console.log("[auth] claiming anonymous identity:", anonHex);
-    conn.reducers.claimAnonymousIdentity({ anonToken: anonHex });
+    void conn.reducers.claimAnonymousIdentity({ anonToken: anonHex });
     clearSavedAnonIdentity();
   }, [conn, oidcToken, state]);
 
-  const identityHex = state === "connected" ? identityStr(getMyIdentity()) : null;
+  const identityHex =
+    state === "connected" ? identityStr(getMyIdentity()) : null;
 
   const myUser = identityHex
-    ? users.find(u => identityStr(u.identity) === identityHex) ?? null
+    ? (users.find(u => identityStr(u.identity) === identityHex) ?? null)
     : null;
 
   return (
-    <Ctx.Provider value={{ state, conn, identityHex, myUser, isSignedIn: auth.isAuthenticated }}>
+    <Ctx.Provider
+      value={{
+        state,
+        conn,
+        identityHex,
+        myUser,
+        isSignedIn: auth.isAuthenticated,
+      }}
+    >
       {children}
     </Ctx.Provider>
   );

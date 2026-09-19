@@ -16,7 +16,14 @@ function extractName(raw: string): string {
   return (parsed?.name as string) ?? "your flower";
 }
 
-export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerGenerated, onGenerationFailed, compact }: FlowerChatProps) {
+export function FlowerChat({
+  model,
+  onGenerationStart,
+  onSpecProgress,
+  onFlowerGenerated,
+  onGenerationFailed,
+  compact,
+}: FlowerChatProps) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [activeCount, setActiveCount] = useState(0);
@@ -74,7 +81,11 @@ export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerG
       }
 
       setMessages(prev =>
-        prev.map((m, i) => i === msgIdx.current ? { ...m, content: `[ok] created: ${extractName(raw)}` } : m),
+        prev.map((m, i) =>
+          i === msgIdx.current
+            ? { ...m, content: `[ok] created: ${extractName(raw)}` }
+            : m,
+        ),
       );
 
       onFlowerGenerated?.(genId, raw);
@@ -100,7 +111,15 @@ export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerG
           alignItems: "center",
         }}
       >
-        <span style={{ color: "var(--tui-fg-4)", fontSize: "var(--tui-font-size-2xs)", whiteSpace: "nowrap" }}>AI</span>
+        <span
+          style={{
+            color: "var(--tui-fg-4)",
+            fontSize: "var(--tui-font-size-2xs)",
+            whiteSpace: "nowrap",
+          }}
+        >
+          AI
+        </span>
         <div className="tui-input-wrap" style={{ flex: 1 }}>
           <input
             value={input}
@@ -139,9 +158,7 @@ export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerG
       <div className="tui-section-header">
         <span>── AI PROMPT</span>
         {activeCount > 0 && (
-          <span className="tui-badge tui-badge-amber">
-            GEN×{activeCount}
-          </span>
+          <span className="tui-badge tui-badge-amber">GEN×{activeCount}</span>
         )}
       </div>
 
@@ -191,22 +208,23 @@ export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerG
                 </>
               ) : (
                 <>
-                  <span style={{ color: msg.content.startsWith("[err]") ? "var(--tui-red)" : "var(--tui-green)" }}>
-                    {msg.content.startsWith("[err]") ? "✗ " : msg.content.startsWith("[ok]") ? "✓ " : "⋯ "}
-                  </span>
                   <span
-                    className="msg"
                     style={{
                       color: msg.content.startsWith("[err]")
                         ? "var(--tui-red)"
-                        : msg.content.startsWith("[ok]")
-                        ? "var(--tui-green)"
-                        : "var(--tui-fg-2)",
+                        : "var(--tui-green)",
                     }}
+                  >
+                    {statusOf(msg.content).mark}
+                  </span>
+                  <span
+                    className="msg"
+                    style={{ color: statusOf(msg.content).color }}
                   >
                     {msg.content || (
                       <span>
-                        generating<span className="tui-generating" />
+                        generating
+                        <span className="tui-generating" />
                       </span>
                     )}
                   </span>
@@ -250,6 +268,14 @@ export function FlowerChat({ model, onGenerationStart, onSpecProgress, onFlowerG
       </div>
     </div>
   );
+}
+
+function statusOf(content: string): { mark: string; color: string } {
+  if (content.startsWith("[err]"))
+    return { mark: "✗ ", color: "var(--tui-red)" };
+  if (content.startsWith("[ok]"))
+    return { mark: "✓ ", color: "var(--tui-green)" };
+  return { mark: "⋯ ", color: "var(--tui-fg-2)" };
 }
 
 interface ChatMsg {
