@@ -8,7 +8,9 @@ import { getMyIdentity } from "./connection.ts";
 function identityHex(id: unknown): string {
   if (!id) return "";
   // SpacetimeDB v2 Identity objects have toHexString or toString methods
-  if (typeof (id as { toHexString?: () => string }).toHexString === "function") {
+  if (
+    typeof (id as { toHexString?: () => string }).toHexString === "function"
+  ) {
     return (id as { toHexString: () => string }).toHexString();
   }
   const s = String(id);
@@ -71,10 +73,10 @@ function resolvePosition(
 /// Seeds existing rows then listens for future changes.
 export function wireToWasm(conn: DbConnection, sim: GardenSim) {
   // Seed existing sessions owned by the current user
-  const existing = [...conn.db.flower_session.iter()].filter(
+  const existing = [...conn.db.flowerSession.iter()].filter(
     s => isVariant(s.status, "Designing") && isMySession(s),
   );
-  const specLookup = [...conn.db.flower_spec.iter()].reduce(
+  const specLookup = [...conn.db.flowerSpec.iter()].reduce(
     (acc, spec) => acc.set(spec.sessionId, spec.spec),
     new Map<bigint, string>(),
   );
@@ -84,25 +86,25 @@ export function wireToWasm(conn: DbConnection, sim: GardenSim) {
     return session.id;
   });
 
-  conn.db.flower_session.onInsert((_ctx, session: FlowerSession) => {
+  conn.db.flowerSession.onInsert((_ctx, session: FlowerSession) => {
     if (isVariant(session.status, "Designing") && isMySession(session)) {
       const count = sim.flower_count() + 1;
       const [x, y] = resolvePosition(session, count, count);
-      const spec = [...conn.db.flower_spec.iter()].find(
+      const spec = [...conn.db.flowerSpec.iter()].find(
         s => s.sessionId === session.id,
       );
       sim.upsert_flower(session.id, spec?.spec ?? "", x, y);
     }
   });
 
-  conn.db.flower_session.onUpdate(
+  conn.db.flowerSession.onUpdate(
     (_ctx, _old: FlowerSession, next: FlowerSession) => {
       if (isVariant(next.status, "Complete")) {
         sim.wilt_flower(next.id);
       } else {
         const count = sim.flower_count();
         const [x, y] = resolvePosition(next, count, count);
-        const spec = [...conn.db.flower_spec.iter()].find(
+        const spec = [...conn.db.flowerSpec.iter()].find(
           s => s.sessionId === next.id,
         );
         sim.upsert_flower(next.id, spec?.spec ?? "", x, y);
@@ -110,12 +112,12 @@ export function wireToWasm(conn: DbConnection, sim: GardenSim) {
     },
   );
 
-  conn.db.flower_session.onDelete((_ctx, session: FlowerSession) => {
+  conn.db.flowerSession.onDelete((_ctx, session: FlowerSession) => {
     sim.remove_flower(session.id);
   });
 
-  conn.db.flower_spec.onInsert((_ctx, spec: FlowerSpec) => {
-    const session = [...conn.db.flower_session.iter()].find(
+  conn.db.flowerSpec.onInsert((_ctx, spec: FlowerSpec) => {
+    const session = [...conn.db.flowerSession.iter()].find(
       s => s.id === spec.sessionId && isVariant(s.status, "Designing"),
     );
     if (session) {
@@ -125,8 +127,8 @@ export function wireToWasm(conn: DbConnection, sim: GardenSim) {
     }
   });
 
-  conn.db.flower_spec.onUpdate((_ctx, _old: FlowerSpec, next: FlowerSpec) => {
-    const session = [...conn.db.flower_session.iter()].find(
+  conn.db.flowerSpec.onUpdate((_ctx, _old: FlowerSpec, next: FlowerSpec) => {
+    const session = [...conn.db.flowerSession.iter()].find(
       s => s.id === next.sessionId && isVariant(s.status, "Designing"),
     );
     if (session) {
@@ -148,7 +150,7 @@ export async function handleMerge(
 ): Promise<void> {
   let specA: FlowerSpec | null = null;
   let specB: FlowerSpec | null = null;
-  for (const spec of conn.db.flower_spec.iter()) {
+  for (const spec of conn.db.flowerSpec.iter()) {
     if (Number(spec.sessionId) === sessionAId) specA = spec;
     if (Number(spec.sessionId) === sessionBId) specB = spec;
   }
@@ -165,7 +167,7 @@ export async function handleMerge(
 
   let sessionA: FlowerSession | null = null;
   let sessionB: FlowerSession | null = null;
-  for (const s of conn.db.flower_session.iter()) {
+  for (const s of conn.db.flowerSession.iter()) {
     if (Number(s.id) === sessionAId) sessionA = s;
     if (Number(s.id) === sessionBId) sessionB = s;
   }
@@ -177,7 +179,7 @@ export async function handleMerge(
   // Look up existing arrangement overrides for parent adornment inheritance (single pass)
   const targetSids = new Set([sessionAId, sessionBId]);
   const parentAdornments: unknown[] = [];
-  for (const o of conn.db.part_override.iter()) {
+  for (const o of conn.db.partOverride.iter()) {
     if (targetSids.has(Number(o.sessionId)) && o.partPath === "arrangement") {
       const parsed = parseSpec(o.overrideJson);
       if (parsed) parentAdornments.push(parsed);
@@ -193,13 +195,18 @@ export async function handleMerge(
         spec_b: parseSpec(specB.spec),
         total_count: totalCount,
         level,
-        parent_adornments: parentAdornments.length > 0 ? parentAdornments : undefined,
+        parent_adornments:
+          parentAdornments.length > 0 ? parentAdornments : undefined,
       }),
     });
 
     const arrangementJson = await readStream(res);
 
-    conn.reducers.mergeSessions({ sessionAId: BigInt(sessionAId), sessionBId: BigInt(sessionBId), aiArrangementJson: arrangementJson });
+    void conn.reducers.mergeSessions({
+      sessionAId: BigInt(sessionAId),
+      sessionBId: BigInt(sessionBId),
+      aiArrangementJson: arrangementJson,
+    });
 
     console.log(
       "[merge] Merged",
