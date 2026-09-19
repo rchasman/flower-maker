@@ -1,0 +1,441 @@
+name: Wild Comet
+species: Matthiola cometensis
+taxonomy:
+  family: Brassicaceae
+  genus: Matthiola
+  species_name: cometensis
+  common_name: Wild Comet
+  botanical_class: Dicot
+petals:
+  layers:
+    - index: 0
+      count: 4
+      shape: Falcate
+      arrangement: Cruciform
+      curvature: 0.7
+      curl: 0
+      texture: Glassy
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 1
+              g: 0.984
+              b: 0.922
+              a: 1
+          - position: 1
+            color:
+              r: 0.988
+              g: 0.827
+              b: 0.302
+              a: 1
+      opacity: 0.75
+      vein_pattern: Pinnate
+      edge_style: Lacerate
+      width: 1
+      length: 1.4
+      angular_offset: 0
+      droop: 0.25
+      thickness: 0.4
+      pattern:
+        kind: Band
+        color:
+          r: 0.984
+          g: 0.443
+          b: 0.522
+          a: 1
+        scale: 0.701
+        density: 0.395
+        extent: 0.536
+      fusion:
+        kind: Bell
+        depth: 0.632
+    - index: 1
+      count: 4
+      shape: Acuminate
+      arrangement: Cruciform
+      curvature: 0.85
+      curl: 0
+      texture: Glassy
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.498
+              g: 0.114
+              b: 0.114
+              a: 1
+          - position: 0.995
+            color:
+              r: 0.388
+              g: 0.4
+              b: 0.945
+              a: 1
+      opacity: 0.75
+      vein_pattern: Pinnate
+      edge_style: Lacerate
+      width: 0.9
+      length: 1.2
+      angular_offset: 42.07
+      droop: 0.25
+      thickness: 0.35
+      pattern:
+        kind: Band
+        color:
+          r: 0.984
+          g: 0.443
+          b: 0.522
+          a: 1
+        scale: 0.313
+        density: 0.794
+        extent: 0.79
+      fusion:
+        kind: Free
+        depth: 0.348
+  bloom_progress: 1
+  wilt_progress: 0
+  symmetry: Radial
+  symmetry_order: 4
+  divergence_angle: 137.5
+  stage: SeedHead
+reproductive:
+  pistil:
+    style: Simple
+    stigma_shape: Bifid
+    color:
+      r: 0.49
+      g: 0.827
+      b: 0.988
+      a: 1
+    height: 0.35
+  stamens:
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.918
+        g: 0.702
+        b: 0.031
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.659
+        g: 0.333
+        b: 0.969
+        a: 1
+      pollen_load: 0.5
+      height: 0.568
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.918
+        g: 0.702
+        b: 0.031
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.659
+        g: 0.333
+        b: 0.969
+        a: 1
+      pollen_load: 0.5
+      height: 0.626
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.918
+        g: 0.702
+        b: 0.031
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.659
+        g: 0.333
+        b: 0.969
+        a: 1
+      pollen_load: 0.5
+      height: 0.578
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.918
+        g: 0.702
+        b: 0.031
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.659
+        g: 0.333
+        b: 0.969
+        a: 1
+      pollen_load: 0.5
+      height: 0.415
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.918
+        g: 0.702
+        b: 0.031
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.659
+        g: 0.333
+        b: 0.969
+        a: 1
+      pollen_load: 0.5
+      height: 0.518
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.918
+        g: 0.702
+        b: 0.031
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.659
+        g: 0.333
+        b: 0.969
+        a: 1
+      pollen_load: 0.5
+      height: 0.455
+      sway: 0.3
+structure:
+  stem:
+    height: 0.628
+    thickness: 0.3
+    curvature: 0.8
+    color:
+      r: 0.6
+      g: 0.106
+      b: 0.106
+      a: 1
+    internode_length: 0.5
+    surface: Pearlescent
+    branching: None
+    style: Trailing
+  sepals:
+    - shape: Lanceolate
+      color:
+        r: 0.043
+        g: 0.198
+        b: 0.102
+        a: 1
+      reflex_angle: 90
+      texture: Smooth
+      length: 0.251
+      persistent: true
+    - shape: Lanceolate
+      color:
+        r: 0.043
+        g: 0.198
+        b: 0.102
+        a: 1
+      reflex_angle: 90
+      texture: Smooth
+      length: 0.251
+      persistent: true
+    - shape: Lanceolate
+      color:
+        r: 0.043
+        g: 0.198
+        b: 0.102
+        a: 1
+      reflex_angle: 90
+      texture: Smooth
+      length: 0.251
+      persistent: true
+    - shape: Lanceolate
+      color:
+        r: 0.043
+        g: 0.198
+        b: 0.102
+        a: 1
+      reflex_angle: 90
+      texture: Smooth
+      length: 0.251
+      persistent: true
+  receptacle:
+    shape: Convex
+    size: 0.255
+    color:
+      r: 0.09
+      g: 0.09
+      b: 0.09
+      a: 1
+  buds:
+    - position: 0.573
+      side: Right
+      size: 0.44
+      openness: 0.289
+foliage:
+  leaves:
+    - shape: Hastate
+      size: 0.442
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.086
+              g: 0.396
+              b: 0.204
+              a: 1
+      vein_pattern: Parallel
+      serration: Spinose
+      arrangement: Alternate
+      phyllotaxis_angle: 137.5
+      droop: 0.25
+      curl: 0.1
+      translucency: 0.7
+      position: 0.2
+      side: Left
+      angle_offset: 0.121
+      variegation:
+        kind: Center
+        color:
+          r: 0.863
+          g: 0.149
+          b: 0.149
+          a: 1
+    - shape: Hastate
+      size: 0.458
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.086
+              g: 0.396
+              b: 0.204
+              a: 1
+      vein_pattern: Parallel
+      serration: Spinose
+      arrangement: Alternate
+      phyllotaxis_angle: 137.5
+      droop: 0.25
+      curl: 0.1
+      translucency: 0.7
+      position: 0.582
+      side: Right
+      angle_offset: -0.092
+      variegation:
+        kind: Center
+        color:
+          r: 0.863
+          g: 0.149
+          b: 0.149
+          a: 1
+    - shape: Hastate
+      size: 0.394
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.086
+              g: 0.396
+              b: 0.204
+              a: 1
+      vein_pattern: Parallel
+      serration: Spinose
+      arrangement: Alternate
+      phyllotaxis_angle: 137.5
+      droop: 0.25
+      curl: 0.1
+      translucency: 0.7
+      position: 0.816
+      side: Left
+      angle_offset: -0.005
+      variegation:
+        kind: Center
+        color:
+          r: 0.863
+          g: 0.149
+          b: 0.149
+          a: 1
+  bracts:
+    - color:
+        stops:
+          - position: 0
+            color:
+              r: 0.98
+              g: 0.8
+              b: 0.082
+              a: 1
+      size: 0.5
+      shape: Lanceolate
+      showy: true
+      position: 0.95
+    - color:
+        stops:
+          - position: 0
+            color:
+              r: 0.98
+              g: 0.8
+              b: 0.082
+              a: 1
+      size: 0.5
+      shape: Lanceolate
+      showy: true
+      position: 0.95
+    - color:
+        stops:
+          - position: 0
+            color:
+              r: 0.98
+              g: 0.8
+              b: 0.082
+              a: 1
+      size: 0.5
+      shape: Lanceolate
+      showy: true
+      position: 0.95
+    - color:
+        stops:
+          - position: 0
+            color:
+              r: 0.98
+              g: 0.8
+              b: 0.082
+              a: 1
+      size: 0.5
+      shape: Lanceolate
+      showy: true
+      position: 0.95
+  leaf_density: 0.5
+ornamentation:
+  dewdrops:
+    - size: 0.05
+      count: 4
+      refraction: 0.5
+      placement: Random
+      surface_tension: 0.6
+  particles:
+    - kind: Embers
+      density: 20
+      color:
+        r: 0.078
+        g: 0.722
+        b: 0.651
+        a: 1
+      drift_speed: 0.3
+      lifetime: 3
+      emission_zone: Whole
+      gravity: -0.6
+  iridescence:
+    intensity: 0.6
+    hue_shift_range: 60
+    affected_parts:
+      - petals
+aura:
+  kind: Frost
+  color:
+    r: 0.847
+    g: 0.706
+    b: 0.996
+    a: 1
+  opacity: 0.25
+  radius: 0.45
+  animation_speed: 0.5
+inflorescence:
+  kind: Solitary
+  head_count: 1
+  head_scale: 0.662
+  spread: 0.288

@@ -1,0 +1,433 @@
+name: Wild Trumpet
+species: Antirrhinum trumpetensis
+taxonomy:
+  family: Plantaginaceae
+  genus: Antirrhinum
+  species_name: trumpetensis
+  common_name: Wild Trumpet
+  botanical_class: Dicot
+petals:
+  layers:
+    - index: 0
+      count: 5
+      shape: Spatulate
+      arrangement: Zygomorphic
+      curvature: 0
+      curl: 0.1
+      texture: Scaled
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.984
+              g: 0.443
+              b: 0.522
+              a: 1
+          - position: 1
+            color:
+              r: 0.573
+              g: 0.251
+              b: 0.055
+              a: 1
+      opacity: 0.75
+      vein_pattern: Pinnate
+      edge_style: Erose
+      width: 1
+      length: 1.4
+      angular_offset: 0
+      droop: 0.25
+      thickness: 0.4
+      pattern:
+        kind: Spots
+        color:
+          r: 0.49
+          g: 0.827
+          b: 0.988
+          a: 1
+        scale: 0.701
+        density: 0.395
+        extent: 0.536
+      fusion:
+        kind: Bell
+        depth: 0.632
+    - index: 1
+      count: 3
+      shape: Tubular
+      arrangement: Zygomorphic
+      curvature: 0.25
+      curl: 0
+      texture: Scaled
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.769
+              g: 0.71
+              b: 0.992
+              a: 1
+          - position: 0.995
+            color:
+              r: 0.976
+              g: 0.451
+              b: 0.086
+              a: 1
+      opacity: 0.75
+      vein_pattern: Pinnate
+      edge_style: Erose
+      width: 0.9
+      length: 1.2
+      angular_offset: 56.094
+      droop: 0.25
+      thickness: 0.35
+      pattern:
+        kind: Spots
+        color:
+          r: 0.49
+          g: 0.827
+          b: 0.988
+          a: 1
+        scale: 0.313
+        density: 0.794
+        extent: 0.79
+      fusion:
+        kind: Free
+        depth: 0.348
+  bloom_progress: 1
+  wilt_progress: 0
+  symmetry: Bilateral
+  symmetry_order: 0
+  divergence_angle: 137.5
+  stage: Bloom
+reproductive:
+  pistil:
+    style: Simple
+    stigma_shape: Bifid
+    color:
+      r: 0.98
+      g: 0.8
+      b: 0.082
+      a: 1
+    height: 0.35
+  stamens:
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.831
+        g: 0.831
+        b: 0.847
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.992
+        g: 0.729
+        b: 0.455
+        a: 1
+      pollen_load: 0.5
+      height: 0.418
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.831
+        g: 0.831
+        b: 0.847
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.992
+        g: 0.729
+        b: 0.455
+        a: 1
+      pollen_load: 0.5
+      height: 0.476
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.831
+        g: 0.831
+        b: 0.847
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.992
+        g: 0.729
+        b: 0.455
+        a: 1
+      pollen_load: 0.5
+      height: 0.428
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.831
+        g: 0.831
+        b: 0.847
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.992
+        g: 0.729
+        b: 0.455
+        a: 1
+      pollen_load: 0.5
+      height: 0.265
+      sway: 0.3
+structure:
+  stem:
+    height: 0.628
+    thickness: 0.3
+    curvature: 0.4
+    color:
+      r: 0.6
+      g: 0.106
+      b: 0.106
+      a: 1
+    internode_length: 0.5
+    surface: Frosted
+    branching: Alternate
+    style: Arching
+  sepals:
+    - shape: Lanceolate
+      color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      reflex_angle: 90
+      texture: Smooth
+      length: 0.251
+      persistent: true
+    - shape: Lanceolate
+      color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      reflex_angle: 90
+      texture: Smooth
+      length: 0.251
+      persistent: true
+    - shape: Lanceolate
+      color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      reflex_angle: 90
+      texture: Smooth
+      length: 0.251
+      persistent: true
+    - shape: Lanceolate
+      color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      reflex_angle: 90
+      texture: Smooth
+      length: 0.251
+      persistent: true
+    - shape: Lanceolate
+      color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      reflex_angle: 90
+      texture: Smooth
+      length: 0.251
+      persistent: true
+  receptacle:
+    shape: Convex
+    size: 0.255
+    color:
+      r: 0.659
+      g: 0.333
+      b: 0.969
+      a: 1
+  buds:
+    - position: 0.573
+      side: Right
+      size: 0.44
+      openness: 0.289
+foliage:
+  leaves:
+    - shape: Pinnate
+      size: 0.442
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.086
+              g: 0.396
+              b: 0.204
+              a: 1
+      vein_pattern: Parallel
+      serration: Spinose
+      arrangement: Opposite
+      phyllotaxis_angle: 137.5
+      droop: 0.25
+      curl: 0.1
+      translucency: 0.7
+      position: 0.2
+      side: Left
+      angle_offset: 0.121
+      variegation:
+        kind: None
+        color:
+          r: 0.388
+          g: 0.4
+          b: 0.945
+          a: 1
+    - shape: Pinnate
+      size: 0.458
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.086
+              g: 0.396
+              b: 0.204
+              a: 1
+      vein_pattern: Parallel
+      serration: Spinose
+      arrangement: Opposite
+      phyllotaxis_angle: 137.5
+      droop: 0.25
+      curl: 0.1
+      translucency: 0.7
+      position: 0.582
+      side: Right
+      angle_offset: -0.092
+      variegation:
+        kind: None
+        color:
+          r: 0.388
+          g: 0.4
+          b: 0.945
+          a: 1
+    - shape: Pinnate
+      size: 0.394
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.086
+              g: 0.396
+              b: 0.204
+              a: 1
+      vein_pattern: Parallel
+      serration: Spinose
+      arrangement: Opposite
+      phyllotaxis_angle: 137.5
+      droop: 0.25
+      curl: 0.1
+      translucency: 0.7
+      position: 0.816
+      side: Left
+      angle_offset: -0.005
+      variegation:
+        kind: None
+        color:
+          r: 0.388
+          g: 0.4
+          b: 0.945
+          a: 1
+  bracts:
+    - color:
+        stops:
+          - position: 0
+            color:
+              r: 0.863
+              g: 0.149
+              b: 0.149
+              a: 1
+      size: 0.5
+      shape: Lanceolate
+      showy: true
+      position: 0.95
+    - color:
+        stops:
+          - position: 0
+            color:
+              r: 0.863
+              g: 0.149
+              b: 0.149
+              a: 1
+      size: 0.5
+      shape: Lanceolate
+      showy: true
+      position: 0.95
+    - color:
+        stops:
+          - position: 0
+            color:
+              r: 0.863
+              g: 0.149
+              b: 0.149
+              a: 1
+      size: 0.5
+      shape: Lanceolate
+      showy: true
+      position: 0.95
+    - color:
+        stops:
+          - position: 0
+            color:
+              r: 0.863
+              g: 0.149
+              b: 0.149
+              a: 1
+      size: 0.5
+      shape: Lanceolate
+      showy: true
+      position: 0.95
+    - color:
+        stops:
+          - position: 0
+            color:
+              r: 0.863
+              g: 0.149
+              b: 0.149
+              a: 1
+      size: 0.5
+      shape: Lanceolate
+      showy: true
+      position: 0.95
+  leaf_density: 0.5
+ornamentation:
+  dewdrops:
+    - size: 0.05
+      count: 4
+      refraction: 0.5
+      placement: Random
+      surface_tension: 0.6
+  particles:
+    - kind: Sparkle
+      density: 20
+      color:
+        r: 0.996
+        g: 0.953
+        b: 0.78
+        a: 1
+      drift_speed: 0.3
+      lifetime: 3
+      emission_zone: Whole
+      gravity: 0
+  iridescence:
+    intensity: 0.6
+    hue_shift_range: 60
+    affected_parts:
+      - petals
+aura:
+  kind: Electric
+  color:
+    r: 0.984
+    g: 0.812
+    b: 0.91
+    a: 1
+  opacity: 0.25
+  radius: 0.45
+  animation_speed: 0.5
+inflorescence:
+  kind: Corymb
+  head_count: 4
+  head_scale: 0.562
+  spread: 0.288
