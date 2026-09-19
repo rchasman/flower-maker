@@ -1,62 +1,73 @@
 import { describe, expect, test } from "bun:test";
-import { TypeSafeClient } from "@typesafe-ai/sdk";
+import type { Experimental_EvaluationModel as EvaluationModel } from "ai";
+import type {
+  Experimental_EvaluationModelV4Answer as Answer,
+  Experimental_EvaluationModelV4CallOptions as CallOptions,
+  Experimental_EvaluationModelV4Question as Question,
+} from "@ai-sdk/provider";
 import { parse as parseYaml } from "yaml";
 import { TEMPLATES } from "../../client/src/data/templates.ts";
 import { FLOWER_QUESTIONS, generateSpecYamlWithJev } from "./jevSpec";
 
-type Criteria = Record<string, unknown>;
+type Overrides = Record<string, string | number>;
 
-function firstOption(criteria: Criteria): string {
+function firstOption(criteria: Readonly<Record<string, unknown>>): string {
   const [first] = Object.keys(criteria);
   if (!first) throw new Error("question has no options");
   return first;
 }
 
-function answersFrom(overrides: Record<string, string | number>) {
-  return Object.fromEntries(
-    Object.entries(FLOWER_QUESTIONS).map(([id, question]) => {
-      if (question.type === "noul") {
-        return [id, { type: "noul", noul: overrides[id] ?? 0.1 }];
-      }
-      const picked = overrides[id] ?? firstOption(question.criteria);
-      return [
-        id,
-        {
-          type: "choice",
-          choice: picked,
-          probabilities: { [picked]: 1 },
-          confidence: 1,
-        },
-      ];
-    }),
+function answerFor(
+  id: string,
+  question: Question,
+  overrides: Overrides,
+): Answer {
+  if (question.type === "boolean") {
+    const override = overrides[id];
+    return {
+      type: "boolean",
+      probability: typeof override === "number" ? override : 0.1,
+    };
+  }
+  if (question.type === "score") {
+    return { type: "score", score: 0 };
+  }
+  const override = overrides[id];
+  const picked =
+    typeof override === "string" ? override : firstOption(question.criteria);
+  const probabilities = Object.fromEntries(
+    Object.keys(question.criteria).map(key => [key, key === picked ? 1 : 0]),
   );
+  return { type: "choice", choice: picked, probabilities };
 }
 
-function stubClient(
-  overrides: Record<string, string | number>,
-  seen: { body?: Record<string, unknown> },
-) {
-  return new TypeSafeClient({
-    apiKey: "test",
-    fetch: async (_url, init) => {
-      seen.body = JSON.parse(String(init?.body));
-      return new Response(
-        JSON.stringify({
-          model: "jev-1.13.0",
-          answers: answersFrom(overrides),
-          usage: { input_tokens: 1, output_tokens: 1 },
-        }),
-        { headers: { "content-type": "application/json" } },
+function stubModel(
+  overrides: Overrides,
+  seen: { options?: CallOptions },
+): EvaluationModel {
+  return {
+    specificationVersion: "v4",
+    provider: "test",
+    modelId: "typesafe-ai/jev",
+    supportedQuestionTypes: ["choice", "score", "boolean"],
+    doEvaluate: async options => {
+      seen.options = options;
+      const answers = Object.fromEntries(
+        Object.entries(options.questions).map(([id, question]) => [
+          id,
+          answerFor(id, question, overrides),
+        ]),
       );
+      return { answers, warnings: [] };
     },
-  });
+  };
 }
 
 describe("generateSpecYamlWithJev", () => {
   test("assembles a renderable spec from Jev's selections", async () => {
-    const seen: { body?: Record<string, unknown> } = {};
+    const seen: { options?: CallOptions } = {};
     const yaml = await generateSpecYamlWithJev(
-      stubClient(
+      stubModel(
         {
           template: "Orchid",
           name_word: "Frost",
@@ -76,14 +87,16 @@ describe("generateSpecYamlWithJev", () => {
         },
         seen,
       ),
-      { prompt: "a frosty orchid dripping with dew", model: "jev-1.13.0" },
+      { prompt: "a frosty orchid dripping with dew" },
     );
     const spec = parseYaml(yaml);
 
-    expect(seen.body?.model).toBe("jev-1.13.0");
-    expect(seen.body?.state).toEqual({
+    expect(seen.options?.state).toEqual({
       request: "a frosty orchid dripping with dew",
     });
+    expect(Object.keys(seen.options?.questions ?? {})).toEqual(
+      Object.keys(FLOWER_QUESTIONS),
+    );
     expect(spec.name).toBe("Frost Orchid");
     expect(spec.species).toBe("Phalaenopsis amabilis");
     expect(spec.petals.layers).toHaveLength(3);
@@ -107,15 +120,18 @@ describe("generateSpecYamlWithJev", () => {
 
   test("a requested template wins over Jev's template choice", async () => {
     const yaml = await generateSpecYamlWithJev(
-      stubClient({ template: "Rose", name_word: "Garden" }, {}),
-      { prompt: "Tulip", templateName: "Tulip", model: "jev-1.13.0" },
+      stubModel({ template: "Rose", name_word: "Garden" }, {}),
+      {
+        prompt: "Tulip",
+        templateName: "Tulip",
+      },
     );
     expect(parseYaml(yaml).name).toBe("Garden Tulip");
   });
 
   test("an ordinary flower gets no aura, thorns or dewdrops", async () => {
     const yaml = await generateSpecYamlWithJev(
-      stubClient(
+      stubModel(
         {
           aura: "none",
           has_thorns: 0.3,
@@ -124,7 +140,7 @@ describe("generateSpecYamlWithJev", () => {
         },
         {},
       ),
-      { prompt: "a plain daisy", model: "jev-1.13.0" },
+      { prompt: "a plain daisy" },
     );
     const spec = parseYaml(yaml);
     expect(spec.aura).toBeUndefined();

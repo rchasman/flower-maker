@@ -1,7 +1,6 @@
-import { streamText, gateway } from "ai";
-import { TypeSafeClient } from "@typesafe-ai/sdk";
+import { streamText, gateway, createTextStreamResponse } from "ai";
 import { z } from "zod";
-import { DEFAULT_MODEL, typeSafeModelName } from "../config/models";
+import { DEFAULT_MODEL, JEV_MODEL } from "../config/models";
 import { generateSpecYamlWithJev } from "./jevSpec";
 
 const GenerateBody = z.object({
@@ -138,11 +137,10 @@ function generatePrompt(body: z.infer<typeof GenerateBody>): string {
     : `Create a unique flower based on this description: ${body.prompt}`;
 }
 
-async function generateWithJev(body: z.infer<typeof GenerateBody>, model: string): Promise<Response> {
-  const yaml = await generateSpecYamlWithJev(new TypeSafeClient(), {
+async function generateWithJev(body: z.infer<typeof GenerateBody>): Promise<Response> {
+  const yaml = await generateSpecYamlWithJev(gateway.evaluationModel(JEV_MODEL), {
     prompt: body.prompt,
     templateName: body.template_name,
-    model,
   });
   return new Response(yaml, { headers: { "Content-Type": "text/yaml; charset=utf-8" } });
 }
@@ -150,8 +148,7 @@ async function generateWithJev(body: z.infer<typeof GenerateBody>, model: string
 export async function handleGenerate(request: Request) {
   try {
     const body = GenerateBody.parse(await request.json());
-    const jevModel = typeSafeModelName(body.model);
-    if (jevModel) return await generateWithJev(body, jevModel);
+    if (body.model === JEV_MODEL) return await generateWithJev(body);
 
     const result = streamText({
       model: gateway(body.model),
@@ -159,7 +156,7 @@ export async function handleGenerate(request: Request) {
       prompt: generatePrompt(body),
     });
 
-    return result.toTextStreamResponse();
+    return createTextStreamResponse({ stream: result.textStream });
   } catch (err) {
     // Catches sync errors (bad body, invalid model, Jev failures). Gateway stream
     // errors surface asynchronously via the AI SDK's error protocol — handled client-side.

@@ -86,7 +86,7 @@ This demonstrates what a programmatic flower order looks like for the flowers AP
 | Rendering         | [PixiJS](https://pixijs.com) + custom shaders      | Homepage grid + designer canvas            |
 | UI                | React 19 + TypeScript                              | Designer, catalog, orders, social          |
 | AI                | [Vercel AI SDK](https://sdk.vercel.ai) + Anthropic | Flower generation, merge descriptions      |
-| AI (System One)   | [TypeSafe Jev](https://docs.typesafe.ai)           | Typed selection of every spec field, one round trip |
+| AI (evaluation)   | [TypeSafe Jev](https://vercel.com/ai-gateway/models/jev) via AI Gateway | Typed selection of every spec field, one round trip |
 | API               | [Hono](https://hono.dev) on Bun                    | AI streaming + order endpoints             |
 
 ## Architecture

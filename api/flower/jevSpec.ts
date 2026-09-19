@@ -1,9 +1,9 @@
 import {
-  choice,
-  noul,
-  type SystemOneResult,
-  type TypeSafeClient,
-} from "@typesafe-ai/sdk";
+  experimental_evaluate as evaluate,
+  type Experimental_EvaluationModel as EvaluationModel,
+  type Experimental_EvaluationQuestion as EvaluationQuestion,
+  type Experimental_EvaluationResult as EvaluationResult,
+} from "ai";
 import { stringify as toYaml } from "yaml";
 import {
   TEMPLATES,
@@ -305,6 +305,26 @@ const TEMPLATE_CRITERIA = Object.fromEntries(
 
 const SAME_AS_PRIMARY = "same_as_primary";
 
+type Criteria = Readonly<Record<string, string | null>>;
+
+function choice<const C extends Criteria>(
+  instructions: string,
+  criteria: C,
+): { type: "choice"; instructions: string; criteria: C } {
+  return { type: "choice", instructions, criteria };
+}
+
+function yesNo(
+  instructions: string,
+  criteria?: { true: string; false: string },
+): {
+  type: "boolean";
+  instructions: string;
+  criteria?: { true: string; false: string };
+} {
+  return { type: "boolean", instructions, criteria };
+}
+
 export const FLOWER_QUESTIONS = {
   template: choice(
     "Which real flower in the list is the closest botanical starting point for the flower described in `request`?",
@@ -393,19 +413,21 @@ export const FLOWER_QUESTIONS = {
     "If the flower described in `request` has a glow or halo, what colour is it?",
     PALETTE_CRITERIA,
   ),
-  has_thorns: noul(
+  has_thorns: yesNo(
     "Does the flower described in `request` have thorns on its stem?",
     {
       true: "the request names thorns, spines or prickles, or the flower is a rose or a bramble",
       false: "no thorns are mentioned or implied",
     },
   ),
-  has_dewdrops: noul(
+  has_dewdrops: yesNo(
     "Does `request` describe water droplets, dew, rain or wetness on the flower?",
   ),
-};
+} satisfies Record<string, EvaluationQuestion>;
 
-export type FlowerAnswers = SystemOneResult<typeof FLOWER_QUESTIONS>["answers"];
+export type FlowerAnswers = EvaluationResult<
+  typeof FLOWER_QUESTIONS
+>["answers"];
 
 interface Rgba {
   r: number;
@@ -527,7 +549,7 @@ export function assembleSpec(
         curvature: 0.1,
         style: answers.stem_style.choice,
         color: STEM_GREEN,
-        ...(answers.has_thorns.noul > 0.5
+        ...(answers.has_thorns.probability > 0.5
           ? {
               thorns: {
                 density: 0.4,
@@ -573,7 +595,7 @@ export function assembleSpec(
       },
       stamens: stamens(answers, centerColor),
     },
-    ...(answers.has_dewdrops.noul > 0.5
+    ...(answers.has_dewdrops.probability > 0.5
       ? {
           ornamentation: {
             dewdrops: [
@@ -605,15 +627,14 @@ export function assembleSpec(
 export interface JevGenerateInput {
   prompt: string;
   templateName?: string;
-  model: string;
 }
 
 export async function generateSpecYamlWithJev(
-  client: TypeSafeClient,
+  model: EvaluationModel,
   input: JevGenerateInput,
 ): Promise<string> {
-  const result = await client.systemOne({
-    model: input.model,
+  const result = await evaluate({
+    model,
     state: { request: input.prompt },
     questions: FLOWER_QUESTIONS,
   });
