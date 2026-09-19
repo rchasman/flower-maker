@@ -46,6 +46,9 @@ export const MODELS = [
 
   // Alibaba
   { id: "qwen-3.5-flash", fullName: "alibaba/qwen3.5-flash", provider: "alibaba" },
+
+  // TypeSafe (System One: answers typed questions, does not stream text)
+  { id: "jev-1.13", fullName: "typesafe/jev-1.13.0", provider: "typesafe" },
 ] as const satisfies readonly ModelConfig[];
 
 export type ModelId = (typeof MODELS)[number]["id"];
@@ -56,3 +59,10 @@ export const MODEL_MAP: Record<string, string> = Object.fromEntries(
 );
 
 export const DEFAULT_MODEL = "google/gemini-3.1-flash-lite-preview";
+
+const TYPESAFE_PREFIX = "typesafe/";
+
+/** The TypeSafe model name when `fullName` selects a TypeSafe model, else undefined. */
+export function typeSafeModelName(fullName: string): string | undefined {
+  return fullName.startsWith(TYPESAFE_PREFIX) ? fullName.slice(TYPESAFE_PREFIX.length) : undefined;
+}

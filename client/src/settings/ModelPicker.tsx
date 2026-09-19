@@ -27,6 +27,7 @@ const MODELS: ModelConfig[] = [
   { id: "kimi-k2.5", fullName: "moonshotai/kimi-k2.5", provider: "moonshot" },
   { id: "glm-5-turbo", fullName: "zai/glm-5-turbo", provider: "zhipu" },
   { id: "qwen-3.5-flash", fullName: "alibaba/qwen3.5-flash", provider: "alibaba" },
+  { id: "jev-1.13", fullName: "typesafe/jev-1.13.0", provider: "typesafe" },
 ];
 
 export const DEFAULT_MODEL = "google/gemini-3.1-flash-lite-preview";
@@ -42,6 +43,7 @@ const PROVIDER_COLORS: Record<string, string> = {
   moonshot: "#e879f9",
   zhipu: "#34d399",
   alibaba: "#fb923c",
+  typesafe: "#22d3ee",
 };
 
 // Group models by provider, preserving order
