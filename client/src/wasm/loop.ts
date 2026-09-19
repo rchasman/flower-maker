@@ -19,8 +19,8 @@ export interface FlowerRenderData {
 }
 
 // SharedArrayBuffer layout constants (must match buffer.rs)
-const FLOATS_PER_FLOWER = 14;
-const HEADER_FLOATS = 2;
+export const FLOATS_PER_FLOWER = 14;
+export const HEADER_FLOATS = 2;
 
 // ── Object pool: pre-allocated FlowerRenderData slots, reused every frame ──
 const INITIAL_POOL_CAPACITY = 256;
@@ -58,56 +58,30 @@ function ensurePoolCapacity(needed: number): void {
   }
 }
 
-/** Copy all fields from src into an existing pool slot (zero allocation). */
-function copyIntoSlot(slot: FlowerRenderData, src: FlowerRenderData): void {
-  slot.sid = src.sid;
-  slot.x = src.x;
-  slot.y = src.y;
-  slot.rotation = src.rotation;
-  slot.scale = src.scale;
-  slot.alpha = src.alpha;
-  slot.has_aura = src.has_aura;
-  slot.has_glow = src.has_glow;
-  slot.particles = src.particles;
-  slot.petal_color_r = src.petal_color_r;
-  slot.petal_color_g = src.petal_color_g;
-  slot.petal_color_b = src.petal_color_b;
-  slot.petal_count = src.petal_count;
-}
-
 let animFrameId: number | null = null;
 let lastTime = 0;
 
 /** Shared render buffer — allocated once, reused every frame. */
 let sharedBuffer: Float32Array | null = null;
 
-function getOrCreateBuffer(sim: GardenSim): Float32Array | null {
+function getOrCreateBuffer(sim: GardenSim): Float32Array {
   if (sharedBuffer) return sharedBuffer;
+  const size = sim.render_buffer_size();
+  sharedBuffer = new Float32Array(allocateBackingStore(size * 4));
+  return sharedBuffer;
+}
 
-  // Try SharedArrayBuffer for zero-copy reads
+/** SharedArrayBuffer needs COOP/COEP headers; a plain ArrayBuffer works everywhere. */
+function allocateBackingStore(
+  byteLength: number,
+): SharedArrayBuffer | ArrayBuffer {
+  if (typeof SharedArrayBuffer === "undefined")
+    return new ArrayBuffer(byteLength);
   try {
-    if (typeof SharedArrayBuffer !== "undefined" && sim.render_buffer_size) {
-      const size = sim.render_buffer_size();
-      const sab = new SharedArrayBuffer(size * 4);
-      sharedBuffer = new Float32Array(sab);
-      return sharedBuffer;
-    }
+    return new SharedArrayBuffer(byteLength);
   } catch {
-    // SharedArrayBuffer not available (missing COOP/COEP headers)
+    return new ArrayBuffer(byteLength);
   }
-
-  // Fallback: regular ArrayBuffer
-  try {
-    if (sim.render_buffer_size) {
-      const size = sim.render_buffer_size();
-      sharedBuffer = new Float32Array(size);
-      return sharedBuffer;
-    }
-  } catch {
-    // render_buffer_size not available (old WASM build)
-  }
-
-  return null;
 }
 
 /** Read flower data from the typed buffer into the pre-allocated pool. Returns active count. */
@@ -141,36 +115,20 @@ export function startLoop(sim: GardenSim, onRender: RenderCallback) {
 
   lastTime = performance.now();
   const buf = getOrCreateBuffer(sim);
-  const useBuffer = buf !== null && typeof sim.write_to_buffer === "function";
 
   function frame(time: number) {
     const dt = Math.min((time - lastTime) / 1000, 0.05); // cap at 50ms
     lastTime = time;
 
-    // 1. Physics tick
     try {
       sim.tick(dt);
     } catch (err) {
       console.error("[loop] tick failed:", err);
     }
 
-    // 2. Export render data
     try {
-      if (useBuffer && buf) {
-        // Fast path: write directly to typed buffer, read into pool (zero alloc)
-        sim.write_to_buffer!(buf);
-        const count = readFromBuffer(buf);
-        onRender(pool, count);
-      } else {
-        // Fallback: JSON → pool (avoids per-frame object allocation)
-        const renderJson = sim.render_data();
-        const raw = JSON.parse(renderJson) as FlowerRenderData[];
-        ensurePoolCapacity(raw.length);
-        for (let i = 0; i < raw.length; i++) {
-          copyIntoSlot(pool[i]!, raw[i]!);
-        }
-        onRender(pool, raw.length);
-      }
+      sim.write_to_buffer(buf);
+      onRender(pool, readFromBuffer(buf));
     } catch (err) {
       console.error("[loop] render frame failed:", err);
     }

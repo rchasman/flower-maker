@@ -137,8 +137,6 @@ dependencies = [
  "flower-core",
  "js-sys",
  "rapier2d",
- "serde",
- "serde_json",
  "serde_yaml",
  "wasm-bindgen",
  "web-sys",

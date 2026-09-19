@@ -46,25 +46,9 @@ export class GardenSimulation {
      * Required buffer size in f32 elements for SharedArrayBuffer allocation.
      * @returns {number}
      */
-    static render_buffer_size() {
-        const ret = wasm.gardensimulation_render_buffer_size();
+    render_buffer_size() {
+        const ret = wasm.gardensimulation_render_buffer_size(this.__wbg_ptr);
         return ret >>> 0;
-    }
-    /**
-     * Export render data as JSON for PixiJS
-     * @returns {string}
-     */
-    render_data() {
-        let deferred1_0;
-        let deferred1_1;
-        try {
-            const ret = wasm.gardensimulation_render_data(this.__wbg_ptr);
-            deferred1_0 = ret[0];
-            deferred1_1 = ret[1];
-            return getStringFromWasm0(ret[0], ret[1]);
-        } finally {
-            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
-        }
     }
     /**
      * Set the physics body position for a flower (used for drag interaction).

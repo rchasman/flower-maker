@@ -46,19 +46,24 @@ impl GardenSimulation {
                 return;
             }
         };
+        let (radius, mass) = body_params(&spec);
         if let Some(flower) = self.flowers.iter_mut().find(|f| f.session_id == session_id) {
-                flower.spec = spec;
+            if self.world.body_matches(flower.body_handle, radius, mass) {
                 self.world.set_position(flower.body_handle, x, y);
             } else {
-                let (radius, mass) = body_params(&spec);
-                let handle = self.world.add_body(x, y, radius, mass, session_id);
-                self.flowers.push(FlowerInstance {
-                    session_id,
-                    spec,
-                    anim: FlowerAnimation::new(),
-                    body_handle: handle,
-                });
+                self.world.remove_body(flower.body_handle);
+                flower.body_handle = self.world.add_body(x, y, radius, mass, session_id);
             }
+            flower.spec = spec;
+        } else {
+            let handle = self.world.add_body(x, y, radius, mass, session_id);
+            self.flowers.push(FlowerInstance {
+                session_id,
+                spec,
+                anim: FlowerAnimation::new(),
+                body_handle: handle,
+            });
+        }
     }
 
     /// Start wilt-out animation for a flower (it will be removed after animation completes)
@@ -103,34 +108,6 @@ impl GardenSimulation {
         self.flowers.len() as u32
     }
 
-    /// Export render data as JSON for PixiJS
-    pub fn render_data(&self) -> String {
-        let data: Vec<serde_json::Value> = self.flowers.iter().map(|f| {
-            let pos = self.world.position(f.body_handle);
-            let rot = self.world.rotation(f.body_handle);
-            let (pr, pg, pb) = primary_petal_color(&f.spec);
-            let petal_count = f.spec.petals.layers.first()
-                .map(|l| l.count).unwrap_or(5);
-            serde_json::json!({
-                "sid": f.session_id,
-                "x": pos.0,
-                "y": pos.1,
-                "rotation": rot,
-                "scale": f.anim.scale(),
-                "alpha": f.anim.alpha(),
-                "spec_name": f.spec.name,
-                "has_aura": f.spec.aura.is_some(),
-                "has_glow": f.spec.ornamentation.glow.is_some(),
-                "particles": f.anim.particles.len(),
-                "petal_color_r": pr,
-                "petal_color_g": pg,
-                "petal_color_b": pb,
-                "petal_count": petal_count,
-            })
-        }).collect();
-        serde_json::to_string(&data).unwrap_or_else(|_| "[]".into())
-    }
-
     /// Write render data into a SharedArrayBuffer-backed f32 slice.
     /// Call from JS: `sim.write_to_buffer(new Float32Array(sharedBuf))`
     /// Returns the number of flowers written.
@@ -159,7 +136,7 @@ impl GardenSimulation {
     }
 
     /// Required buffer size in f32 elements for SharedArrayBuffer allocation.
-    pub fn render_buffer_size() -> u32 {
+    pub fn render_buffer_size(&self) -> u32 {
         buffer::BUFFER_FLOATS as u32
     }
 
@@ -186,4 +163,47 @@ fn primary_petal_color(spec: &FlowerSpec) -> (f32, f32, f32) {
         .and_then(|layer| layer.color.stops.first())
         .map(|stop| (stop.color.r as f32, stop.color.g as f32, stop.color.b as f32))
         .unwrap_or((0.8, 0.4, 0.6)) // fallback pink
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use flower_core::catalog::{Inflorescence, InflorescenceKind};
+
+    fn spray_yaml(head_count: u32) -> String {
+        let spec = FlowerSpec {
+            inflorescence: Inflorescence {
+                kind: InflorescenceKind::Spray,
+                head_count,
+                ..Inflorescence::default()
+            },
+            ..FlowerSpec::default()
+        };
+        serde_yaml::to_string(&spec).expect("spec serialises")
+    }
+
+    #[test]
+    fn upsert_grows_collider_when_head_count_rises() {
+        let mut sim = GardenSimulation::new();
+        sim.upsert_flower(7, &spray_yaml(1), 10.0, 20.0);
+        let (radius_one_head, _) = sim.world.body_params(sim.flowers[0].body_handle).unwrap();
+
+        sim.upsert_flower(7, &spray_yaml(7), 10.0, 20.0);
+        let handle = sim.flowers[0].body_handle;
+        let (radius_seven_heads, _) = sim.world.body_params(handle).unwrap();
+
+        assert!(radius_seven_heads > radius_one_head);
+        assert_eq!(sim.flowers.len(), 1);
+        assert_eq!(sim.world.position(handle), (10.0, 20.0));
+    }
+
+    #[test]
+    fn upsert_keeps_body_when_params_are_unchanged() {
+        let mut sim = GardenSimulation::new();
+        sim.upsert_flower(7, &spray_yaml(3), 0.0, 0.0);
+        let handle = sim.flowers[0].body_handle;
+        sim.upsert_flower(7, &spray_yaml(3), 5.0, 6.0);
+        assert_eq!(sim.flowers[0].body_handle, handle);
+        assert_eq!(sim.world.position(handle), (5.0, 6.0));
+    }
 }

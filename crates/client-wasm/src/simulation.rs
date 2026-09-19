@@ -87,6 +87,20 @@ impl PhysicsWorld {
             .unwrap_or((0.0, 0.0))
     }
 
+    /// Collider radius and body mass, or None when the handle is gone.
+    pub fn body_params(&self, handle: RigidBodyHandle) -> Option<(f32, f32)> {
+        let body = self.rigid_body_set.get(handle)?;
+        let collider = body.colliders().first().and_then(|h| self.collider_set.get(*h))?;
+        let radius = collider.shape().as_ball()?.radius;
+        Some((radius, body.mass()))
+    }
+
+    /// True when the body already has this collider radius and mass.
+    pub fn body_matches(&self, handle: RigidBodyHandle, radius: f32, mass: f32) -> bool {
+        self.body_params(handle)
+            .is_some_and(|(r, m)| (r - radius).abs() < 1e-4 && (m - mass).abs() < 1e-3)
+    }
+
     pub fn rotation(&self, handle: RigidBodyHandle) -> f32 {
         self.rigid_body_set.get(handle)
             .map(|b| b.rotation().angle())
