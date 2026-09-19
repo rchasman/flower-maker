@@ -62,11 +62,17 @@ export function NameGate({ children }: NameGateProps) {
           <pre className="tui-ascii-art" style={{ marginBottom: "1.5rem" }}>
             {ASCII_LOGO}
           </pre>
-          <div style={{ color: "var(--tui-fg-3)", fontSize: "var(--tui-font-size-sm)" }}>
+          <div
+            style={{
+              color: "var(--tui-fg-3)",
+              fontSize: "var(--tui-font-size-sm)",
+            }}
+          >
             {state === "connecting" ? (
               <span>
                 <span style={{ color: "var(--tui-amber)" }}>[sync]</span>{" "}
-                establishing connection<span className="tui-generating" />
+                establishing connection
+                <span className="tui-generating" />
               </span>
             ) : (
               <span>
@@ -92,7 +98,7 @@ export function NameGate({ children }: NameGateProps) {
     }
     setSubmitting(true);
     setError(null);
-    conn.reducers.setName({ name: trimmed });
+    void conn.reducers.setName({ name: trimmed });
     setTimeout(() => setSubmitting(false), 500);
   };
 
@@ -131,7 +137,9 @@ export function NameGate({ children }: NameGateProps) {
                 style={{
                   fontSize: "var(--tui-font-size-xs)",
                   lineHeight: 1.6,
-                  color: line.includes("[ok") ? "var(--tui-green)" : "var(--tui-fg-3)",
+                  color: line.includes("[ok")
+                    ? "var(--tui-green)"
+                    : "var(--tui-fg-3)",
                 }}
               >
                 {line}
@@ -214,11 +222,28 @@ export function NameGate({ children }: NameGateProps) {
                       margin: "1rem 0",
                     }}
                   >
-                    <div style={{ flex: 1, height: 1, background: "var(--tui-border)" }} />
-                    <span style={{ fontSize: "var(--tui-font-size-xs)", color: "var(--tui-fg-4)" }}>
+                    <div
+                      style={{
+                        flex: 1,
+                        height: 1,
+                        background: "var(--tui-border)",
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontSize: "var(--tui-font-size-xs)",
+                        color: "var(--tui-fg-4)",
+                      }}
+                    >
                       OR
                     </span>
-                    <div style={{ flex: 1, height: 1, background: "var(--tui-border)" }} />
+                    <div
+                      style={{
+                        flex: 1,
+                        height: 1,
+                        background: "var(--tui-border)",
+                      }}
+                    />
                   </div>
                   <button
                     onClick={() => auth.signinRedirect()}

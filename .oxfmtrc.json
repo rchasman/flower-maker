@@ -2,5 +2,12 @@
   "arrowParens": "avoid",
   "printWidth": 80,
   "sortPackageJson": false,
-  "ignorePatterns": ["target/", "dist/", "build/", "node_modules/", ".logs/"]
+  "ignorePatterns": [
+    "target/",
+    "dist/",
+    "build/",
+    "node_modules/",
+    ".logs/",
+    "client/src/spacetime/module_bindings/"
+  ]
 }

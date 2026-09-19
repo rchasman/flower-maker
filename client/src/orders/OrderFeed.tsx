@@ -46,12 +46,17 @@ export function OrderFeed() {
           <span style={{ color: "var(--tui-fg-3)" }}>
             #{Number(order.sessionId)}
             {isVariant(order.source, "Agent") && (
-              <span className="tui-badge tui-badge-purple" style={{ marginLeft: "0.5ch" }}>
+              <span
+                className="tui-badge tui-badge-purple"
+                style={{ marginLeft: "0.5ch" }}
+              >
                 AI
               </span>
             )}
           </span>
-          <span style={{ color: "var(--tui-fg-4)" }}>{order.note ?? "ordered"}</span>
+          <span style={{ color: "var(--tui-fg-4)" }}>
+            {order.note ?? "ordered"}
+          </span>
         </div>
       ))}
     </div>

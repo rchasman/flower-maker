@@ -5,9 +5,18 @@ import { useChatMessages, useUsers } from "../spacetime/hooks.ts";
 import type { User } from "../spacetime/types.ts";
 
 const CHATTER_COLORS = [
-  "#f87171", "#fb923c", "#fbbf24", "#a3e635",
-  "#34d399", "#22d3ee", "#60a5fa", "#a78bfa",
-  "#e879f9", "#fb7185", "#4ade80", "#2dd4bf",
+  "#f87171",
+  "#fb923c",
+  "#fbbf24",
+  "#a3e635",
+  "#34d399",
+  "#22d3ee",
+  "#60a5fa",
+  "#a78bfa",
+  "#e879f9",
+  "#fb7185",
+  "#4ade80",
+  "#2dd4bf",
 ];
 
 /** Stable map: each online user gets a unique color by sorted index. */
@@ -16,7 +25,10 @@ export function buildColorMap(users: User[]): Map<string, string> {
     .filter(u => u.online)
     .sort((a, b) => String(a.identity).localeCompare(String(b.identity)));
   return new Map(
-    sorted.map((u, i) => [String(u.identity), CHATTER_COLORS[i % CHATTER_COLORS.length]!]),
+    sorted.map((u, i) => [
+      String(u.identity),
+      CHATTER_COLORS[i % CHATTER_COLORS.length]!,
+    ]),
   );
 }
 
@@ -29,7 +41,10 @@ function hashColor(identity: string): string {
   return CHATTER_COLORS[Math.abs(hash) % CHATTER_COLORS.length]!;
 }
 
-export function colorForIdentity(colorMap: Map<string, string>, identity: string): string {
+export function colorForIdentity(
+  colorMap: Map<string, string>,
+  identity: string,
+): string {
   return colorMap.get(identity) ?? hashColor(identity);
 }
 
@@ -61,7 +76,7 @@ export function Chat() {
   const sendMessage = () => {
     const text = input.trim();
     if (!text || !conn) return;
-    conn.reducers.sendChat({ text });
+    void conn.reducers.sendChat({ text });
     setInput("");
   };
 
@@ -96,9 +111,14 @@ export function Chat() {
             >
               <span
                 className="nick"
-                style={{ color: colorForIdentity(colorMap, String(msg.sender)) }}
+                style={{
+                  color: colorForIdentity(colorMap, String(msg.sender)),
+                }}
               >
-                &lt;{userNameMap.get(String(msg.sender)) ?? String(msg.sender).slice(0, 8)}&gt;
+                &lt;
+                {userNameMap.get(String(msg.sender)) ??
+                  String(msg.sender).slice(0, 8)}
+                &gt;
               </span>{" "}
               <span className="msg">{msg.text}</span>
             </motion.div>

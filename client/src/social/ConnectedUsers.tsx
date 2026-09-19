@@ -27,7 +27,9 @@ export function ConnectedUsers() {
           className="tui-log-entry"
           style={{ display: "flex", alignItems: "center", gap: "1ch" }}
         >
-          <span style={{ color: "var(--tui-green)", fontSize: "0.5rem" }}>●</span>
+          <span style={{ color: "var(--tui-green)", fontSize: "0.5rem" }}>
+            ●
+          </span>
           <span
             className="nick"
             style={{ color: colorForIdentity(colorMap, String(user.identity)) }}
@@ -37,7 +39,12 @@ export function ConnectedUsers() {
         </div>
       ))}
       {online.length === 0 && (
-        <div style={{ color: "var(--tui-fg-4)", fontSize: "var(--tui-font-size-sm)" }}>
+        <div
+          style={{
+            color: "var(--tui-fg-4)",
+            fontSize: "var(--tui-font-size-sm)",
+          }}
+        >
           no other operators connected.
         </div>
       )}

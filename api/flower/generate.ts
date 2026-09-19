@@ -137,12 +137,19 @@ function generatePrompt(body: z.infer<typeof GenerateBody>): string {
     : `Create a unique flower based on this description: ${body.prompt}`;
 }
 
-async function generateWithJev(body: z.infer<typeof GenerateBody>): Promise<Response> {
-  const yaml = await generateSpecYamlWithJev(gateway.evaluationModel(JEV_MODEL), {
-    prompt: body.prompt,
-    templateName: body.template_name,
+async function generateWithJev(
+  body: z.infer<typeof GenerateBody>,
+): Promise<Response> {
+  const yaml = await generateSpecYamlWithJev(
+    gateway.evaluationModel(JEV_MODEL),
+    {
+      prompt: body.prompt,
+      templateName: body.template_name,
+    },
+  );
+  return new Response(yaml, {
+    headers: { "Content-Type": "text/yaml; charset=utf-8" },
   });
-  return new Response(yaml, { headers: { "Content-Type": "text/yaml; charset=utf-8" } });
 }
 
 export async function handleGenerate(request: Request) {

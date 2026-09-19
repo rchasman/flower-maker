@@ -26,7 +26,10 @@ export default {
     const route = routes[path];
 
     if (!route) {
-      return Response.json({ error: "Not found" }, { status: 404, headers: corsHeaders });
+      return Response.json(
+        { error: "Not found" },
+        { status: 404, headers: corsHeaders },
+      );
     }
 
     const response = await route(request);

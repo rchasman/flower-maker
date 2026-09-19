@@ -56,7 +56,8 @@ function useTable<T>(
       if (!t) return;
       setRows(prev => {
         const next = [...t.iter()];
-        if (prev.length === next.length && prev.every((r, i) => r === next[i])) return prev;
+        if (prev.length === next.length && prev.every((r, i) => r === next[i]))
+          return prev;
         return next;
       });
     };
@@ -85,11 +86,11 @@ function useTable<T>(
 }
 
 export function useFlowerSessions(conn: DbConnection | null) {
-  return useTable<FlowerSession>(conn, "flower_session");
+  return useTable<FlowerSession>(conn, "flowerSession");
 }
 
 export function useFlowerSpecs(conn: DbConnection | null) {
-  return useTable<FlowerSpec>(conn, "flower_spec");
+  return useTable<FlowerSpec>(conn, "flowerSpec");
 }
 
 export function useUsers(conn: DbConnection | null) {
@@ -97,15 +98,13 @@ export function useUsers(conn: DbConnection | null) {
 }
 
 export function useOrders(conn: DbConnection | null) {
-  return useTable<FlowerOrder>(conn, "flower_order");
+  return useTable<FlowerOrder>(conn, "flowerOrder");
 }
 
 export function useChatMessages(conn: DbConnection | null) {
-  return useTable<ChatMessage>(conn, "chat_message");
+  return useTable<ChatMessage>(conn, "chatMessage");
 }
 
 export function usePartOverrides(conn: DbConnection | null) {
-  return useTable<FlowerPartOverride>(conn, "part_override");
+  return useTable<FlowerPartOverride>(conn, "partOverride");
 }
-
-

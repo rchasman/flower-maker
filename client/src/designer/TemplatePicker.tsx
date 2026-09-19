@@ -13,7 +13,14 @@ interface TemplatePickerProps {
   onGenerationFailed: (genId: string) => void;
 }
 
-export function TemplatePicker({ conn, model, onGenerationStart, onSpecProgress, onFlowerGenerated, onGenerationFailed }: TemplatePickerProps) {
+export function TemplatePicker({
+  conn,
+  model,
+  onGenerationStart,
+  onSpecProgress,
+  onFlowerGenerated,
+  onGenerationFailed,
+}: TemplatePickerProps) {
   const [search, setSearch] = useState("");
   const [generatingSet, setGeneratingSet] = useState<Set<string>>(new Set());
   const groups = templatesByCategory();
@@ -75,7 +82,12 @@ export function TemplatePicker({ conn, model, onGenerationStart, onSpecProgress,
       }}
     >
       {/* Search */}
-      <div style={{ padding: "0.375rem 0.5ch", borderBottom: "1px solid var(--tui-border-dim)" }}>
+      <div
+        style={{
+          padding: "0.375rem 0.5ch",
+          borderBottom: "1px solid var(--tui-border-dim)",
+        }}
+      >
         <div className="tui-input-wrap">
           <input
             value={search}
@@ -96,7 +108,10 @@ export function TemplatePicker({ conn, model, onGenerationStart, onSpecProgress,
       >
         <div className="tui-template-grid">
           {filteredGroups.map(group => [
-            <div key={`cat-${group.category}`} className="tui-template-category">
+            <div
+              key={`cat-${group.category}`}
+              className="tui-template-category"
+            >
               {group.label}
             </div>,
             ...group.templates.map(t => (
@@ -105,7 +120,9 @@ export function TemplatePicker({ conn, model, onGenerationStart, onSpecProgress,
                 template={t}
                 disabled={!conn}
                 generating={generatingSet.has(t.name)}
-                onClick={() => { void handleTemplateClick(t); }}
+                onClick={() => {
+                  void handleTemplateClick(t);
+                }}
               />
             )),
           ])}
@@ -187,7 +204,8 @@ function TemplateTile({
 function buildGradient(colors: string[]): string {
   const hexes = colors.slice(0, 3).map(colorToHex);
   if (hexes.length === 1) return hexes[0]!;
-  if (hexes.length === 2) return `linear-gradient(135deg, ${hexes[0]}, ${hexes[1]})`;
+  if (hexes.length === 2)
+    return `linear-gradient(135deg, ${hexes[0]}, ${hexes[1]})`;
   return `linear-gradient(135deg, ${hexes[0]}, ${hexes[1]}, ${hexes[2]})`;
 }
 

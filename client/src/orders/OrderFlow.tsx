@@ -15,7 +15,12 @@ export function OrderFlow({ session, onOrder }: OrderFlowProps) {
 
   if (!session) {
     return (
-      <div style={{ color: "var(--tui-fg-4)", fontSize: "var(--tui-font-size-sm)" }}>
+      <div
+        style={{
+          color: "var(--tui-fg-4)",
+          fontSize: "var(--tui-font-size-sm)",
+        }}
+      >
         select a flower to place an order.
       </div>
     );
@@ -54,7 +59,13 @@ export function OrderFlow({ session, onOrder }: OrderFlowProps) {
         data-label="SESSION"
         style={{ padding: "1rem 1ch 0.75rem" }}
       >
-        <div style={{ color: "var(--tui-fg-1)", marginBottom: "0.5rem", fontSize: "var(--tui-font-size-sm)" }}>
+        <div
+          style={{
+            color: "var(--tui-fg-1)",
+            marginBottom: "0.5rem",
+            fontSize: "var(--tui-font-size-sm)",
+          }}
+        >
           {session.prompt}
         </div>
         <div
@@ -79,7 +90,10 @@ export function OrderFlow({ session, onOrder }: OrderFlowProps) {
         style={{ width: "100%", padding: "0.5rem" }}
       >
         {isOrdering ? (
-          <span>PLACING ORDER<span className="tui-generating" /></span>
+          <span>
+            PLACING ORDER
+            <span className="tui-generating" />
+          </span>
         ) : (
           "PLACE ORDER →"
         )}

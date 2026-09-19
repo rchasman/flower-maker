@@ -77,9 +77,10 @@ export async function connect(oidcToken?: string): Promise<DbConnection> {
       const mod = await import("./module_bindings/index.ts");
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- SDK builder API varies by version
-      const builder = mod.DbConnection.builder() as any
+      const builder = mod.DbConnection.builder() as any;
       // Use OIDC token if signed in, otherwise fall back to saved anonymous token
-      const token = oidcToken ?? localStorage.getItem(ANON_TOKEN_KEY) ?? undefined;
+      const token =
+        oidcToken ?? localStorage.getItem(ANON_TOKEN_KEY) ?? undefined;
 
       const conn = builder
         .withUri(SPACETIMEDB_URI)
@@ -102,7 +103,9 @@ export async function connect(oidcToken?: string): Promise<DbConnection> {
           (conn as DbConnection)
             .subscriptionBuilder()
             .onApplied(() => {
-              console.log("[spacetimedb] subscription applied — client cache ready");
+              console.log(
+                "[spacetimedb] subscription applied — client cache ready",
+              );
               notify("connected", conn as DbConnection);
             })
             .subscribeToAllTables();

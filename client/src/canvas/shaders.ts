@@ -71,7 +71,10 @@ export function createMergeGlowFilter(
     resources: {
       mergeGlowUniforms: {
         uIntensity: { value: defaults.uIntensity, type: "f32" },
-        uGlowColor: { value: new Float32Array(defaults.uGlowColor), type: "vec3<f32>" },
+        uGlowColor: {
+          value: new Float32Array(defaults.uGlowColor),
+          type: "vec3<f32>",
+        },
         uRadius: { value: defaults.uRadius, type: "f32" },
       },
     },
@@ -137,7 +140,10 @@ export function createPetalTranslucencyFilter(
     resources: {
       petalUniforms: {
         uTranslucency: { value: defaults.uTranslucency, type: "f32" },
-        uLightDir: { value: new Float32Array(defaults.uLightDir), type: "vec2<f32>" },
+        uLightDir: {
+          value: new Float32Array(defaults.uLightDir),
+          type: "vec2<f32>",
+        },
       },
     },
   });
@@ -266,18 +272,18 @@ void main() {
 `;
 
 export interface DarkFantasyDitherUniforms {
-  uColorLevels: number;    // color steps per channel (5 = chunky dark fantasy)
-  uContrast: number;       // S-curve strength (0 = none, 1 = full)
-  uShadowTint: [number, number, number];    // RGB multiplier for dark tones
+  uColorLevels: number; // color steps per channel (5 = chunky dark fantasy)
+  uContrast: number; // S-curve strength (0 = none, 1 = full)
+  uShadowTint: [number, number, number]; // RGB multiplier for dark tones
   uHighlightTint: [number, number, number]; // RGB additive for bright tones
-  uTintStrength: number;   // how much tinting to apply (0–1)
+  uTintStrength: number; // how much tinting to apply (0–1)
   uVignetteStrength: number; // edge darkening (0 = none, 2 = heavy)
 }
 
 export const DARK_FANTASY_DITHER_DEFAULTS: DarkFantasyDitherUniforms = {
   uColorLevels: 5.0,
   uContrast: 0.6,
-  uShadowTint: [0.7, 0.5, 1.0],   // deep purple shadows
+  uShadowTint: [0.7, 0.5, 1.0], // deep purple shadows
   uHighlightTint: [1.0, 0.85, 0.4], // warm gold highlights
   uTintStrength: 0.5,
   uVignetteStrength: 1.2,
@@ -297,8 +303,14 @@ export function createDarkFantasyDitherFilter(
       ditherUniforms: {
         uColorLevels: { value: d.uColorLevels, type: "f32" },
         uContrast: { value: d.uContrast, type: "f32" },
-        uShadowTint: { value: new Float32Array(d.uShadowTint), type: "vec3<f32>" },
-        uHighlightTint: { value: new Float32Array(d.uHighlightTint), type: "vec3<f32>" },
+        uShadowTint: {
+          value: new Float32Array(d.uShadowTint),
+          type: "vec3<f32>",
+        },
+        uHighlightTint: {
+          value: new Float32Array(d.uHighlightTint),
+          type: "vec3<f32>",
+        },
         uTintStrength: { value: d.uTintStrength, type: "f32" },
         uVignetteStrength: { value: d.uVignetteStrength, type: "f32" },
       },

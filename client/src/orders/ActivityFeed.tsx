@@ -1,25 +1,14 @@
 import { useState, useMemo, useCallback } from "react";
 import { useSession } from "../session/SessionProvider.tsx";
-import { useFlowerSessions, useFlowerSpecs, usePartOverrides } from "../spacetime/hooks.ts";
+import {
+  useFlowerSessions,
+  useFlowerSpecs,
+  usePartOverrides,
+} from "../spacetime/hooks.ts";
 import { isVariant } from "../spacetime/types.ts";
-import type { FlowerSession, FlowerSpec } from "../spacetime/types.ts";
 import { run, getNestedValue, parseSpec } from "../lib/utils.ts";
 
 // ── Types ─────────────────────────────────────────────────────────────────
-
-type ActiveFlower = {
-  kind: "active";
-  session: FlowerSession;
-  spec: FlowerSpec | null;
-  constituents: ConstituentEntry[];
-  arrangementName: string | null;
-};
-
-type ConstituentEntry = {
-  index: number;
-  name: string;
-  shape: string | null;
-};
 
 interface ActivityFeedProps {
   onMerge?: (sidA: number, sidB: number) => void;
@@ -32,7 +21,12 @@ interface ActivityFeedProps {
 function specName(raw: string): string {
   const s = parseSpec(raw);
   if (!s) return "unknown";
-  return (s.name as string) ?? (s.common_name as string) ?? (s.species as string) ?? "unknown";
+  return (
+    (s.name as string) ??
+    (s.common_name as string) ??
+    (s.species as string) ??
+    "unknown"
+  );
 }
 
 function specShape(raw: string): string | null {
@@ -42,7 +36,18 @@ function specShape(raw: string): string | null {
 }
 
 function levelLabel(level: number): string {
-  return ["", "stem", "group", "bunch", "arrangement", "bouquet", "centerpiece", "installation"][level] ?? "?";
+  return (
+    [
+      "",
+      "stem",
+      "group",
+      "bunch",
+      "arrangement",
+      "bouquet",
+      "centerpiece",
+      "installation",
+    ][level] ?? "?"
+  );
 }
 
 const actionBtnStyle: React.CSSProperties = {
@@ -61,7 +66,11 @@ const actionBtnStyle: React.CSSProperties = {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export function ActivityFeed({ onMerge, onSelect, selectedId }: ActivityFeedProps) {
+export function ActivityFeed({
+  onMerge,
+  onSelect,
+  selectedId,
+}: ActivityFeedProps) {
   const { conn, identityHex } = useSession();
   const sessions = useFlowerSessions(conn);
   const specs = useFlowerSpecs(conn);
@@ -84,7 +93,10 @@ export function ActivityFeed({ onMerge, onSelect, selectedId }: ActivityFeedProp
     return designing.map(session => {
       const sid = Number(session.id);
       const constituents = partOverrides
-        .filter(o => o.sessionId === session.id && o.partPath.startsWith("constituent:"))
+        .filter(
+          o =>
+            o.sessionId === session.id && o.partPath.startsWith("constituent:"),
+        )
         .map(o => {
           const idx = parseInt(o.partPath.split(":")[1] ?? "0", 10);
           return {
@@ -114,28 +126,46 @@ export function ActivityFeed({ onMerge, onSelect, selectedId }: ActivityFeedProp
     });
   }, [sessions, specs, partOverrides, identityHex]);
 
-  const handleDelete = useCallback((sid: bigint) => {
-    conn?.reducers.deleteSession({ sessionId: sid });
-  }, [conn]);
+  const handleDelete = useCallback(
+    (sid: bigint) => {
+      void conn?.reducers.deleteSession({ sessionId: sid });
+    },
+    [conn],
+  );
 
-  const handleSplit = useCallback((sid: bigint, constituentIndex: number) => {
-    conn?.reducers.splitConstituent({ sessionId: sid, constituentIndex });
-  }, [conn]);
+  const handleSplit = useCallback(
+    (sid: bigint, constituentIndex: number) => {
+      void conn?.reducers.splitConstituent({
+        sessionId: sid,
+        constituentIndex,
+      });
+    },
+    [conn],
+  );
 
-  const handleRemove = useCallback((sid: bigint, constituentIndex: number) => {
-    conn?.reducers.removeConstituent({ sessionId: sid, constituentIndex });
-  }, [conn]);
+  const handleRemove = useCallback(
+    (sid: bigint, constituentIndex: number) => {
+      void conn?.reducers.removeConstituent({
+        sessionId: sid,
+        constituentIndex,
+      });
+    },
+    [conn],
+  );
 
   const startMerge = useCallback((sid: number) => {
     setMergeSource(sid);
   }, []);
 
-  const completeMerge = useCallback((targetSid: number) => {
-    if (mergeSource !== null && mergeSource !== targetSid) {
-      onMerge?.(mergeSource, targetSid);
-    }
-    setMergeSource(null);
-  }, [mergeSource, onMerge]);
+  const completeMerge = useCallback(
+    (targetSid: number) => {
+      if (mergeSource !== null && mergeSource !== targetSid) {
+        onMerge?.(mergeSource, targetSid);
+      }
+      setMergeSource(null);
+    },
+    [mergeSource, onMerge],
+  );
 
   const cancelMerge = useCallback(() => {
     setMergeSource(null);
@@ -145,16 +175,23 @@ export function ActivityFeed({ onMerge, onSelect, selectedId }: ActivityFeedProp
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
       {/* ── Merge mode banner ── */}
       {mergeSource !== null && (
-        <div style={{
-          padding: "0.375rem 1ch",
-          background: "var(--tui-purple-dim)",
-          borderBottom: "1px solid var(--tui-purple)",
-          fontSize: "var(--tui-font-size-xs)",
-          display: "flex",
-          alignItems: "center",
-          gap: "0.5ch",
-        }}>
-          <span style={{ color: "var(--tui-purple)", textShadow: "0 0 4px var(--tui-purple-glow)" }}>
+        <div
+          style={{
+            padding: "0.375rem 1ch",
+            background: "var(--tui-purple-dim)",
+            borderBottom: "1px solid var(--tui-purple)",
+            fontSize: "var(--tui-font-size-xs)",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5ch",
+          }}
+        >
+          <span
+            style={{
+              color: "var(--tui-purple)",
+              textShadow: "0 0 4px var(--tui-purple-glow)",
+            }}
+          >
             MERGE
           </span>
           <span style={{ color: "var(--tui-fg-2)", flex: 1 }}>
@@ -162,7 +199,11 @@ export function ActivityFeed({ onMerge, onSelect, selectedId }: ActivityFeedProp
           </span>
           <button
             onClick={cancelMerge}
-            style={{ ...actionBtnStyle, color: "var(--tui-red)", borderColor: "var(--tui-red-dim)" }}
+            style={{
+              ...actionBtnStyle,
+              color: "var(--tui-red)",
+              borderColor: "var(--tui-red-dim)",
+            }}
           >
             ESC
           </button>
@@ -172,18 +213,22 @@ export function ActivityFeed({ onMerge, onSelect, selectedId }: ActivityFeedProp
       {/* ── Active flowers ── */}
       {activeFlowers.length > 0 && (
         <div>
-          <div style={{
-            padding: "0.25rem 1ch",
-            fontSize: "var(--tui-font-size-xs)",
-            color: "var(--tui-green)",
-            textShadow: "0 0 6px var(--tui-green-glow)",
-            borderBottom: "1px solid var(--tui-border-dim)",
-          }}>
+          <div
+            style={{
+              padding: "0.25rem 1ch",
+              fontSize: "var(--tui-font-size-xs)",
+              color: "var(--tui-green)",
+              textShadow: "0 0 6px var(--tui-green-glow)",
+              borderBottom: "1px solid var(--tui-border-dim)",
+            }}
+          >
             CANVAS ({activeFlowers.length})
           </div>
           {activeFlowers.map(flower => {
             const sid = Number(flower.session.id);
-            const name = flower.spec ? specName(flower.spec.spec) : flower.session.prompt.slice(0, 20);
+            const name = flower.spec
+              ? specName(flower.spec.spec)
+              : flower.session.prompt.slice(0, 20);
             const shape = flower.spec ? specShape(flower.spec.spec) : null;
             const level = Number(flower.session.arrangementLevel);
             const isBundle = flower.constituents.length > 0;
@@ -207,7 +252,9 @@ export function ActivityFeed({ onMerge, onSelect, selectedId }: ActivityFeedProp
                     display: "flex",
                     alignItems: "flex-start",
                     gap: "0.75ch",
-                    borderBottom: isBundle ? "none" : "1px solid var(--tui-border-dim)",
+                    borderBottom: isBundle
+                      ? "none"
+                      : "1px solid var(--tui-border-dim)",
                     cursor: isMergeTarget ? "pointer" : "default",
                     background: run(() => {
                       if (isMergeSource) return "rgba(196, 181, 253, 0.06)";
@@ -218,71 +265,122 @@ export function ActivityFeed({ onMerge, onSelect, selectedId }: ActivityFeedProp
                     transition: "background 0.15s",
                   }}
                   onMouseEnter={e => {
-                    if (isMergeTarget) (e.currentTarget.style.background = "rgba(196, 181, 253, 0.1)");
+                    if (isMergeTarget)
+                      e.currentTarget.style.background =
+                        "rgba(196, 181, 253, 0.1)";
                   }}
                   onMouseLeave={e => {
-                    if (isMergeTarget) (e.currentTarget.style.background = "rgba(196, 181, 253, 0.03)");
+                    if (isMergeTarget)
+                      e.currentTarget.style.background =
+                        "rgba(196, 181, 253, 0.03)";
                   }}
                 >
                   {/* Status indicator */}
-                  <span style={{
-                    width: "4px",
-                    height: "4px",
-                    borderRadius: "50%",
-                    background: isMergeTarget ? "var(--tui-purple)" : "var(--tui-green)",
-                    boxShadow: isMergeTarget
-                      ? "0 0 4px var(--tui-purple-glow)"
-                      : "0 0 4px var(--tui-green-glow)",
-                    flexShrink: 0,
-                    marginTop: "0.375rem",
-                  }} />
+                  <span
+                    style={{
+                      width: "4px",
+                      height: "4px",
+                      borderRadius: "50%",
+                      background: isMergeTarget
+                        ? "var(--tui-purple)"
+                        : "var(--tui-green)",
+                      boxShadow: isMergeTarget
+                        ? "0 0 4px var(--tui-purple-glow)"
+                        : "0 0 4px var(--tui-green-glow)",
+                      flexShrink: 0,
+                      marginTop: "0.375rem",
+                    }}
+                  />
 
                   {/* Info */}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
-                      fontSize: "var(--tui-font-size-xs)",
-                      color: isMergeTarget ? "var(--tui-purple)" : "var(--tui-fg-1)",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}>
+                    <div
+                      style={{
+                        fontSize: "var(--tui-font-size-xs)",
+                        color: isMergeTarget
+                          ? "var(--tui-purple)"
+                          : "var(--tui-fg-1)",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
                       {isMergeTarget ? `→ merge into ${name}` : name}
                       {isBundle && (
-                        <span className="tui-badge tui-badge-purple" style={{ marginLeft: "0.5ch", verticalAlign: "middle" }}>
+                        <span
+                          className="tui-badge tui-badge-purple"
+                          style={{
+                            marginLeft: "0.5ch",
+                            verticalAlign: "middle",
+                          }}
+                        >
                           {flower.constituents.length}x
                         </span>
                       )}
                     </div>
-                    <div style={{
-                      fontSize: "var(--tui-font-size-2xs)",
-                      color: "var(--tui-fg-4)",
-                      display: "flex",
-                      gap: "0.75ch",
-                    }}>
+                    <div
+                      style={{
+                        fontSize: "var(--tui-font-size-2xs)",
+                        color: "var(--tui-fg-4)",
+                        display: "flex",
+                        gap: "0.75ch",
+                      }}
+                    >
                       {shape && <span>{shape}</span>}
-                      {level > 1 && <span style={{ color: "var(--tui-purple)" }}>{levelLabel(level)}</span>}
+                      {level > 1 && (
+                        <span style={{ color: "var(--tui-purple)" }}>
+                          {levelLabel(level)}
+                        </span>
+                      )}
                       {flower.arrangementName && (
-                        <span style={{ color: "var(--tui-fg-3)" }}>{flower.arrangementName}</span>
+                        <span style={{ color: "var(--tui-fg-3)" }}>
+                          {flower.arrangementName}
+                        </span>
                       )}
                     </div>
                   </div>
 
                   {/* Actions */}
                   {mergeSource === null && (
-                    <div style={{ display: "flex", gap: "0.25rem", flexShrink: 0, alignItems: "center" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "0.25rem",
+                        flexShrink: 0,
+                        alignItems: "center",
+                      }}
+                    >
                       <button
                         type="button"
-                        onClick={e => { e.stopPropagation(); e.preventDefault(); startMerge(sid); }}
-                        style={{ ...actionBtnStyle, color: "var(--tui-purple)", borderColor: "var(--tui-purple-dim)" }}
+                        onClick={e => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          startMerge(sid);
+                        }}
+                        style={{
+                          ...actionBtnStyle,
+                          color: "var(--tui-purple)",
+                          borderColor: "var(--tui-purple-dim)",
+                        }}
                         title="Merge with another flower"
                       >
                         +
                       </button>
                       <button
                         type="button"
-                        onClick={e => { e.stopPropagation(); e.preventDefault(); handleDelete(flower.session.id); }}
-                        style={{ ...actionBtnStyle, color: "var(--tui-red)", borderColor: "var(--tui-red-dim)" }}
-                        title={isBundle ? "Delete entire bundle" : "Delete flower"}
+                        onClick={e => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          handleDelete(flower.session.id);
+                        }}
+                        style={{
+                          ...actionBtnStyle,
+                          color: "var(--tui-red)",
+                          borderColor: "var(--tui-red-dim)",
+                        }}
+                        title={
+                          isBundle ? "Delete entire bundle" : "Delete flower"
+                        }
                       >
                         x
                       </button>
@@ -292,10 +390,12 @@ export function ActivityFeed({ onMerge, onSelect, selectedId }: ActivityFeedProp
 
                 {/* Constituent sub-rows for bundles */}
                 {isBundle && (
-                  <div style={{
-                    borderBottom: "1px solid var(--tui-border-dim)",
-                    background: "var(--tui-bg-0)",
-                  }}>
+                  <div
+                    style={{
+                      borderBottom: "1px solid var(--tui-border-dim)",
+                      background: "var(--tui-bg-0)",
+                    }}
+                  >
                     {flower.constituents.map((c, ci) => {
                       const isLast = ci === flower.constituents.length - 1;
                       return (
@@ -310,34 +410,77 @@ export function ActivityFeed({ onMerge, onSelect, selectedId }: ActivityFeedProp
                           }}
                         >
                           {/* Tree connector */}
-                          <span style={{ color: "var(--tui-fg-4)", flexShrink: 0, width: "2ch" }}>
+                          <span
+                            style={{
+                              color: "var(--tui-fg-4)",
+                              flexShrink: 0,
+                              width: "2ch",
+                            }}
+                          >
                             {isLast ? "└─" : "├─"}
                           </span>
 
                           {/* Name + shape */}
-                          <span style={{ color: "var(--tui-fg-2)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          <span
+                            style={{
+                              color: "var(--tui-fg-2)",
+                              flex: 1,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
                             {c.name}
                             {c.index === 0 && (
-                              <span style={{ color: "var(--tui-green)", marginLeft: "0.5ch" }}>*</span>
+                              <span
+                                style={{
+                                  color: "var(--tui-green)",
+                                  marginLeft: "0.5ch",
+                                }}
+                              >
+                                *
+                              </span>
                             )}
                           </span>
                           {c.shape && (
-                            <span style={{ color: "var(--tui-fg-4)", flexShrink: 0 }}>{c.shape}</span>
+                            <span
+                              style={{
+                                color: "var(--tui-fg-4)",
+                                flexShrink: 0,
+                              }}
+                            >
+                              {c.shape}
+                            </span>
                           )}
 
                           {/* Per-constituent actions */}
-                          <div style={{ display: "flex", gap: "0.25rem", flexShrink: 0, alignItems: "center" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: "0.25rem",
+                              flexShrink: 0,
+                              alignItems: "center",
+                            }}
+                          >
                             <button
                               type="button"
-                              onClick={() => handleSplit(flower.session.id, c.index)}
-                              style={{ ...actionBtnStyle, color: "var(--tui-cyan)", borderColor: "rgba(103, 232, 249, 0.15)" }}
+                              onClick={() =>
+                                handleSplit(flower.session.id, c.index)
+                              }
+                              style={{
+                                ...actionBtnStyle,
+                                color: "var(--tui-cyan)",
+                                borderColor: "rgba(103, 232, 249, 0.15)",
+                              }}
                               title="Split out as independent flower"
                             >
                               {"<>"}
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleRemove(flower.session.id, c.index)}
+                              onClick={() =>
+                                handleRemove(flower.session.id, c.index)
+                              }
                               style={actionBtnStyle}
                               title="Remove from bundle"
                             >
@@ -356,11 +499,13 @@ export function ActivityFeed({ onMerge, onSelect, selectedId }: ActivityFeedProp
       )}
 
       {activeFlowers.length === 0 && (
-        <div style={{
-          padding: "0.5rem 1ch",
-          color: "var(--tui-fg-4)",
-          fontSize: "var(--tui-font-size-xs)",
-        }}>
+        <div
+          style={{
+            padding: "0.5rem 1ch",
+            color: "var(--tui-fg-4)",
+            fontSize: "var(--tui-font-size-xs)",
+          }}
+        >
           no flowers on canvas.
         </div>
       )}
