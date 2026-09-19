@@ -30,7 +30,7 @@ ok "Dependencies installed"
 
 if [ ! -f .env ]; then
   cp .env.example .env
-  ok "Created .env from .env.example — fill in ANTHROPIC_API_KEY for AI features"
+  ok "Created .env from .env.example — fill in AI_GATEWAY_API_KEY for AI features"
 else
   dim ".env already exists, skipping"
 fi
