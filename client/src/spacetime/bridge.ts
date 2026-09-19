@@ -19,7 +19,7 @@ function identityHex(id: unknown): string {
 }
 
 /** Check if a session belongs to the current user. */
-function isMySession(session: FlowerSession): boolean {
+export function isMySession(session: FlowerSession): boolean {
   const me = getMyIdentity();
   if (!me) return true; // fallback: show all if identity unavailable
   const myHex = identityHex(me);
