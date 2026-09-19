@@ -39,7 +39,7 @@ pub enum BotanicalClass {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum FlowerFamily {
     #[default]
-    Unknown,
+    Invented,        // no real family — obeys only internal consistency rules
     // Dicots
     Rosaceae,        // roses, cherries, apples — 5 petals, many stamens
     Asteraceae,      // daisies, sunflowers — composite heads (ray + disc)
@@ -61,12 +61,24 @@ pub enum FlowerFamily {
     Caprifoliaceae,  // honeysuckles — tubular, bilateral
     Hydrangeaceae,   // hydrangeas — 4-5 petal clusters
     Magnoliaceae,    // magnolias — many tepals, spiral
+    Paeoniaceae,     // peonies — 5-10 petals, many stamens, often doubled
+    Plumbaginaceae,  // statice, limonium — papery calyx, tiny flowers in sprays
+    Hypericaceae,    // St John's wort — 5 petals, brush of stamens, berries
+    Myrtaceae,       // waxflower, eucalyptus — 5 waxy petals, many stamens
+    Plantaginaceae,  // snapdragons — bilateral, two-lipped, spikes
+    Gentianaceae,    // lisianthus, gentians — 5 fused petals, bell/funnel
+    Campanulaceae,   // bellflowers — 5 fused petals, bell
+    Nymphaeaceae,    // water lilies — many petals, spiral, floating
+    Passifloraceae,  // passion flowers — 5+5, corona of filaments
+    Proteaceae,      // proteas — dense heads wrapped in showy bracts
+    Cactaceae,       // cactus flowers — many tepals, many stamens, spiral
     // Monocots
     Orchidaceae,     // orchids — bilateral, labellum, 3+3 tepals
     Liliaceae,       // lilies — 6 tepals, 2 whorls, radial
     Iridaceae,       // iris, crocus — 3+3, often bearded
     Amaryllidaceae,  // amaryllis, daffodils — 6 tepals, corona
     Asparagaceae,    // hyacinths, agave — 6 tepals, bell-shaped
+    Alstroemeriaceae, // alstroemeria — 3+3 tepals, inner ones streaked
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -87,6 +99,7 @@ pub struct FlowerSpec {
     pub roots: RootSystem,
     pub aura: Option<Aura>,
     pub personality: FlowerPersonality,
+    pub inflorescence: Inflorescence,
 }
 
 impl Default for FlowerSpec {
@@ -103,21 +116,85 @@ impl Default for FlowerSpec {
             roots: RootSystem::default(),
             aura: None,
             personality: FlowerPersonality::default(),
+            inflorescence: Inflorescence::default(),
         }
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INFLORESCENCE — how many heads and how they sit on the stem
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Inflorescence {
+    pub kind: InflorescenceKind,
+    pub head_count: u32,         // 1 = a single head
+    pub head_scale: f64,         // 0.0-1.0 size of secondary heads vs the primary
+    pub spread: f64,             // 0.0-1.0 how far heads sit from the axis
+}
+
+impl Default for Inflorescence {
+    fn default() -> Self {
+        Self {
+            kind: InflorescenceKind::default(),
+            head_count: 1,
+            head_scale: 0.5,
+            spread: 0.5,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum InflorescenceKind {
+    #[default]
+    Solitary,    // one head
+    Spike,       // heads sit on the main stem, no stalks
+    Raceme,      // short stalks alternating up the stem
+    Umbel,       // stalks from one point at the top, heads level
+    Corymb,      // stalks from different points, heads level
+    Panicle,     // branched stalks, pyramid
+    Spray,       // branches from the upper stem, primary head on top
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PETAL SYSTEM
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PetalSystem {
     pub layers: Vec<PetalLayer>,
     pub bloom_progress: f64,        // 0.0 = bud, 1.0 = full bloom
     pub wilt_progress: f64,         // 0.0 = fresh, 1.0 = wilted
     pub symmetry: Symmetry,
+    pub symmetry_order: u32,        // Radial order, 0 = unspecified
+    pub divergence_angle: f64,      // degrees, Spiral only
+    pub stage: LifeStage,
+}
+
+impl Default for PetalSystem {
+    fn default() -> Self {
+        Self {
+            layers: Vec::new(),
+            bloom_progress: 0.0,
+            wilt_progress: 0.0,
+            symmetry: Symmetry::default(),
+            symmetry_order: 0,
+            divergence_angle: 137.5,
+            stage: LifeStage::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum LifeStage {
+    Bud,         // petals closed inside the sepals
+    Opening,     // half open
+    #[default]
+    Bloom,       // fully open
+    Fading,      // droop and desaturation
+    SeedHead,    // no petals, enlarged receptacle, seed marks or pappus
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -139,6 +216,8 @@ pub struct PetalLayer {
     pub angular_offset: f64,         // degrees offset from previous layer
     pub droop: f64,                  // 0.0 (upright) to 1.0 (hanging)
     pub thickness: f64,              // 0.1-1.0
+    pub pattern: PetalPattern,
+    pub fusion: Fusion,
 }
 
 impl Default for PetalLayer {
@@ -160,8 +239,74 @@ impl Default for PetalLayer {
             angular_offset: 0.0,
             droop: 0.0,
             thickness: 0.5,
+            pattern: PetalPattern::default(),
+            fusion: Fusion::default(),
         }
     }
+}
+
+/// Marks drawn on each petal of a layer, in petal-local space
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PetalPattern {
+    pub kind: PatternKind,
+    pub color: Color,
+    pub scale: f64,              // 0.0-1.0 mark size relative to petal width
+    pub density: f64,            // 0.0-1.0 how many marks
+    pub extent: f64,             // 0.0-1.0 how far the marks reach from their anchor
+}
+
+impl Default for PetalPattern {
+    fn default() -> Self {
+        Self {
+            kind: PatternKind::default(),
+            color: Color::default(),
+            scale: 0.5,
+            density: 0.5,
+            extent: 0.5,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum PatternKind {
+    #[default]
+    None,
+    Spots,        // round marks spread along the petal
+    Speckle,      // many tiny marks
+    Stripes,      // lines along the length from the base
+    Flame,        // tapering streaks from the base
+    ThroatBlotch, // one filled region from the base
+    Picotee,      // band along the edge
+    Band,         // band across the petal
+}
+
+/// How the petals of a layer join into one corolla
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Fusion {
+    pub kind: FusionKind,
+    pub depth: f64,              // 0.0-1.0 fraction of petal length that is fused
+}
+
+impl Default for Fusion {
+    fn default() -> Self {
+        Self {
+            kind: FusionKind::default(),
+            depth: 0.5,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum FusionKind {
+    #[default]
+    Free,        // separate petals
+    Bell,        // widens then curves in
+    Trumpet,     // widens outward
+    Urn,         // bulges then narrows
+    Funnel,      // widens linearly
+    Tube,        // stays narrow with small lobes
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -192,18 +337,15 @@ pub enum PetalArrangement {
     Zygomorphic,    // irregular, one plane of symmetry
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Whole-flower symmetry. Radial order and spiral angle live on PetalSystem
+/// as `symmetry_order` and `divergence_angle`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum Symmetry {
-    Radial { order: u32 },
+    #[default]
+    Radial,
     Bilateral,
     Asymmetric,
-    Spiral { divergence_angle: f64 },
-}
-
-impl Default for Symmetry {
-    fn default() -> Self {
-        Self::Radial { order: 0 }
-    }
+    Spiral,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -357,6 +499,35 @@ pub struct StructureSystem {
     pub sepals: Vec<Sepal>,
     pub receptacle: Receptacle,
     pub peduncle: Peduncle,
+    pub buds: Vec<Bud>,
+}
+
+/// A side bud on the stem, drawn closed or part open
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Bud {
+    pub position: f64,           // 0.0-1.0 along the stem
+    pub side: Side,
+    pub size: f64,               // relative to the primary head
+    pub openness: f64,           // 0.0 closed, 1.0 nearly open
+}
+
+impl Default for Bud {
+    fn default() -> Self {
+        Self {
+            position: 0.5,
+            side: Side::default(),
+            size: 0.3,
+            openness: 0.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum Side {
+    #[default]
+    Left,
+    Right,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -539,6 +710,10 @@ pub struct Leaf {
     pub droop: f64,
     pub curl: f64,
     pub translucency: f64,       // 0.0-1.0 light through leaf
+    pub position: f64,           // 0.0-1.0 along the stem
+    pub side: Side,
+    pub angle_offset: f64,       // radians
+    pub variegation: Variegation,
 }
 
 impl Default for Leaf {
@@ -554,8 +729,30 @@ impl Default for Leaf {
             droop: 0.0,
             curl: 0.0,
             translucency: 0.5,
+            position: 0.5,
+            side: Side::default(),
+            angle_offset: 0.0,
+            variegation: Variegation::default(),
         }
     }
+}
+
+/// A second color laid over the leaf in a fixed pattern
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct Variegation {
+    pub kind: VariegationKind,
+    pub color: Color,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum VariegationKind {
+    #[default]
+    None,
+    Edge,        // pale margin
+    Center,      // pale midrib region
+    Splash,      // irregular blotches
+    Stripe,      // lengthwise stripes
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

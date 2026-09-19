@@ -1,12 +1,10 @@
 mod simulation;
 mod merge;
-mod animation;
 mod buffer;
 
 use flower_core::catalog::FlowerSpec;
 use flower_core::animation::FlowerAnimation;
-use flower_core::physics::GardenPhysics;
-use flower_core::templates::PhysicsArchetype;
+use flower_core::physics::{GardenPhysics, body_params};
 use simulation::PhysicsWorld;
 use merge::MergeTracker;
 use buffer::RenderBuffer;
@@ -56,17 +54,7 @@ impl GardenSimulation {
                 flower.spec = spec;
                 self.world.set_position(flower.body_handle, x, y);
             } else {
-                // Derive physics from stem properties as a proxy for archetype
-                let is_heavy = spec.structure.stem.thickness > 0.4;
-                let is_tall = spec.structure.stem.height > 0.8;
-                let archetype = match (is_heavy, is_tall) {
-                    (true, true) => PhysicsArchetype::Sturdy,
-                    (true, false) => PhysicsArchetype::Bushy,
-                    (false, true) => PhysicsArchetype::Upright,
-                    (false, false) => PhysicsArchetype::Delicate,
-                };
-                let radius = archetype.collider_radius() as f32;
-                let mass = archetype.mass() as f32;
+                let (radius, mass) = body_params(&spec);
                 let handle = self.world.add_body(x, y, radius, mass, session_id);
                 self.flowers.push(FlowerInstance {
                     session_id,

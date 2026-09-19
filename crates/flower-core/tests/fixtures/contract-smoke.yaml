@@ -1,0 +1,57 @@
+name: Contract Smoke Iris
+species: Iris germanica
+taxonomy:
+  family: Iridaceae
+  genus: Iris
+  species_name: germanica
+  common_name: Bearded Iris
+  botanical_class: Monocot
+petals:
+  layers:
+    - index: 0
+      count: 3
+      shape: Obovate
+      arrangement: Whorled
+      pattern:
+        kind: Flame
+        color: { r: 0.9, g: 0.8, b: 0.2, a: 1.0 }
+        scale: 0.3
+        density: 0.7
+        extent: 0.6
+      fusion:
+        kind: Bell
+        depth: 0.35
+    - index: 1
+      count: 3
+      shape: Spatulate
+      angular_offset: 60.0
+  bloom_progress: 1.0
+  wilt_progress: 0.0
+  symmetry: Spiral
+  symmetry_order: 3
+  divergence_angle: 144.0
+  stage: Opening
+structure:
+  stem:
+    height: 0.9
+    thickness: 0.3
+  buds:
+    - position: 0.7
+      side: Right
+      size: 0.4
+      openness: 0.2
+foliage:
+  leaves:
+    - shape: Linear
+      size: 0.8
+      position: 0.3
+      side: Right
+      angle_offset: 0.4
+      variegation:
+        kind: Stripe
+        color: { r: 0.95, g: 0.95, b: 0.8, a: 1.0 }
+inflorescence:
+  kind: Spray
+  head_count: 7
+  head_scale: 0.6
+  spread: 0.8
