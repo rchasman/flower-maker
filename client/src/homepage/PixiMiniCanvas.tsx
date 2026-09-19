@@ -24,6 +24,8 @@ import {
 import {
   drawFlowerFromPlan,
   drawArrangementFromPlan,
+  drawGlow,
+  hasGlow,
 } from "../flower/pixi-draw.ts";
 import type { FlowerSession, FlowerSpec } from "../spacetime/types.ts";
 
@@ -112,6 +114,36 @@ function resolvePositions(
   return resolved;
 }
 
+/** One zone member's Graphics: the arrangement, or the flower followed by one frame of its additive glow. */
+function snapshotGraphics(
+  p: { sid: number; sessionKey: string },
+  constituentMap: Map<string, Array<{ spec: string; sid: number }>>,
+  specBySessionId: Map<string, FlowerSpec>,
+  arrangementMetaMap: Map<string, ArrangementMeta>,
+  radius: number,
+): Graphics[] {
+  const g = new Graphics();
+  const constituents = constituentMap.get(p.sessionKey);
+  if (constituents && constituents.length > 1) {
+    const level = Math.min(7, Math.ceil(constituents.length / 3));
+    const meta = arrangementMetaMap.get(p.sessionKey);
+    drawArrangementFromPlan(
+      g,
+      createArrangementPlan(constituents, level, meta),
+      radius,
+      1.0,
+    );
+    return [g];
+  }
+  const plan = createFlowerPlan(specBySessionId.get(p.sessionKey)?.spec, p.sid);
+  drawFlowerFromPlan(g, plan, radius, 1.0);
+  if (!hasGlow(plan)) return [g];
+  const glow = new Graphics();
+  glow.blendMode = "add";
+  drawGlow(glow, plan, radius, 1.0);
+  return [g, glow];
+}
+
 // ── Render a zone to a data URL ──────────────────────────────────────────
 
 async function renderZoneSnapshot(
@@ -128,23 +160,17 @@ async function renderZoneSnapshot(
   const resolved = resolvePositions(sessions, radius);
 
   for (const p of resolved) {
-    const g = new Graphics();
-    const constituents = constituentMap.get(p.sessionKey);
-    const isArrangement = !!constituents && constituents.length > 1;
-
-    if (isArrangement) {
-      const level = Math.min(7, Math.ceil(constituents.length / 3));
-      const meta = arrangementMetaMap.get(p.sessionKey);
-      const plan = createArrangementPlan(constituents, level, meta);
-      drawArrangementFromPlan(g, plan, radius, 1.0);
-    } else {
-      const spec = specBySessionId.get(p.sessionKey)?.spec;
-      const plan = createFlowerPlan(spec, p.sid);
-      drawFlowerFromPlan(g, plan, radius, 1.0);
+    const drawn = snapshotGraphics(
+      p,
+      constituentMap,
+      specBySessionId,
+      arrangementMetaMap,
+      radius,
+    );
+    for (const g of drawn) {
+      g.position.set(p.x, p.y);
+      container.addChild(g);
     }
-
-    g.position.set(p.x, p.y);
-    container.addChild(g);
   }
 
   const bounds = resolved.reduce(
@@ -175,14 +201,19 @@ async function renderZoneSnapshot(
   const renderTexture = RenderTexture.create({ width: size, height: size });
   app.renderer.render({ container, target: renderTexture });
 
-  const canvas = app.renderer.texture.generateCanvas(
-    renderTexture,
-  ) as HTMLCanvasElement;
+  const canvas = app.renderer.texture.generateCanvas(renderTexture);
+  if (!(canvas instanceof HTMLCanvasElement)) {
+    throw new Error("pixi generated a canvas the browser cannot encode");
+  }
 
   // Async blob encode — avoids blocking the main thread with synchronous PNG encoding.
   // toBlob is async (callback-based) unlike toDataURL which blocks.
-  const blob = await new Promise<Blob>(resolve =>
-    canvas.toBlob(b => resolve(b!), "image/webp", 0.8),
+  const blob = await new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob(
+      b => (b ? resolve(b) : reject(new Error("canvas.toBlob gave no blob"))),
+      "image/webp",
+      0.8,
+    ),
   );
 
   const url = URL.createObjectURL(blob);
