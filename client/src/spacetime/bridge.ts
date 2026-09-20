@@ -202,7 +202,7 @@ export async function handleMerge(
 
     const arrangementJson = await readStream(res);
 
-    void conn.reducers.mergeSessions({
+    await conn.reducers.mergeSessions({
       sessionAId: BigInt(sessionAId),
       sessionBId: BigInt(sessionBId),
       aiArrangementJson: arrangementJson,
