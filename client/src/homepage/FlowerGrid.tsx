@@ -237,9 +237,9 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
   );
 }
 
-/** Empty zone placeholder — subtle crosshair. */
+/** Empty zone placeholder: a faint crosshair. */
 function EmptyZoneIcon({ isYours }: { isYours: boolean }) {
-  const color = isYours ? "var(--accent-dim)" : "var(--border)";
+  const color = isYours ? "var(--border-hover)" : "var(--border)";
   return (
     <svg
       style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
@@ -254,8 +254,9 @@ function EmptyZoneIcon({ isYours }: { isYours: boolean }) {
           x="20"
           y="36"
           textAnchor="middle"
-          fill="var(--accent-dim)"
-          fontSize="3"
+          fill="var(--text-quaternary)"
+          fontSize="2.5"
+          letterSpacing="0.3"
           fontFamily="var(--font-mono)"
         >
           YOUR ZONE

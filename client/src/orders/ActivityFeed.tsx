@@ -186,14 +186,7 @@ export function ActivityFeed({
             gap: "0.5ch",
           }}
         >
-          <span
-            style={{
-              color: "var(--accent)",
-              textShadow: "0 0 4px var(--accent-dim)",
-            }}
-          >
-            MERGE
-          </span>
+          <span style={{ color: "var(--accent)" }}>MERGE</span>
           <span style={{ color: "var(--text-tertiary)", flex: 1 }}>
             select target for #{mergeSource}
           </span>
@@ -214,15 +207,13 @@ export function ActivityFeed({
       {activeFlowers.length > 0 && (
         <div>
           <div
+            className="label"
             style={{
-              padding: "0.25rem 1ch",
-              fontSize: "var(--font-size-xs)",
-              color: "var(--positive)",
-              textShadow: "0 0 6px var(--accent-dim)",
+              padding: "0.5rem 1ch",
               borderBottom: "1px solid var(--border)",
             }}
           >
-            CANVAS ({activeFlowers.length})
+            Flowers ({activeFlowers.length})
           </div>
           {activeFlowers.map(flower => {
             const sid = Number(flower.session.id);

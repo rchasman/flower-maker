@@ -133,7 +133,7 @@ export function Chat() {
               padding: "1rem 0",
             }}
           >
-            no messages. type to chat.
+            No messages yet.
           </div>
         )}
       </div>
@@ -156,7 +156,7 @@ export function Chat() {
                 sendMessage();
               }
             }}
-            placeholder="say something..."
+            placeholder="Say something"
             className="input"
           />
         </div>

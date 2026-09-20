@@ -566,9 +566,7 @@ export function PartEditor({
               >
                 {isCollapsed ? "▸" : "▾"}
               </span>
-              <span style={{ textShadow: `0 0 6px ${section.accent}33` }}>
-                {section.label}
-              </span>
+              <span>{section.label}</span>
               {sectionModified > 0 && (
                 <span
                   style={{

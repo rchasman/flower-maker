@@ -441,12 +441,11 @@ a,
 .zone-grid {
   flex: 1;
   display: grid;
-  gap: 0;
+  gap: 1px;
+  align-content: start;
   overflow: auto;
-  background: var(--border);
+  background: var(--surface);
   padding: 1px;
-  row-gap: 1px;
-  column-gap: 1px;
 }
 
 .zone-card {
@@ -454,8 +453,8 @@ a,
   background: var(--surface);
   overflow: hidden;
   position: relative;
-  outline: 1px solid transparent;
-  outline-offset: -1px;
+  outline: 1px solid var(--border);
+  outline-offset: 0;
   transition: outline-color 0.2s;
 }
 

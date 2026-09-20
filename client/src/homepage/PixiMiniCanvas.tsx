@@ -50,7 +50,7 @@ function getSharedApp(): Promise<Application> {
   const app = new Application();
   sharedAppReady = app
     .init({
-      background: 0x0d0d0d,
+      background: 0x000000,
       width: SNAPSHOT_SIZE,
       height: SNAPSHOT_SIZE,
       antialias: true,
@@ -289,7 +289,7 @@ export function PixiMiniCanvas({
           inset: 0,
           width: "100%",
           height: "100%",
-          background: "#0d0d0d",
+          background: "#000000",
         }}
       />
     );
@@ -305,7 +305,7 @@ export function PixiMiniCanvas({
         width: "100%",
         height: "100%",
         objectFit: "contain",
-        background: "#0d0d0d",
+        background: "#000000",
       }}
     />
   );

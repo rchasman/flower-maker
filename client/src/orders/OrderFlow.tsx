@@ -21,7 +21,7 @@ export function OrderFlow({ session, onOrder }: OrderFlowProps) {
           fontSize: "var(--font-size-sm)",
         }}
       >
-        select a flower to place an order.
+        Select a flower to place an order.
       </div>
     );
   }
@@ -112,7 +112,7 @@ export function OrderFlow({ session, onOrder }: OrderFlowProps) {
               margin: 0,
               fontSize: "var(--font-size-xs)",
               lineHeight: 1.6,
-              color: "var(--positive)",
+              color: "var(--text-secondary)",
               overflow: "auto",
               maxHeight: "300px",
             }}

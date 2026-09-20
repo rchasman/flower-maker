@@ -542,7 +542,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
 
       void app
         .init({
-          background: 0x0d0d0d,
+          background: 0x000000,
           resizeTo: el,
           antialias: true,
           resolution: window.devicePixelRatio,

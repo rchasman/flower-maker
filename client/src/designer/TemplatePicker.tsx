@@ -80,7 +80,7 @@ export function TemplatePicker({
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="search templates..."
+            placeholder="Search templates"
             className="input"
           />
         </div>

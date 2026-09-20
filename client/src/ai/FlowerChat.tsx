@@ -140,7 +140,7 @@ export function FlowerChat({
                 void handleSubmit();
               }
             }}
-            placeholder="describe a flower..."
+            placeholder="Describe a flower"
             className="input"
           />
         </div>
@@ -243,7 +243,7 @@ export function FlowerChat({
                 void handleSubmit();
               }
             }}
-            placeholder="describe a flower..."
+            placeholder="Describe a flower"
             className="input"
           />
         </div>

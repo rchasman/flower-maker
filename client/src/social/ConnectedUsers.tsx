@@ -12,14 +12,8 @@ export function ConnectedUsers() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-      <div
-        style={{
-          fontSize: "var(--font-size-xs)",
-          color: "var(--positive)",
-          marginBottom: "0.25rem",
-        }}
-      >
-        ── OPERATORS ONLINE ({online.length})
+      <div className="label" style={{ marginBottom: "0.25rem" }}>
+        Online ({online.length})
       </div>
       {online.map(user => (
         <div
