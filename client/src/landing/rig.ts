@@ -31,9 +31,19 @@ export interface SpriteTransform {
   readonly scale: number;
   /** 0..1 */
   readonly visible: number;
+  /** Painter's order: higher draws in front. */
+  readonly z: number;
   readonly cutA: Cut;
   readonly cutB: Cut;
 }
+
+/** Depth layers of the scene, back to front. */
+export const Z = {
+  belt: 0,
+  onBelt: 1,
+  arm: 2,
+  held: 3,
+} as const;
 
 /** Where an arm's base flange sits in frame uv and how tall the whole plate is. */
 export interface ArmPlacement {
@@ -140,6 +150,7 @@ export const armLinks = (
     angle: angles[k]!,
     scale: placement.scale,
     visible: 1,
+    z: Z.arm,
     cutA: k === 0 ? NO_CUT : cutAt(joints, k, 1),
     cutB: k === 3 ? NO_CUT : cutAt(joints, k + 1, -1),
   }));

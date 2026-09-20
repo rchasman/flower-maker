@@ -11,6 +11,7 @@ import {
   armTip,
   NO_CUT,
   REST,
+  Z,
   type ArmPlacement,
   type ArmPose,
   type SpriteTransform,
@@ -150,6 +151,7 @@ const item = (
   scale: number,
   visible: number,
   angle = 0,
+  z: number = Z.onBelt,
 ): SpriteTransform => ({
   tex: plateIndex(id),
   x,
@@ -158,6 +160,7 @@ const item = (
   angle,
   scale,
   visible,
+  z,
   cutA: NO_CUT,
   cutB: NO_CUT,
 });
@@ -170,6 +173,7 @@ const belt: SpriteTransform = {
   angle: 0,
   scale: 1.19,
   visible: 1,
+  z: Z.belt,
   cutA: NO_CUT,
   cutB: NO_CUT,
 };
@@ -210,7 +214,14 @@ const bunch = (t: number, handoffPose: ArmPose, frameAspect: number) => {
   const position: Point = held ? [gx, gy + HELD_DROP * (1 + offered)] : onBelt;
   const scale = 0.26 * lerp(1, OFFER_GROWTH, offered);
   const visible = seg(t, 4.05, 4.25) - seg(t, 9.2, 9.6);
-  return item("bunch", position, scale, visible, OFFER_TURN * offered);
+  return item(
+    "bunch",
+    position,
+    scale,
+    visible,
+    OFFER_TURN * offered,
+    held ? Z.held : Z.onBelt,
+  );
 };
 
 export const timeline = (

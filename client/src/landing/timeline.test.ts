@@ -105,3 +105,19 @@ describe("belt continuity", () => {
     expect(bunchAt(0.5).visible).toBe(0);
   });
 });
+
+describe("depth", () => {
+  test("flowers ride behind the arms and the bunch comes in front only while the last arm holds it", () => {
+    const tulipAt = (t: number) =>
+      timeline(t).find(s => s.tex === plateIndex("tulip"))!;
+    const bunchAt = (t: number) =>
+      timeline(t).find(s => s.tex === plateIndex("bunch"))!;
+    const armZ = timeline(0).find(s => s.tex === plateIndex("arm-pick"))!.z;
+    expect(tulipAt(1.7).z).toBeLessThan(armZ);
+    expect(tulipAt(4.1).z).toBeLessThan(armZ);
+    expect(bunchAt(5.9).z).toBeLessThan(armZ);
+    expect(bunchAt(6.2).z).toBeLessThan(armZ);
+    expect(bunchAt(7.0).z).toBeGreaterThan(armZ);
+    expect(bunchAt(8.6).z).toBeGreaterThan(armZ);
+  });
+});
