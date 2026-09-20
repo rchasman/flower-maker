@@ -87,7 +87,7 @@ export function Landing({ children }: LandingProps) {
         }}
       >
         <span className="label" style={{ marginBottom: "1.25rem" }}>
-          A multiplayer flower garden, streaming live
+          An experimental multiplayer garden
         </span>
 
         <h1
@@ -98,11 +98,11 @@ export function Landing({ children }: LandingProps) {
             lineHeight: 1.02,
             letterSpacing: "-0.02em",
             color: "var(--text-primary)",
-            maxWidth: "18ch",
+            maxWidth: "20ch",
             marginBottom: "1.25rem",
           }}
         >
-          A garden everyone is growing at once.
+          Stream a generated flower into the garden.
         </h1>
 
         <p
@@ -115,8 +115,8 @@ export function Landing({ children }: LandingProps) {
             marginBottom: "1.75rem",
           }}
         >
-          Pick a stem, grow it, and watch everyone else's grow live beside
-          yours.
+          Every stem is generated from real botany as you watch, and grows live
+          beside what everyone else is streaming in.
         </p>
 
         <form
