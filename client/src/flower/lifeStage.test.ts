@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { LIFE_STAGES, type LifeStage } from "../data/flower-enums.ts";
 import { colorFromSpec } from "./color.ts";
 import { cmdsReach } from "./geometry.ts";
-import { fadedCount, hasPappus } from "./lifeStage.ts";
+import { budShellColor, fadedCount, hasPappus } from "./lifeStage.ts";
+import { lerpColor } from "./color.ts";
 import { createFlowerPlan, type FlowerPlan } from "./render.ts";
 import { stemPointAt } from "./stem.ts";
 import { flattenCmds } from "./test-helpers.ts";
@@ -57,6 +58,13 @@ const outerReach = (p: FlowerPlan): number =>
       0,
     ]),
   );
+const channels = (color: number): number[] => [
+  (color >> 16) & 0xff,
+  (color >> 8) & 0xff,
+  color & 0xff,
+];
+const colorDistance = (a: number, b: number): number =>
+  Math.hypot(...channels(a).map((c, i) => c - channels(b)[i]!));
 const saturation = (color: number): number => {
   const channels = [(color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff];
   return Math.max(...channels) - Math.min(...channels);
@@ -75,6 +83,43 @@ describe("life stage", () => {
     expect(shell.length).toBeLessThanOrEqual(5);
     expect(outerReach(bud)).toBeLessThan(outerReach(bloom));
     expect(bud.particles.filter(p => p.kind === "Pollen")).toEqual([]);
+  });
+
+  test("the Bud shell is sepal green tinted 40 percent toward the petal color", () => {
+    const bud = plan({ stage: "Bud" });
+    const sepal = bud.heads[0].sepals[0]!.color;
+    const petal = colorFromSpec(0.9, 0.2, 0.4);
+    expect(budShellColor(sepal, petal)).toBe(lerpColor(sepal, petal, 0.4));
+    const shell = bud.heads[0].layers[0]!.petals[0]!.color;
+    const toShell = (color: number) => colorDistance(shell, color);
+    expect(toShell(budShellColor(sepal, petal))).toBeLessThan(toShell(petal));
+    expect(toShell(budShellColor(sepal, petal))).toBeLessThan(toShell(sepal));
+    expect(
+      colorDistance(bloom.heads[0].layers[0]!.petals[0]!.color, petal),
+    ).toBeLessThan(toShell(petal));
+  });
+
+  test("a spray's buds draw at least 0.55 of its blooms", () => {
+    const p = createFlowerPlan(
+      JSON.stringify({
+        ...JSON.parse(spec()),
+        inflorescence: { kind: "Spray", head_count: 4 },
+      }),
+      SID,
+    );
+    const drawn = (stage: LifeStage) =>
+      Math.max(
+        ...p.florets
+          .filter(f => f.stage === stage)
+          .map(f => {
+            const head = p.heads[f.head]!;
+            return (
+              f.scale *
+              Math.max(...head.layers[0]!.petals.map(pt => cmdsReach(pt.cmds)))
+            );
+          }),
+      );
+    expect(drawn("Bud") / drawn("Bloom")).toBeGreaterThanOrEqual(0.55);
   });
 
   test("the Bud shell stays inside its sepals", () => {

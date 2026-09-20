@@ -516,7 +516,7 @@ const SPRAY_BUD_AT = 0.78;
 const SPRAY_BUD_LENGTH = 0.45;
 const SPRAY_BUD_ANGLE = 40 * DEG;
 const SPRAY_BUD_BEND = 20 * DEG;
-const SPRAY_BUD_SIZE = 0.8;
+const SPRAY_BUD_SIZE = 1;
 
 /** Branches from the upper third arching down to a nodding head each, with a bud just behind it, under a terminal head. */
 function spray(frame: Frame, count: number): InflorescenceLayout {

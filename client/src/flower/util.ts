@@ -14,6 +14,12 @@ export function unreachable(value: never): never {
 /** Direction the light comes from, radians in flower space; petals facing it are lit. */
 export const LIGHT_ANGLE = -Math.PI / 4;
 
+/** Unit vector toward the light, flower space; the petal light fills are offset along it. */
+export const LIGHT_DIRECTION: readonly [number, number] = [
+  Math.cos(LIGHT_ANGLE),
+  Math.sin(LIGHT_ANGLE),
+];
+
 /** The sunflower spiral step, about 137.5 degrees. */
 export const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 

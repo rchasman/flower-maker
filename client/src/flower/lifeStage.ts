@@ -12,7 +12,7 @@ import type {
   PetalShape,
   Side,
 } from "../data/flower-enums.ts";
-import { darkenColor } from "./color.ts";
+import { darkenColor, lerpColor } from "./color.ts";
 import {
   circleCmds,
   closedSmoothCmds,
@@ -60,10 +60,10 @@ const BLOOM_SEPALS = { curvature: 0.1, width: 0.3, lengthScale: 1 };
 
 export const STAGE_PROFILES: Record<LifeStage, StageProfile> = {
   Bud: {
-    radialOffset: 0.6,
+    radialOffset: 0.8,
     throatOpen: false,
     desaturation: 0,
-    sepals: { curvature: 0.7, width: 0.45, lengthScale: 1.15 },
+    sepals: { curvature: 0.7, width: 0.45, lengthScale: 1.8 },
   },
   Opening: {
     radialOffset: 1,
@@ -113,8 +113,14 @@ const BUD_SHELL_MIN = 3;
 const BUD_SHELL_MAX = 5;
 /** a shell petal must be wide enough for three to five of them to close over the centre */
 const BUD_SHELL_MIN_WIDTH = 0.9;
-/** the shell stays inside the sepals, which keep their bloom length */
-const BUD_SHELL_LENGTH = 0.55;
+/** the shell stays inside the sepals, which grow past their bloom length around a bud */
+const BUD_SHELL_LENGTH = 0.7;
+/** how far a bud's shell is tinted from the sepal color toward the petal color */
+const BUD_SHELL_PETAL_TINT = 0.4;
+
+/** A closed bud is mostly sepal green with the petal color showing through. */
+export const budShellColor = (sepalColor: number, petalColor: number): number =>
+  lerpColor(sepalColor, petalColor, BUD_SHELL_PETAL_TINT);
 const OPENING_LENGTH = 0.6;
 const OPENING_CURVATURE = 0.4;
 const FADING_LOSS = 0.2;
@@ -127,14 +133,13 @@ export const fadedCount = (count: number): number =>
 
 /**
  * The layers a head at `stage` draws. Bud: one closed shell of ovate petals in
- * the outer layer's base color. Opening: the outer layer only, shorter and
- * more cupped. Fading: every layer with fewer, drooping, paler petals.
- * SeedHead: none.
+ * `shellColor`. Opening: the outer layer only, shorter and more cupped.
+ * Fading: every layer with fewer, drooping, paler petals. SeedHead: none.
  */
 export function stageLayers<L extends StageLayerFields>(
   stage: LifeStage,
   layers: readonly L[],
-  baseColor: number,
+  shellColor: number,
 ): L[] {
   const outer = layers[0];
   switch (stage) {
@@ -149,7 +154,7 @@ export function stageLayers<L extends StageLayerFields>(
               width: Math.max(outer.width, BUD_SHELL_MIN_WIDTH),
               length: outer.length * BUD_SHELL_LENGTH,
               curvature: 0.9,
-              color: outer.color ?? baseColor,
+              color: shellColor,
               fusion: { kind: "Free", depth: 0 },
             },
           ]

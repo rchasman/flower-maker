@@ -1,8 +1,9 @@
 # Rendering
 
 Every flower on screen is drawn from its spec by the modules in
-`client/src/flower/`. There are no sprites and no shaders. The pipeline has
-two steps:
+`client/src/flower/`. There are no sprites; the only shaders are the filters
+in `client/src/flower/shaders/`, which shade what the plan drew. The pipeline
+has two steps:
 
 1. `createFlowerPlan(spec, sid)` in `render.ts` parses the YAML spec and builds
    a `FlowerPlan`: scale independent geometry as `DrawCmd` lists plus resolved
@@ -16,19 +17,22 @@ per session and rebuilt only when the spec changes.
 
 ## Modules
 
-| Module             | Builds                                                                  |
-| ------------------ | ----------------------------------------------------------------------- |
-| `render.ts`        | spec parsing, `FlowerPlan`, `createFlowerPlan`, `createArrangementPlan` |
-| `petal.ts`         | petal frames, width profiles per `PetalShape`, edge modifiers, outlines |
-| `patterns.ts`      | `generatePetalMarks`: marks in the petal-local frame                    |
-| `corolla.ts`       | `generateCorolla`: one fused cup with lobes and a throat                |
-| `inflorescence.ts` | `layoutInflorescence`: where the secondary heads sit and their pedicels |
-| `lifeStage.ts`     | stage profiles, `stageLayers`, `buildSeedHead`, `generateBuds`          |
-| `effects.ts`       | particles, pollen, bracts, nectary, iridescence, bioluminescence        |
-| `leaf.ts`          | leaf outlines, veins and variegation polygons                           |
-| `stem.ts`          | stem outline, surface strokes, branches, `stemPointAt`                  |
-| `color.ts`         | hex color math: darken, lighten, desaturate, hue rotate                 |
-| `pixi-draw.ts`     | `drawFlowerFromPlan`, `drawArrangementFromPlan`, `drawAura`, `drawGlow` |
+| Module             | Builds                                                                      |
+| ------------------ | --------------------------------------------------------------------------- |
+| `render.ts`        | spec parsing, `FlowerPlan`, `createFlowerPlan`, `createArrangementPlan`     |
+| `petal.ts`         | petal frames, width profiles per `PetalShape`, edge modifiers, outlines     |
+| `patterns.ts`      | `generatePetalMarks`: marks in the petal-local frame                        |
+| `corolla.ts`       | `generateCorolla`: one fused cup with lobes and a throat                    |
+| `inflorescence.ts` | `layoutInflorescence`: where the secondary heads sit and their pedicels     |
+| `lifeStage.ts`     | stage profiles, `stageLayers`, `buildSeedHead`, `generateBuds`              |
+| `effects.ts`       | particles, pollen, bracts, nectary, iridescence, bioluminescence            |
+| `leaf.ts`          | leaf outlines, veins and variegation polygons                               |
+| `stem.ts`          | stem outline, surface strokes, branches, `stemPointAt`                      |
+| `color.ts`         | hex color math: darken, lighten, desaturate, hue rotate                     |
+| `pixi-draw.ts`     | `drawFlowerFromPlan`, `drawArrangementFromPlan`, `drawAura`, `drawGlow`     |
+| `lighting.ts`      | the shader's uniforms from a plan: head lights, depth layers, blur sizes    |
+| `scene.ts`         | `createFlowerScene`: one flower's layers and filters on a pixi stage        |
+| `shaders/`         | `PlantLightFilter`, GLSL and WGSL programs for head volume and translucency |
 
 ## Parsing
 
@@ -175,28 +179,53 @@ the petal color showing between the sepals once `openness` passes 0.6.
 | Particles         | `ornamentation.particles[]`                               | seeds per entry; drawn per frame                                                                                                                                                                                           |
 | Aura              | `aura`                                                    | pulsing circles or triangles by `AuraKind`; drawn per frame                                                                                                                                                                |
 
+### GPU effects
+
+`createFlowerScene(plan)` in `scene.ts` builds every layer a flower needs and
+the filters over them, once per plan; `FlowerCanvas`, `PixiMiniCanvas` and the
+render harness all go through it, so a flower looks the same on every surface.
+Filters are created with the scene and destroyed with it; nothing is allocated
+per frame. Every custom shader ships a GLSL program and a WGSL program, so it
+runs on WebGL and WebGPU alike.
+
+| Effect             | Where                                              | How                                                                                                                                                                                                                                                                                                                        |
+| ------------------ | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bloom              | the aura and glow layers                           | two `Graphics` share one `GraphicsContext`: the crisp core and, under it, a copy with a `BlurFilter` (quality 3, strength from `glowBloomStrength` and `auraBloomStrength`, which scale with the radius) at lower alpha. The glow pair is additive. The blur never touches the flower `Graphics`.                          |
+| Head volume        | `PlantLightFilter` on the flower `Graphics`        | each head is a uniform (`headLights`: centre and radius in local pixels, strength by stage from `volumeStrength`, 0.35 for a bloom, less for a bud). The fragment finds its nearest head and shades it as a shallow cup: brighter toward `LIGHT_DIRECTION` and the rim, darker toward the shadow side and the centre well. |
+| Petal translucency | the same filter                                    | `translucencyOf(head)`: the outer layer's texture (Papery, Silk, Glassy high; Waxy, Leathery, Metallic low) opened up by the thinnest layer's opacity class. The fragment lifts thin fills (low alpha), luminance edges and pale fills toward a warm white.                                                                |
+| Depth              | a second `Graphics` behind the plant               | florets with `depth > 0.5` (`isBackFloret`) draw there with their pedicels, under their own `PlantLightFilter` and a mild `BlurFilter` (`backBlurStrength`, 0.5 at radius 70). The plan already darkens them.                                                                                                              |
+| Stem cylinders     | `StalkShading` on `StemPlan` and every `StalkPlan` | `stemShading` and `stalkPlan` add a highlight line offset toward the light and a shade line away from it, each stroked half the mid half width, in a lighter and a darker tint of the stalk color.                                                                                                                         |
+
+The filter texture's origin follows the flower's bounds, so `PlantLightFilter`
+maps texture space back to the flower's local pixels through a hidden one
+pixel `Sprite` at the origin and `filterManager.calculateSpriteMatrix`, the way
+pixi's `DisplacementFilter` does. The head uniforms are therefore set once per
+`draw`, not per frame, and the flower may move, rotate and scale freely.
+
 ## Drawing order and per frame work
 
 `drawFlowerFromPlan` draws the stem, the pedicels, the leaves and scale bracts,
 the buds, then every head back to front (`drawHead`: bracts, sepals, petal
-layers, dewdrops, stamens, center disc), then the particles. Petals are drawn
+layers, dewdrops, stamens, center disc), then the particles. Its `layer`
+option draws only the front florets with the plant, or only the back florets
+with their pedicels, for the two `Graphics` a scene keeps. Petals are drawn
 with several passes each: the depth shadow of inner layers, the fill, the
 gradient stop sub-paths, the light, shadow and highlight offsets, the texture
 pass, the iridescence sheen, the marks, the veins and the outline.
 
 Most of a flower is static. Three things read `performance.now()` and are
-redrawn every frame:
+redrawn every frame by `scene.tick`:
 
-| What                                  | Where                                                            | Why a separate Graphics                                                                            |
-| ------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Aura                                  | `drawAura`, its own `Graphics` inserted behind the flower        | it pulses and shifts every frame, and its circles would give the flower a rectangular bounding box |
-| Bioluminescence and a pulsing nectary | `drawGlow`, its own `Graphics` with `blendMode = "add"` in front | additive glow behind the petals would not show through their fills                                 |
-| Particles                             | inside `drawFlowerFromPlan`                                      | they wobble, drift and fall, so a plan with particles marks the whole flower dirty                 |
+| What                                  | Where                                        | Why a separate Graphics                                                                            |
+| ------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Aura                                  | `drawAura`, its bloom pair behind the flower | it pulses and shifts every frame, and its circles would give the flower a rectangular bounding box |
+| Bioluminescence and a pulsing nectary | `drawGlow`, its additive bloom pair in front | additive glow behind the petals would not show through their fills                                 |
+| Particles                             | `drawParticles`, its own `Graphics` in front | they wobble, drift and fall, and the flower keeps its tessellation                                 |
 
-`FlowerCanvas` keeps a dirty flag per flower. The main `Graphics` is cleared
-and redrawn only when scale, alpha or selection changed, or the plan has
-particles. The aura and glow `Graphics` are cleared and redrawn every frame and
-track the flower's position and rotation.
+`FlowerCanvas` keeps a dirty flag per flower. `scene.draw` clears and redraws
+the flower `Graphics` only when scale or alpha changed; the selection ring is
+its own `Graphics` on the stage. The scene's root `Container` carries the
+flower's position, rotation and merge bloom scale, so every layer tracks it.
 
 ## Arrangements
 
@@ -223,9 +252,9 @@ flower calls `set_body_position` on the simulation.
 **Homepage** (`client/src/homepage/PixiMiniCanvas.tsx`). Zone cards do not each
 own a WebGL context. One shared offscreen `Application` renders each zone's
 flowers into a `RenderTexture`, the texture is extracted to a data URL, and the
-card shows an `<img>`. The snapshot draws the flower or arrangement plan once,
-plus the glow when `hasGlow` is true. Auras and particle motion are not part of
-the snapshot.
+card shows an `<img>`. The snapshot builds the same scene as the designer,
+draws it once and ticks it once, so one frame of the aura, glow and particles
+is in the picture, with every filter applied inside the render texture.
 
 ## Determinism
 

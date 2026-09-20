@@ -16,6 +16,7 @@ import { darkenColor, lightenColor } from "./color.ts";
 import type { NectaryPlan, ParticleSeed } from "./effects.ts";
 import type { DrawCmd } from "./geometry.ts";
 import type { BudPlan, SeedHeadPlan } from "./lifeStage.ts";
+import { inLayer, type FloretLayer } from "./lighting.ts";
 import type {
   ArrangementPlan,
   CorollaPlan,
@@ -26,7 +27,7 @@ import type {
   PetalPlan,
   PlacedFloret,
 } from "./render.ts";
-import type { StalkPlan, StemPlan } from "./stem.ts";
+import type { StalkPlan, StalkShading, StemPlan } from "./stem.ts";
 import { GOLDEN_ANGLE, LIGHT_ANGLE, unreachable } from "./util.ts";
 
 // ── Low-level path helpers ──
@@ -768,7 +769,30 @@ function drawStalk(
   );
 }
 
-/** A branch, pedicel or petiole: its fill, then only its two long edges, so nothing is stroked across the join. */
+/** The highlight along the lit side of a stalk and the shade along the other, so it reads as a cylinder. */
+function drawStalkShading(
+  g: Graphics,
+  shading: StalkShading,
+  color: number,
+  scale: number,
+  alpha: number,
+): void {
+  const width = Math.max(0.5, shading.width * scale);
+  strokeCmds(
+    g,
+    shading.shade,
+    { color: darkenColor(color, 0.35), width, alpha: alpha * 0.35 },
+    scale,
+  );
+  strokeCmds(
+    g,
+    shading.shine,
+    { color: lightenColor(color, 0.35), width, alpha: alpha * 0.4 },
+    scale,
+  );
+}
+
+/** A branch, pedicel or petiole: its fill, its cylinder shading, then only its two long edges, so nothing is stroked across the join. */
 function drawBranch(
   g: Graphics,
   stalk: StalkPlan,
@@ -777,6 +801,7 @@ function drawBranch(
   alpha: number,
 ): void {
   fillCmds(g, stalk.fill, { color, alpha: alpha * 0.9 }, scale);
+  drawStalkShading(g, stalk.shading, color, scale, alpha);
   strokeCmds(
     g,
     stalk.edges,
@@ -873,9 +898,10 @@ function drawBud(g: Graphics, bud: BudPlan, scale: number, alpha: number) {
   fillCmds(g, bud.petal, { color: bud.petalColor, alpha: alpha * 0.9 }, scale);
 }
 
-/** The stem fill and edge, then its surface detail and thorns. */
+/** The stem fill and edge, its cylinder shading, then its surface detail and thorns. */
 function drawStem(g: Graphics, stem: StemPlan, scale: number, alpha: number) {
   drawStalk(g, stem.cmds, stem.color, scale, alpha);
+  drawStalkShading(g, stem.shading, stem.color, scale, alpha);
   for (const layer of stem.surface) {
     strokeCmds(
       g,
@@ -991,6 +1017,12 @@ export type DrawFlowerOptions = {
    * Graphics instead, so the flower itself is not re-tessellated to move them.
    */
   particles: boolean;
+  /**
+   * Which florets to draw. "back" draws only the florets behind the plant
+   * with their pedicels, for a Graphics that sits behind the rest and is
+   * blurred; "front" draws everything else; "all" is the whole flower.
+   */
+  layer: FloretLayer;
 };
 
 /** Draw a flower from its pre-computed plan: stem, branches and pedicels, leaves, buds, then every head back to front. */
@@ -999,22 +1031,29 @@ export function drawFlowerFromPlan(
   plan: FlowerPlan,
   r: number,
   alpha: number,
-  options: DrawFlowerOptions = { particles: true },
+  options: DrawFlowerOptions = { particles: true, layer: "all" },
 ) {
   const scale = r;
-  const ordered = drawOrder(plan.florets);
+  const ordered = drawOrder(plan.florets).filter(f =>
+    inLayer(f, options.layer),
+  );
+  const plant = options.layer !== "back";
 
   if (plan.stem) {
     const stemColor = plan.stem.color;
-    drawStem(g, plan.stem, scale, alpha);
-    for (const b of plan.branches) drawBranch(g, b, stemColor, scale, alpha);
+    if (plant) {
+      drawStem(g, plan.stem, scale, alpha);
+      for (const b of plan.branches) drawBranch(g, b, stemColor, scale, alpha);
+    }
     for (const floret of ordered) {
       if (floret.stalk) drawBranch(g, floret.stalk, stemColor, scale, alpha);
     }
   }
 
-  for (const leaf of plan.leaves) drawLeaf(g, leaf, scale, alpha);
-  for (const bud of plan.buds) drawBud(g, bud, scale, alpha);
+  if (plant) {
+    for (const leaf of plan.leaves) drawLeaf(g, leaf, scale, alpha);
+    for (const bud of plan.buds) drawBud(g, bud, scale, alpha);
+  }
 
   for (const floret of ordered) {
     drawHeadAt(
@@ -1028,7 +1067,7 @@ export function drawFlowerFromPlan(
     );
   }
 
-  if (options.particles) drawParticles(g, plan, r, alpha);
+  if (options.particles && plant) drawParticles(g, plan, r, alpha);
 }
 
 /** The plan's particles at this moment, in front of the flower. */

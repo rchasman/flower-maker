@@ -13,7 +13,14 @@ import {
   type DrawCmd,
   type Vec2,
 } from "./geometry.ts";
-import { clamp, lerp, sidHash, sideSign, steps } from "./util.ts";
+import {
+  LIGHT_DIRECTION,
+  clamp,
+  lerp,
+  sidHash,
+  sideSign,
+  steps,
+} from "./util.ts";
 
 const TAU = Math.PI * 2;
 
@@ -82,6 +89,17 @@ export type StemSurfacePlan = {
   color: number;
 };
 
+/**
+ * The two open lines that make a stalk read as a cylinder: a highlight along
+ * the side that faces the light and a shade line along the other, each
+ * stroked `width` wide (plan units) in a tint of the stalk color.
+ */
+export type StalkShading = {
+  shine: DrawCmd[];
+  shade: DrawCmd[];
+  width: number;
+};
+
 export type StemPlan = {
   cmds: DrawCmd[];
   color: number;
@@ -90,6 +108,7 @@ export type StemPlan = {
   halfWidth: number;
   /** bark from a Woody style, then the surface texture's own detail; empty for a smooth stem */
   surface: readonly StemSurfacePlan[];
+  shading: StalkShading;
 };
 
 type StemWidthModifiers = {
@@ -294,6 +313,51 @@ function zigzagOutline(
     ...right.toReversed().map(lineTo),
     { op: "Z" },
   ];
+}
+
+/** where across the half width the highlight and shade lines run */
+const SHINE_OFFSET = 0.45;
+const SHADE_OFFSET = 0.55;
+/** the lines' stroke width as a share of the mid half width */
+const SHADING_WIDTH = 0.5;
+
+/** The unit normal on the side of the centreline that faces the light. */
+function litNormal(c: CentrePoint): Vec2 {
+  const [nx, ny] = centreNormal(c);
+  const facing = nx * LIGHT_DIRECTION[0] + ny * LIGHT_DIRECTION[1];
+  return facing >= 0 ? [nx, ny] : [-nx, -ny];
+}
+
+/**
+ * Highlight and shade lines along a centreline sampled at `ts`, each offset
+ * toward or away from the light by a share of the local half width.
+ */
+function stalkShading(
+  ts: readonly number[],
+  centreAt: (t: number) => CentrePoint,
+  widthAt: (t: number) => number,
+): StalkShading {
+  const along = (offset: number): Vec2[] =>
+    ts.map(t => {
+      const c = centreAt(t);
+      const [nx, ny] = litNormal(c);
+      const w = widthAt(t) * offset;
+      return [c.x + nx * w, c.y + ny * w];
+    });
+  return {
+    shine: smoothCmds(along(SHINE_OFFSET)),
+    shade: smoothCmds(along(-SHADE_OFFSET)),
+    width: widthAt(0.5) * SHADING_WIDTH,
+  };
+}
+
+/** The stem's cylinder shading along its axis. */
+export function stemShading(axis: StemAxis, halfWidth: number): StalkShading {
+  return stalkShading(
+    steps(OUTLINE_SEGMENTS),
+    t => stemCentreAt(axis, t),
+    t => drawnHalfWidthAt(halfWidth, axis.style, t),
+  );
 }
 
 /** Generate a stem outline as a closed path around the axis centreline. */
@@ -631,14 +695,16 @@ export function branchHalfWidthAt(b: Branch, s: number): number {
   return body + b.parentHalfWidth * (1 - BRANCH_WIDTH) * flare * flare;
 }
 
-/** A drawn stalk: the closed fill and the two open edge strokes, so no cap is stroked across the parent. */
+/** A drawn stalk: the closed fill, the two open edge strokes, so no cap is stroked across the parent, and its cylinder shading. */
 export type StalkPlan = {
   fill: DrawCmd[];
   edges: DrawCmd[];
+  shading: StalkShading;
 };
 
 export function stalkPlan(b: Branch): StalkPlan {
-  const pairs = steps(BRANCH_STATIONS).map((s): EdgePair => {
+  const stations = steps(BRANCH_STATIONS);
+  const pairs = stations.map((s): EdgePair => {
     const c = branchPointAt(b, s);
     const [nx, ny] = centreNormal(c);
     const w = branchHalfWidthAt(b, s);
@@ -652,5 +718,10 @@ export function stalkPlan(b: Branch): StalkPlan {
   return {
     fill: assembleOutline(left, right),
     edges: [...smoothCmds(left), ...smoothCmds(right)],
+    shading: stalkShading(
+      stations,
+      s => branchPointAt(b, s),
+      s => branchHalfWidthAt(b, s),
+    ),
   };
 }
