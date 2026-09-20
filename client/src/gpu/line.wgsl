@@ -1,7 +1,8 @@
 import { bayer8, ditherBit, paperOrInk, revealMask } from "./dither.wgsl";
 
-// Composites the assembly line sprites by brightness, then dithers the result to one bit.
-// Every plate is shot on pure black, so the brightest sample at a cell is the sprite in front.
+// Paints the assembly line sprites back to front, then dithers the result to one bit.
+// Every plate is shot on pure black, so a sample brighter than near-black means the subject is
+// there and covers whatever was painted before it. Sprites arrive sorted by depth.
 // Arms arrive as four link sprites each, cut from one plate by half-planes at the joints.
 // The pointer trail reveals the plate's real colour under the dither.
 
@@ -107,16 +108,9 @@ fn beltSurface(uv: vec2f) -> f32 {
   return 1.0 + onSurface * (scuff * 1.0 + seam * 2.0);
 }
 
-fn brighter(a: Sample, b: Sample) -> Sample {
-  if (b.lum > a.lum) { return b; }
-  return a;
-}
-
 // Anything darker than this on a plate is background; above it the subject covers what is behind.
 const OPAQUE_ABOVE = 0.04;
 
-// Items sit in front of the arms: where the flower plate has a subject, it hides whatever is
-// behind it instead of letting brighter metal show through the petals.
 fn over(back: Sample, front: Sample) -> Sample {
   if (front.coverage > OPAQUE_ABOVE) { return front; }
   return back;
@@ -132,12 +126,7 @@ fn over(back: Sample, front: Sample) -> Sample {
 
   var best = Sample(0.0, vec3f(0.0), 0.0);
   for (var i = 0u; i < SPRITE_COUNT; i++) {
-    let sample = sampleSprite(sprites[i], q, frameAspect);
-    if (sprites[i].tone.y >= 4.0) {
-      best = over(best, sample);
-    } else {
-      best = brighter(best, sample);
-    }
+    best = over(best, sampleSprite(sprites[i], q, frameAspect));
   }
 
   let luminance = clamp((best.lum - 0.5) * params.contrast + 0.5, 0.0, 1.0);

@@ -37,29 +37,34 @@ const HIDDEN: SpriteUniform = {
   cutB: [0, 0, 0, 0],
 };
 
-/** Pairs each timeline sprite with its plate's exposure and image aspect, padded to the shader's array. */
+/**
+ * Pairs each timeline sprite with its plate's exposure and image aspect, sorted back to front
+ * so the shader can paint them in order, padded to the shader's array.
+ */
 export const spriteUniforms = (
   plates: readonly Plate[],
   aspects: readonly number[],
   transforms: readonly SpriteTransform[],
 ): readonly SpriteUniform[] => {
-  const filled = transforms.map((t): SpriteUniform => ({
-    place: [t.x, t.y, t.pivot[0], t.pivot[1]],
-    shape: [t.angle, t.scale, aspects[t.tex] ?? 1, t.visible],
-    tone: [plates[t.tex]?.exposure ?? 1, t.tex, 0, 0],
-    cutA: [
-      t.cutA.point[0],
-      t.cutA.point[1],
-      t.cutA.normal[0],
-      t.cutA.normal[1],
-    ],
-    cutB: [
-      t.cutB.point[0],
-      t.cutB.point[1],
-      t.cutB.normal[0],
-      t.cutB.normal[1],
-    ],
-  }));
+  const filled = [...transforms]
+    .sort((a, b) => a.z - b.z)
+    .map((t): SpriteUniform => ({
+      place: [t.x, t.y, t.pivot[0], t.pivot[1]],
+      shape: [t.angle, t.scale, aspects[t.tex] ?? 1, t.visible],
+      tone: [plates[t.tex]?.exposure ?? 1, t.tex, 0, 0],
+      cutA: [
+        t.cutA.point[0],
+        t.cutA.point[1],
+        t.cutA.normal[0],
+        t.cutA.normal[1],
+      ],
+      cutB: [
+        t.cutB.point[0],
+        t.cutB.point[1],
+        t.cutB.normal[0],
+        t.cutB.normal[1],
+      ],
+    }));
   return [
     ...filled,
     ...Array.from(
