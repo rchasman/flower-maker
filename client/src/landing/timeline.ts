@@ -16,7 +16,7 @@ import {
   type SpriteTransform,
 } from "./rig.ts";
 
-export const LOOP_SECONDS = 8;
+export const LOOP_SECONDS = 10;
 /** Width over height of the frame the transforms are laid out for. */
 export const DEFAULT_FRAME_ASPECT = 16 / 9;
 
@@ -130,10 +130,10 @@ const HANDOFF_TRACK: readonly Keyframe[] = [
   [0, REST],
   [5.9, REST],
   [6.3, GRAB_DOWN],
-  [6.6, GRAB_UP],
-  [7.0, OFFER],
-  [7.5, OFFER],
-  [8.0, REST],
+  [6.7, GRAB_UP],
+  [8.0, OFFER],
+  [9.2, OFFER],
+  [LOOP_SECONDS, REST],
 ];
 
 /** Joint angles of the three arms at time `t`. */
@@ -190,7 +190,7 @@ const tulip = (t: number, pickPose: ArmPose, frameAspect: number) => {
 };
 
 /** How far the bunch turns upright while it is offered, so the blooms face the viewer. */
-const OFFER_TURN = deg(-70);
+const OFFER_TURN = deg(-90);
 /** How much the bunch grows as it comes toward the viewer. */
 const OFFER_GROWTH = 1.5;
 
@@ -206,10 +206,10 @@ const bunch = (t: number, handoffPose: ArmPose, frameAspect: number) => {
   ];
   const held = t >= 6.3;
   const [gx, gy] = tip(2, handoffPose, frameAspect);
-  const offered = seg(t, 6.7, 7.1);
+  const offered = seg(t, 6.8, 8.0);
   const position: Point = held ? [gx, gy + HELD_DROP * (1 + offered)] : onBelt;
   const scale = 0.26 * lerp(1, OFFER_GROWTH, offered);
-  const visible = seg(t, 4.05, 4.25) - seg(t, 7.5, 7.75);
+  const visible = seg(t, 4.05, 4.25) - seg(t, 9.2, 9.6);
   return item("bunch", position, scale, visible, OFFER_TURN * offered);
 };
 

@@ -98,10 +98,10 @@ describe("belt continuity", () => {
     expect(bunchAt(4.15).x).toBeCloseTo(tulipAt(4.15).x, 5);
     expect(bunchAt(4.15).visible + tulipAt(4.15).visible).toBeCloseTo(1, 5);
     expect(bunchAt(5.9).x).toBeCloseTo(0.13, 1);
-    expect(bunchAt(7.3).y).toBeLessThan(bunchAt(5.9).y);
-    expect(bunchAt(7.3).angle).toBeLessThan(-1);
-    expect(bunchAt(7.3).scale).toBeGreaterThan(bunchAt(5.9).scale);
-    expect(bunchAt(7.9).visible).toBe(0);
+    expect(bunchAt(8.5).y).toBeLessThan(bunchAt(5.9).y);
+    expect(bunchAt(8.5).angle).toBeCloseTo(-Math.PI / 2, 5);
+    expect(bunchAt(8.5).scale).toBeGreaterThan(bunchAt(5.9).scale);
+    expect(bunchAt(9.8).visible).toBe(0);
     expect(bunchAt(0.5).visible).toBe(0);
   });
 });

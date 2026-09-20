@@ -9,7 +9,7 @@ struct Params {
   pixel: f32,
   reveal: f32,
   contrast: f32,
-  /** Distance the belt has travelled, in frame uv, so the stripes stop when the belt stops. */
+  /** Distance the belt has travelled, in frame uv, so its surface scrolls with the items. */
   travel: f32,
   resolution: vec2f,
 }
@@ -81,21 +81,34 @@ fn keep(cut: vec4f, uv: vec2f) -> f32 {
   return step(0.0, dot(uv - cut.xy, cut.zw));
 }
 
-// The belt surface carries stripes that move with the belt's travel, so they stop with it.
-fn beltStripes(uv: vec2f) -> f32 {
-  let onSurface = step(0.52, uv.y) * step(uv.y, 0.6);
-  let stripe = step(0.5, fract(uv.x * 28.0 + params.travel * 16.0));
-  return 1.0 - onSurface * 0.35 * stripe;
-}
-
 fn sampleSprite(s: Sprite, q: vec2f, frameAspect: f32) -> Sample {
   let uv = spriteUv(s, q, frameAspect);
   let inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0)
     * keep(s.cutA, uv) * keep(s.cutB, uv);
   let tex = u32(s.tone.y + 0.5);
-  let gain = select(1.0, beltStripes(uv), tex == 0u);
+  let gain = select(1.0, beltSurface(uv), tex == 0u);
   let rgb = sampleTex(tex, uv) * inside * s.shape.w;
   return Sample(luminanceOf(rgb) * s.tone.x * gain, rgb);
+}
+
+fn hash(p: vec2f) -> f32 {
+  return fract(sin(dot(p, vec2f(12.9898, 78.233))) * 43758.5453);
+}
+
+// A little per-cell jitter on the Bayer threshold breaks the flat plateaus an ordered dither
+// makes out of smooth gradients, such as the belt's rubber.
+fn jitter(cell: vec2f) -> f32 {
+  return (hash(cell) - 0.5) * 0.1;
+}
+
+// Scuffs and one seam on the rubber, scrolling with the belt's travel so the belt visibly runs
+// while items ride and stands still while an arm works. Random scuffs cannot band.
+fn beltSurface(uv: vec2f) -> f32 {
+  let onSurface = step(0.52, uv.y) * step(uv.y, 0.6);
+  let scrolled = vec2f(uv.x + params.travel, uv.y);
+  let scuff = step(0.9, hash(floor(scrolled * vec2f(140.0, 36.0))));
+  let seam = 1.0 - smoothstep(0.0, 0.006, abs(fract(scrolled.x) - 0.5));
+  return 1.0 + onSurface * (scuff * 1.2 + seam * 2.0);
 }
 
 fn brighter(a: Sample, b: Sample) -> Sample {
@@ -106,7 +119,7 @@ fn brighter(a: Sample, b: Sample) -> Sample {
 @fragment fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   let cell = floor(uv * params.resolution / params.pixel);
   let snapped = (cell + 0.5) * params.pixel / params.resolution;
-  let threshold = bayer8(vec2u(cell));
+  let threshold = clamp(bayer8(vec2u(cell)) + jitter(cell), 0.0, 1.0);
 
   let frameAspect = params.resolution.x / params.resolution.y;
   let q = vec2f(snapped.x * frameAspect, snapped.y);
