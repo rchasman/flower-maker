@@ -520,6 +520,6 @@ aura:
   animation_speed: 0.5
 inflorescence:
   kind: Panicle
-  head_count: 7
+  head_count: 10
   head_scale: 0.462
   spread: 0.288

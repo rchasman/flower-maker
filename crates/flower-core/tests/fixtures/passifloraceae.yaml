@@ -569,6 +569,6 @@ aura:
   animation_speed: 0.5
 inflorescence:
   kind: Spike
-  head_count: 4
+  head_count: 14
   head_scale: 0.412
   spread: 0.288

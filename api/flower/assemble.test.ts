@@ -13,6 +13,7 @@ import {
   DROOPS,
   GRADIENT_DIRECTIONS,
   HEAD_COUNT_CLASSES,
+  KIND_HEAD_RANGE,
   LAYER_COUNTS,
   LEAF_COUNT_CLASSES,
   LEAF_DROOPS,
@@ -374,9 +375,22 @@ describe("answers", () => {
       layer_count: "triple",
       petal_count_class: "many",
     });
-    rose.petals.layers.map(l =>
-      expect(l.count % FAMILIES.Rosaceae.symmetryOrder).toBe(0),
+    expect(rose.petals.layers.map(l => l.count)).toEqual([5, 8, 13]);
+  });
+
+  test("a spiralled bloom recurves its outer ring and cups each ring inward more", () => {
+    const rose = assemble(FAMILIES.Rosaceae, "faithful", {
+      layer_count: "triple",
+      pose: "open",
+    });
+    const curvatures = rose.petals.layers.map(l => l.curvature);
+    expect(curvatures[0]!).toBeLessThan(0);
+    expect(curvatures[2]!).toBeGreaterThan(0.4);
+    expect(curvatures.every((c, i) => i === 0 || c > curvatures[i - 1]!)).toBe(
+      true,
     );
+    const lily = assemble(FAMILIES.Liliaceae, "faithful", { pose: "open" });
+    expect(first(lily.petals.layers, "layers").curvature).toBe(0);
   });
 
   test("booleans switch optional structures on", () => {
@@ -503,24 +517,41 @@ describe("multi-head stems", () => {
       head_count_class,
       stem_height: "short",
     });
+  const CLUSTER_KINDS = INFLORESCENCE_KINDS.filter(kind => kind !== "Solitary");
 
-  test("axial kinds grow the stem with every head up to six, level kinds do not", () => {
+  test("every cluster kind draws its head count from its own range, few to many", () => {
+    for (const kind of CLUSTER_KINDS) {
+      const [lo, hi] = KIND_HEAD_RANGE[kind];
+      const few = heads(kind, "few").inflorescence.head_count;
+      const many = heads(kind, "many").inflorescence.head_count;
+      expect(few).toBeGreaterThanOrEqual(lo);
+      expect(many).toBeLessThanOrEqual(hi);
+      expect(few).toBeLessThan(many);
+    }
+    expect(heads("Solitary", "many").inflorescence.head_count).toBe(1);
+  });
+
+  test("the kind ranges match what the renderer lays out", () => {
+    expect(KIND_HEAD_RANGE.Spike).toEqual([12, 20]);
+    expect(KIND_HEAD_RANGE.Raceme).toEqual([6, 10]);
+    expect(KIND_HEAD_RANGE.Umbel).toEqual([7, 12]);
+    expect(KIND_HEAD_RANGE.Corymb).toEqual([12, 24]);
+    expect(KIND_HEAD_RANGE.Panicle).toEqual([6, 12]);
+    expect(KIND_HEAD_RANGE.Spray).toEqual([3, 5]);
+  });
+
+  test("every cluster stands on a stem 1.3 to 1.6 times the solitary height", () => {
     const solitary = heads("Solitary", "single").structure.stem.height;
-    const spike = heads("Spike", "several");
-    expect(spike.inflorescence.head_count).toBeGreaterThan(1);
-    const extra = Math.min(spike.inflorescence.head_count - 1, 6);
-    expect(spike.structure.stem.height).toBeCloseTo(
-      solitary * (1 + 0.12 * extra),
-      2,
-    );
-    expect(heads("Raceme", "several").structure.stem.height).toBeGreaterThan(
-      solitary,
-    );
-    expect(heads("Panicle", "several").structure.stem.height).toBeGreaterThan(
-      solitary,
-    );
-    expect(heads("Umbel", "several").structure.stem.height).toBe(solitary);
-    expect(heads("Spray", "many").structure.stem.height).toBe(solitary);
+    for (const kind of CLUSTER_KINDS) {
+      for (const cls of ["few", "many"] as const) {
+        const ratio = heads(kind, cls).structure.stem.height / solitary;
+        expect(ratio).toBeGreaterThanOrEqual(1.3 - 1e-3);
+        expect(ratio).toBeLessThanOrEqual(1.6 + 1e-3);
+      }
+      expect(heads(kind, "many").structure.stem.height).toBeGreaterThan(
+        heads(kind, "few").structure.stem.height,
+      );
+    }
   });
 
   test("the stem height never leaves the schema range", () => {
@@ -532,22 +563,42 @@ describe("multi-head stems", () => {
     expect(tall.structure.stem.height).toBeLessThanOrEqual(1);
   });
 
-  test("head_scale follows the kind, jitter aside", () => {
+  test("head_scale is the floret size class of the kind, jitter aside", () => {
     const scale = (kind: InflorescenceKind) =>
       heads(kind, "several").inflorescence.head_scale;
     const base: Record<InflorescenceKind, number> = {
       Solitary: 0.6,
       Spike: 0.35,
-      Raceme: 0.45,
+      Raceme: 0.5,
       Umbel: 0.5,
-      Corymb: 0.5,
+      Corymb: 0.3,
       Panicle: 0.4,
-      Spray: 0.55,
+      Spray: 0.85,
     };
     const jitter = scale("Umbel") - base.Umbel;
     INFLORESCENCE_KINDS.map(kind =>
       expect(scale(kind)).toBeCloseTo(base[kind] + jitter, 3),
     );
+  });
+
+  test("a template's inflorescence overrides the model's answer", () => {
+    const hydrangea = TEMPLATES.find(t => t.name === "Hydrangea");
+    if (hydrangea === undefined) throw new Error("no Hydrangea template");
+    const spec = assembleSpec({
+      profile: FAMILIES[hydrangea.family],
+      strangeness: "faithful",
+      answers: { inflorescence_kind: "Solitary", head_count_class: "single" },
+      stageOne: {
+        family: hydrangea.family,
+        template: hydrangea.name,
+        strangeness: "faithful",
+        mood: "Storm",
+      },
+      seed: 1,
+      template: hydrangea,
+    });
+    expect(spec.inflorescence.kind).toBe("Corymb");
+    expect(spec.inflorescence.head_count).toBeGreaterThanOrEqual(12);
   });
 });
 

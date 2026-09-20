@@ -171,7 +171,7 @@ reproductive:
     drip_rate: 0.2
 structure:
   stem:
-    height: 0.428
+    height: 0.621
     thickness: 0.2
     curvature: 0.1
     color:
@@ -327,6 +327,6 @@ aura:
   animation_speed: 0.5
 inflorescence:
   kind: Spray
-  head_count: 7
-  head_scale: 0.612
+  head_count: 4
+  head_scale: 0.912
   spread: 0.288

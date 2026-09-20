@@ -12,7 +12,7 @@ petals:
       count: 8
       shape: Cordate
       arrangement: Spiral
-      curvature: -0.4
+      curvature: -0.7
       curl: 0.5
       texture: Fuzzy
       color:
@@ -51,10 +51,10 @@ petals:
         kind: Funnel
         depth: 0.632
     - index: 1
-      count: 5
+      count: 13
       shape: Runcinate
       arrangement: Spiral
-      curvature: -0.15
+      curvature: -0.3
       curl: 0.3
       texture: Fuzzy
       color:
@@ -76,7 +76,7 @@ petals:
       edge_style: Fringed
       width: 0.9
       length: 1.2
-      angular_offset: 33.656
+      angular_offset: 12.945
       droop: 0.25
       thickness: 0.35
       pattern:
@@ -93,7 +93,7 @@ petals:
         kind: Free
         depth: 0.348
     - index: 2
-      count: 3
+      count: 21
       shape: Runcinate
       arrangement: Spiral
       curvature: 0.1
@@ -118,7 +118,7 @@ petals:
       edge_style: Fringed
       width: 0.8
       length: 1
-      angular_offset: 71.74
+      angular_offset: 10.249
       droop: 0.25
       thickness: 0.3
       pattern:

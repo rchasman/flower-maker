@@ -771,7 +771,7 @@ reproductive:
       sway: 0.3
 structure:
   stem:
-    height: 0.878
+    height: 1
     thickness: 0.45
     curvature: 0.3
     color:
@@ -1076,6 +1076,6 @@ aura:
   animation_speed: 0.5
 inflorescence:
   kind: Corymb
-  head_count: 14
-  head_scale: 0.562
+  head_count: 23
+  head_scale: 0.362
   spread: 0.288

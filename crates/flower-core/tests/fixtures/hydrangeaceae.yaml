@@ -261,7 +261,7 @@ reproductive:
       sway: 0.3
 structure:
   stem:
-    height: 1
+    height: 0.973
     thickness: 0.3
     curvature: 0.3
     color:
@@ -508,6 +508,6 @@ aura:
   animation_speed: 0.5
 inflorescence:
   kind: Panicle
-  head_count: 14
+  head_count: 11
   head_scale: 0.462
   spread: 0.288

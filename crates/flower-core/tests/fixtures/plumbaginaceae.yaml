@@ -197,7 +197,7 @@ reproductive:
     trail: false
 structure:
   stem:
-    height: 1
+    height: 0.934
     thickness: 0.3
     curvature: 0.1
     color:
@@ -394,6 +394,6 @@ aura:
   animation_speed: 0.5
 inflorescence:
   kind: Spike
-  head_count: 7
+  head_count: 17
   head_scale: 0.412
   spread: 0.288

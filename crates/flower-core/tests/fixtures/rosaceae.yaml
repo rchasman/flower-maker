@@ -12,7 +12,7 @@ petals:
       count: 5
       shape: Lanceolate
       arrangement: Spiral
-      curvature: 0
+      curvature: -0.3
       curl: 0.1
       texture: Velvet
       color:
@@ -51,10 +51,10 @@ petals:
         kind: Bell
         depth: 0.632
     - index: 1
-      count: 5
+      count: 8
       shape: Ligulate
       arrangement: Spiral
-      curvature: 0.25
+      curvature: 0.1
       curl: 0
       texture: Velvet
       color:
@@ -76,7 +76,7 @@ petals:
       edge_style: Ruffled
       width: 0.9
       length: 1.2
-      angular_offset: 33.656
+      angular_offset: 21.035
       droop: 0.25
       thickness: 0.35
       pattern:
@@ -606,7 +606,7 @@ reproductive:
       sway: 0.3
 structure:
   stem:
-    height: 0.854
+    height: 0.864
     thickness: 0.3
     curvature: 0.4
     color:
@@ -863,6 +863,6 @@ aura:
   animation_speed: 0.5
 inflorescence:
   kind: Spike
-  head_count: 4
+  head_count: 14
   head_scale: 0.412
   spread: 0.288

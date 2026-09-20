@@ -1046,6 +1046,6 @@ aura:
   animation_speed: 0.5
 inflorescence:
   kind: Raceme
-  head_count: 14
-  head_scale: 0.512
+  head_count: 10
+  head_scale: 0.562
   spread: 0.288

@@ -96,7 +96,7 @@ reproductive:
     drip_rate: 0.2
 structure:
   stem:
-    height: 0.428
+    height: 0.556
     thickness: 0.2
     curvature: 0
     color:
@@ -262,6 +262,6 @@ aura:
   animation_speed: 0.5
 inflorescence:
   kind: Umbel
-  head_count: 2
+  head_count: 7
   head_scale: 0.562
   spread: 0.288

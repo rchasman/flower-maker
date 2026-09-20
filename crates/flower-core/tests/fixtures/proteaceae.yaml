@@ -12,7 +12,7 @@ petals:
       count: 21
       shape: Falcate
       arrangement: Spiral
-      curvature: 0.35
+      curvature: 0.05
       curl: 0.1
       texture: Leathery
       color:
@@ -51,10 +51,10 @@ petals:
         kind: Free
         depth: 0.632
     - index: 1
-      count: 13
+      count: 21
       shape: Acuminate
       arrangement: Spiral
-      curvature: 0.6
+      curvature: 0.45
       curl: 0
       texture: Leathery
       color:
@@ -76,7 +76,7 @@ petals:
       edge_style: Rolled
       width: 0.4
       length: 1.2
-      angular_offset: 12.945
+      angular_offset: 8.013
       droop: 0.05
       thickness: 0.35
       pattern:
@@ -738,7 +738,7 @@ reproductive:
     drip_rate: 0.2
 structure:
   stem:
-    height: 0.736
+    height: 0.621
     thickness: 0.2
     curvature: 0.1
     color:
@@ -873,6 +873,6 @@ aura:
   animation_speed: 0.5
 inflorescence:
   kind: Raceme
-  head_count: 7
-  head_scale: 0.512
+  head_count: 8
+  head_scale: 0.562
   spread: 0.288

@@ -12,7 +12,7 @@ petals:
       count: 34
       shape: Ligulate
       arrangement: Spiral
-      curvature: 0.7
+      curvature: 0.4
       curl: 0
       texture: Powdery
       color:
@@ -51,10 +51,10 @@ petals:
         kind: Bell
         depth: 0.632
     - index: 1
-      count: 20
+      count: 21
       shape: Panduriform
       arrangement: Spiral
-      curvature: 0.85
+      curvature: 0.8
       curl: 0
       texture: Powdery
       color:
@@ -76,7 +76,7 @@ petals:
       edge_style: Undulate
       width: 0.9
       length: 1.2
-      angular_offset: 8.414
+      angular_offset: 8.013
       droop: 0.25
       thickness: 0.35
       pattern:
@@ -93,7 +93,7 @@ petals:
         kind: Free
         depth: 0.348
     - index: 2
-      count: 12
+      count: 21
       shape: Panduriform
       arrangement: Spiral
       curvature: 0.85
@@ -118,7 +118,7 @@ petals:
       edge_style: Undulate
       width: 0.8
       length: 1
-      angular_offset: 17.935
+      angular_offset: 10.249
       droop: 0.25
       thickness: 0.3
       pattern:
@@ -753,7 +753,7 @@ reproductive:
       sway: 0.3
 structure:
   stem:
-    height: 0.628
+    height: 1
     thickness: 0.3
     curvature: 0.8
     color:
@@ -1076,6 +1076,6 @@ aura:
   animation_speed: 0.5
 inflorescence:
   kind: Umbel
-  head_count: 14
+  head_count: 12
   head_scale: 0.562
   spread: 0.288

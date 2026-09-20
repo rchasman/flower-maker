@@ -291,15 +291,29 @@ export const HEAD_COUNT_CLASS_DESCRIPTIONS: Descriptions<
   typeof HEAD_COUNT_CLASSES
 > = {
   single: "one flower head",
-  few: "2 to 4 heads",
-  several: "5 to 8 heads",
-  many: "9 or more heads",
+  few: "a sparse cluster, few heads for its kind",
+  several: "a typical cluster for its kind",
+  many: "a dense cluster, many heads for its kind",
 };
-const HEAD_COUNT_RANGE: Record<HeadCountClass, readonly [number, number]> = {
-  single: [1, 1],
-  few: [2, 4],
-  several: [5, 8],
-  many: [9, 15],
+/** The share of the kind's head count range each class draws from. */
+const HEAD_COUNT_SHARE: Record<HeadCountClass, readonly [number, number]> = {
+  single: [0, 0],
+  few: [0, 0.34],
+  several: [0.33, 0.67],
+  many: [0.66, 1],
+};
+/** How many florets each kind carries, from its sparsest to its densest cluster. */
+export const KIND_HEAD_RANGE: Record<
+  InflorescenceKind,
+  readonly [number, number]
+> = {
+  Solitary: [1, 1],
+  Spike: [12, 20],
+  Raceme: [6, 10],
+  Umbel: [7, 12],
+  Corymb: [12, 24],
+  Panicle: [6, 12],
+  Spray: [3, 5],
 };
 
 export const BUD_COUNT_CLASSES = ["none", "one", "several"] as const;
@@ -943,10 +957,15 @@ function resolveAnswers(
   const defaults = defaultAnswers(profile, nounDraw, template);
   const keep = <K extends StageTwoId>(id: K): StageTwoAnswers[K] =>
     legalAnswer(profile, strangeness, id, answers[id]) ?? defaults[id];
-  return STAGE_TWO_IDS.reduce<StageTwoAnswers>(
-    (resolved, id) => ({ ...resolved, [id]: keep(id) }),
+  const resolved = STAGE_TWO_IDS.reduce<StageTwoAnswers>(
+    (acc, id) => ({ ...acc, [id]: keep(id) }),
     defaults,
   );
+  // A named template knows its own inflorescence; the model's answer cannot
+  // turn a hydrangea into one flower.
+  return template?.inflorescence
+    ? { ...resolved, inflorescence_kind: template.inflorescence }
+    : resolved;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1022,20 +1041,48 @@ function layerCount(ctx: Context): number {
   );
 }
 
+/** Families whose first arrangement is Spiral bloom like a rose: rings grow inward along the Fibonacci numbers. */
+const isSpiralled = (profile: FamilyProfile): boolean =>
+  profile.arrangements[0] === "Spiral";
+
+const GOLDEN_RATIO = (1 + Math.sqrt(5)) / 2;
+const MAX_SPIRAL_RING = 21;
+
 // Inner rings shrink by the drawn factor. A radial family with a fixed order
-// keeps each ring a multiple of that order so the symmetry survives.
+// keeps each ring a multiple of that order so the symmetry survives. A
+// spiralled family instead grows inward: 5, 8, 13, the way a rose packs.
 function layerCounts(ctx: Context, outer: number, layers: number): number[] {
   const { profile, jitter, jit } = ctx;
   const factor = clamp(0.6, 0.8, 0.7 + jit(jitter.layerFactor, 0.1));
   const order = profile.symmetry === "Radial" ? profile.symmetryOrder : 0;
-  const shrink = (previous: number) =>
-    order > 0
+  const next = (previous: number): number => {
+    if (isSpiralled(profile)) {
+      return Math.min(MAX_SPIRAL_RING, Math.round(previous * GOLDEN_RATIO));
+    }
+    return order > 0
       ? Math.max(order, Math.round((previous * factor) / order) * order)
       : Math.max(3, Math.round(previous * factor));
+  };
   return Array.from({ length: layers - 1 }).reduce<number[]>(
-    counts => [...counts, shrink(at(counts, counts.length - 1, "counts"))],
+    counts => [...counts, next(at(counts, counts.length - 1, "counts"))],
     [outer],
   );
+}
+
+/** A spiralled bloom's outer ring recurves and each ring inward cups more; other families cup a little more per ring. */
+const SPIRAL_OUTER_RECURVE = 0.3;
+const SPIRAL_CUP_STEP = 0.4;
+const CUP_STEP = 0.25;
+
+function layerCurvature(
+  profile: FamilyProfile,
+  pose: { curvature: number },
+  index: number,
+): number {
+  const curvature = isSpiralled(profile)
+    ? pose.curvature - SPIRAL_OUTER_RECURVE + index * SPIRAL_CUP_STEP
+    : pose.curvature + index * CUP_STEP;
+  return round3(clamp(-1, 0.85, curvature));
 }
 
 function petalLayer(
@@ -1063,7 +1110,7 @@ function petalLayer(
     count,
     shape: outer ? answers.outer_shape : answers.inner_shape,
     arrangement: first(profile.arrangements, `${profile.key}.arrangements`),
-    curvature: round3(clamp(-1, 0.85, pose.curvature + index * 0.25)),
+    curvature: layerCurvature(profile, pose, index),
     curl: round3(Math.max(0, pose.curl - index * 0.2)),
     texture: answers.texture,
     color: gradient(base, tip, answers.gradient_direction, jit(draw.stop, 0.1)),
@@ -1285,18 +1332,23 @@ const STEM_CURVATURE: Record<StemStyle, number> = {
 
 type Inflorescence = FlowerSpecJson["inflorescence"];
 
-/** Kinds whose heads stack along the main axis and so need a taller stem. */
-const AXIAL_KINDS: ReadonlySet<InflorescenceKind> = new Set([
-  "Spike",
-  "Raceme",
-  "Panicle",
-]);
+/** A cluster of heads stands on a stem this many times a solitary one's, sparse to dense. */
+const CLUSTER_HEIGHT = [1.3, 1.6] as const;
 
-/** Each extra head up to six adds 12% to the stem height, capped at the schema max. */
-function axialHeight(height: number, inflorescence: Inflorescence): number {
-  if (!AXIAL_KINDS.has(inflorescence.kind)) return height;
-  const extraHeads = Math.min(inflorescence.head_count - 1, 6);
-  return Math.min(1, height * (1 + 0.12 * extraHeads));
+/** Where the head count sits in its kind's range, 0 sparse to 1 dense. */
+function clusterDensity(inflorescence: Inflorescence): number {
+  const [lo, hi] = KIND_HEAD_RANGE[inflorescence.kind];
+  return hi > lo ? clamp(0, 1, (inflorescence.head_count - lo) / (hi - lo)) : 0;
+}
+
+/** A multi-head stem is 1.3 to 1.6 times the solitary height, capped at the schema max. */
+function clusterHeight(height: number, inflorescence: Inflorescence): number {
+  if (inflorescence.kind === "Solitary") return height;
+  return Math.min(
+    1,
+    height *
+      lerp(CLUSTER_HEIGHT[0], CLUSTER_HEIGHT[1], clusterDensity(inflorescence)),
+  );
 }
 
 function stem(ctx: Context, inflorescence: Inflorescence): Structure["stem"] {
@@ -1319,7 +1371,7 @@ function stem(ctx: Context, inflorescence: Inflorescence): Structure["stem"] {
     STEM_HEIGHT_VALUE[answers.stem_height] + jit(jitter.stemHeight, 0.05),
   );
   return {
-    height: round3(axialHeight(answeredHeight, inflorescence)),
+    height: round3(clusterHeight(answeredHeight, inflorescence)),
     thickness: STEM_THICKNESS_VALUE[answers.stem_thickness],
     curvature: STEM_CURVATURE[answers.stem_style],
     color,
@@ -1331,25 +1383,41 @@ function stem(ctx: Context, inflorescence: Inflorescence): Structure["stem"] {
   };
 }
 
-/** Size of the secondary heads against the primary, before jitter; Solitary has none. */
+/**
+ * Floret size class, 0 small to 1 large, before jitter: every floret of a
+ * cluster is the same size class, a dense corymb small and a spray large.
+ * Solitary has no florets to size.
+ */
 const HEAD_SCALE: Record<InflorescenceKind, number> = {
   Solitary: 0.6,
   Spike: 0.35,
-  Raceme: 0.45,
+  Raceme: 0.5,
   Umbel: 0.5,
-  Corymb: 0.5,
+  Corymb: 0.3,
   Panicle: 0.4,
-  Spray: 0.55,
+  Spray: 0.85,
 };
+
+/** A head count in the class's share of the kind's range, the jitter picking the spot. */
+function headCount(
+  kind: InflorescenceKind,
+  cls: HeadCountClass,
+  draw: number,
+): number {
+  if (kind === "Solitary") return 1;
+  const [lo, hi] = KIND_HEAD_RANGE[kind];
+  const [from, to] = HEAD_COUNT_SHARE[cls];
+  const low = lo + (hi - lo) * from;
+  const high = lo + (hi - lo) * to;
+  return Math.round(lerp(low, high, draw));
+}
 
 function inflorescence(ctx: Context): Inflorescence {
   const { answers, jitter, jit } = ctx;
   const kind = answers.inflorescence_kind;
-  const [lo, hi] = HEAD_COUNT_RANGE[answers.head_count_class];
-  const drawn = lo + Math.floor(jitter.headCount * (hi - lo + 1));
   return {
     kind,
-    head_count: kind === "Solitary" ? 1 : Math.max(2, Math.min(hi, drawn)),
+    head_count: headCount(kind, answers.head_count_class, jitter.headCount),
     head_scale: round3(
       clamp(0.2, 1, HEAD_SCALE[kind] + jit(jitter.headScale, 0.1)),
     ),

@@ -96,7 +96,7 @@ reproductive:
     drip_rate: 0.2
 structure:
   stem:
-    height: 0.479
+    height: 0.556
     thickness: 0.2
     curvature: 0.6
     color:
@@ -242,6 +242,6 @@ aura:
   animation_speed: 0.5
 inflorescence:
   kind: Spike
-  head_count: 2
+  head_count: 12
   head_scale: 0.412
   spread: 0.288

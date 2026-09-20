@@ -12,7 +12,7 @@ petals:
       count: 5
       shape: Reniform
       arrangement: Spiral
-      curvature: 0
+      curvature: -0.3
       curl: 0.1
       texture: Rough
       color:
