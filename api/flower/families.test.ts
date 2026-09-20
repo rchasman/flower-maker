@@ -116,6 +116,19 @@ describe("FAMILIES", () => {
     });
   });
 
+  test("small tubular families hide their centres: a small receptacle, stamens hidden first, a capitate stigma first", () => {
+    for (const key of [
+      "Lamiaceae",
+      "Plantaginaceae",
+      "Boraginaceae",
+    ] as const) {
+      const profile = FAMILIES[key];
+      expect(profile.receptacleSize, key).toEqual([0.1, 0.2]);
+      expect(profile.stamenProminence[0], key).toBe("hidden");
+      expect(profile.stigmaShapes[0], key).toBe("Capitate");
+    }
+  });
+
   test("Invented has every enum open", () => {
     LIST_NAMES.map(listName =>
       expect(FAMILIES.Invented[listName], listName).toEqual(
