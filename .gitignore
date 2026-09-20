@@ -14,3 +14,8 @@ dist/
 
 # Rust build artifacts (not WASM output)
 *.rlib
+
+# Template source plates are regenerated with client/scripts/generate-templates.ts;
+# only the dithered tiles ship.
+client/public/art/templates/*.png
+!client/public/art/templates/*.dither.png

@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import type { DbConnection } from "../spacetime/types.ts";
-import { templatesByCategory, type TemplateInfo } from "../data/templates.ts";
+import {
+  templatesByCategory,
+  templateArtUrl,
+  type TemplateInfo,
+} from "../data/templates.ts";
 import { generateFlower } from "../ai/generateFlower.ts";
 
 interface TemplatePickerProps {
@@ -141,8 +145,6 @@ function TemplateTile({
   generating: boolean;
   onClick: () => void;
 }) {
-  const gradient = buildGradient(t.colors);
-
   return (
     <motion.button
       onClick={onClick}
@@ -153,15 +155,10 @@ function TemplateTile({
       whileTap={{ scale: 0.97 }}
       transition={{ duration: 0.1 }}
     >
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: gradient,
-          opacity: 0.18,
-          transition: "opacity 0.15s ease",
-          zIndex: 0,
-        }}
+      <img
+        src={templateArtUrl(t)}
+        alt={`${t.name}, one stem`}
+        loading="lazy"
         className="template-tile__bg"
       />
       <span className="template-tile__name">
@@ -173,41 +170,6 @@ function TemplateTile({
           t.name
         )}
       </span>
-      <div className="template-tile__colors">
-        {t.colors.slice(0, 5).map(c => (
-          <span
-            key={c}
-            className="template-tile__swatch"
-            style={{ background: colorToHex(c) }}
-          />
-        ))}
-      </div>
     </motion.button>
   );
-}
-
-function buildGradient(colors: string[]): string {
-  const hexes = colors.slice(0, 3).map(colorToHex);
-  if (hexes.length === 1) return hexes[0]!;
-  if (hexes.length === 2)
-    return `linear-gradient(135deg, ${hexes[0]}, ${hexes[1]})`;
-  return `linear-gradient(135deg, ${hexes[0]}, ${hexes[1]}, ${hexes[2]})`;
-}
-
-function colorToHex(name: string): string {
-  const map: Record<string, string> = {
-    Red: "#ef4444",
-    Pink: "#ec4899",
-    White: "#f5f5f5",
-    Yellow: "#eab308",
-    Orange: "#f97316",
-    Purple: "#a855f7",
-    Lavender: "#c4b5fd",
-    Blue: "#3b82f6",
-    Green: "#22c55e",
-    Peach: "#fdba74",
-    Coral: "#fb7185",
-    Brown: "#92400e",
-  };
-  return map[name] ?? "#737373";
 }
