@@ -1,0 +1,73 @@
+import { SPRITE_IDS, type SpriteId } from "./timeline.ts";
+
+export interface Plate {
+  readonly id: SpriteId;
+  readonly prompt: string;
+  /** Point in the image (uv, 0..1) that the sprite rotates about and is positioned by. */
+  readonly pivot: readonly [number, number];
+  /** Luminance multiplier before dithering, for dark subjects that would otherwise vanish. */
+  readonly exposure: number;
+}
+
+const STYLE =
+  "High-contrast studio photograph in muted natural colour on a pure black background. " +
+  "Single hard key light from the upper left, deep shadows, one subject, generous negative space. " +
+  "The background must be solid pure black with nothing else in frame. " +
+  "No text, no letters, no logos, no watermark, no hands, no people.";
+
+const PLATE_LIST: readonly Plate[] = [
+  {
+    id: "belt",
+    prompt: `A long empty black rubber conveyor belt segment on a dark steel frame, seen from the side at eye level, running horizontally across the full width of the frame in the lower third, rollers visible at each end. ${STYLE}`,
+    pivot: [0.5, 0.56],
+    exposure: 2.2,
+  },
+  {
+    id: "arm-pick",
+    prompt: `An industrial six-axis robot arm in dark grey metal, bolted to a round base flange at the bottom centre of the frame, reaching up and to the left with an open two-finger gripper, full arm visible. ${STYLE}`,
+    pivot: [0.51, 0.91],
+    exposure: 2.4,
+  },
+  {
+    id: "arm-wrap",
+    prompt: `An industrial six-axis robot arm in dark grey metal, bolted to a round base flange at the bottom centre of the frame, reaching straight up and forward with a flat paddle end effector, full arm visible. ${STYLE}`,
+    pivot: [0.43, 0.92],
+    exposure: 2.4,
+  },
+  {
+    id: "arm-handoff",
+    prompt: `An industrial six-axis robot arm in dark grey metal, bolted to a round base flange at the bottom centre of the frame, reaching up and to the left with a closed two-finger gripper, full arm visible. ${STYLE}`,
+    pivot: [0.53, 0.91],
+    exposure: 2.4,
+  },
+  {
+    id: "tulip",
+    prompt: `A single white tulip with a long green stem lying horizontally, bloom to the left, centred in the frame. ${STYLE}`,
+    pivot: [0.5, 0.53],
+    exposure: 1.6,
+  },
+  {
+    id: "bunch",
+    prompt: `A small hand-tied bunch of five white tulips wrapped in a kraft paper cone, lying horizontally with the blooms to the left, centred in the frame. ${STYLE}`,
+    pivot: [0.5, 0.53],
+    exposure: 1.6,
+  },
+  {
+    id: "bouquet",
+    prompt: `A finished round bouquet of white tulips and eucalyptus wrapped in kraft paper with a dark ribbon, standing upright, centred in the frame. ${STYLE}`,
+    pivot: [0.49, 0.8],
+    exposure: 1.6,
+  },
+];
+
+const plateById = new Map(PLATE_LIST.map(plate => [plate.id, plate]));
+
+/** One plate per sprite, in SPRITE_IDS order, so shader binding slots line up with the timeline. */
+export const PLATES: readonly Plate[] = SPRITE_IDS.map(id => {
+  const plate = plateById.get(id);
+  if (!plate) throw new Error(`No plate declared for sprite "${id}"`);
+  return plate;
+});
+
+export const artUrl = (id: SpriteId): string => `/art/${id}.png`;
+export const FALLBACK_URL = "/art/assembly-line.dither.png";

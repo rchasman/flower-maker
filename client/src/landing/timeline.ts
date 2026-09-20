@@ -31,7 +31,7 @@ export interface SpriteTransform {
 }
 
 const STATION_X = [1 / 6, 1 / 2, 5 / 6] as const;
-const BELT_Y = 0.7;
+const BELT_Y = 0.72;
 const ARM_BASE_Y = 0.92;
 const ARM_BASE_DX = 0.12;
 const ARM_SCALE = 0.62;
@@ -109,9 +109,9 @@ const handoffAngle = (t: number) =>
 const belt: SpriteTransform = {
   id: "belt",
   x: 0.5,
-  y: 0.78,
+  y: BELT_Y,
   angle: 0,
-  scale: 0.32,
+  scale: 0.34,
   visible: 1,
 };
 
@@ -135,7 +135,7 @@ const tulip = (t: number, pickA: number): SpriteTransform => {
 const bunch = (t: number): SpriteTransform => ({
   id: "bunch",
   x: lerp(STATION_X[1]!, STATION_X[2]! - 0.1, seg(t, 3.9, 5.4)),
-  y: BELT_Y - 0.05,
+  y: BELT_Y - 0.06,
   angle: 0,
   scale: 0.16,
   visible: present(t, 3.6, 3.9, 5.4, 5.7),
@@ -146,7 +146,7 @@ const bouquet = (t: number, handoffA: number): SpriteTransform => {
   return {
     id: "bouquet",
     x: gx,
-    y: gy + 0.08,
+    y: gy + 0.04,
     angle: 0,
     scale: 0.24,
     visible: present(t, 5.4, 5.7, 3.0, 3.4),
