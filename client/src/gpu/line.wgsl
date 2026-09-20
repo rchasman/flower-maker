@@ -40,6 +40,8 @@ const SPRITE_COUNT = 15u;
 struct Sample {
   lum: f32,
   rgb: vec3f,
+  // Raw brightness of the plate at this cell, before exposure: above ~0 means the subject is there.
+  coverage: f32,
 }
 
 fn luminanceOf(rgb: vec3f) -> f32 {
@@ -88,17 +90,11 @@ fn sampleSprite(s: Sprite, q: vec2f, frameAspect: f32) -> Sample {
   let tex = u32(s.tone.y + 0.5);
   let gain = select(1.0, beltSurface(uv), tex == 0u);
   let rgb = sampleTex(tex, uv) * inside * s.shape.w;
-  return Sample(luminanceOf(rgb) * s.tone.x * gain, rgb);
+  return Sample(luminanceOf(rgb) * s.tone.x * gain, rgb, luminanceOf(rgb));
 }
 
 fn hash(p: vec2f) -> f32 {
   return fract(sin(dot(p, vec2f(12.9898, 78.233))) * 43758.5453);
-}
-
-// A little per-cell jitter on the Bayer threshold breaks the flat plateaus an ordered dither
-// makes out of smooth gradients, such as the belt's rubber.
-fn jitter(cell: vec2f) -> f32 {
-  return (hash(cell) - 0.5) * 0.1;
 }
 
 // Scuffs and one seam on the rubber, scrolling with the belt's travel so the belt visibly runs
@@ -106,9 +102,9 @@ fn jitter(cell: vec2f) -> f32 {
 fn beltSurface(uv: vec2f) -> f32 {
   let onSurface = step(0.52, uv.y) * step(uv.y, 0.6);
   let scrolled = vec2f(uv.x + params.travel, uv.y);
-  let scuff = step(0.9, hash(floor(scrolled * vec2f(140.0, 36.0))));
+  let scuff = step(0.965, hash(floor(scrolled * vec2f(360.0, 48.0))));
   let seam = 1.0 - smoothstep(0.0, 0.006, abs(fract(scrolled.x) - 0.5));
-  return 1.0 + onSurface * (scuff * 1.2 + seam * 2.0);
+  return 1.0 + onSurface * (scuff * 1.0 + seam * 2.0);
 }
 
 fn brighter(a: Sample, b: Sample) -> Sample {
@@ -116,17 +112,32 @@ fn brighter(a: Sample, b: Sample) -> Sample {
   return a;
 }
 
+// Anything darker than this on a plate is background; above it the subject covers what is behind.
+const OPAQUE_ABOVE = 0.04;
+
+// Items sit in front of the arms: where the flower plate has a subject, it hides whatever is
+// behind it instead of letting brighter metal show through the petals.
+fn over(back: Sample, front: Sample) -> Sample {
+  if (front.coverage > OPAQUE_ABOVE) { return front; }
+  return back;
+}
+
 @fragment fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   let cell = floor(uv * params.resolution / params.pixel);
   let snapped = (cell + 0.5) * params.pixel / params.resolution;
-  let threshold = clamp(bayer8(vec2u(cell)) + jitter(cell), 0.0, 1.0);
+  let threshold = bayer8(vec2u(cell));
 
   let frameAspect = params.resolution.x / params.resolution.y;
   let q = vec2f(snapped.x * frameAspect, snapped.y);
 
-  var best = Sample(0.0, vec3f(0.0));
+  var best = Sample(0.0, vec3f(0.0), 0.0);
   for (var i = 0u; i < SPRITE_COUNT; i++) {
-    best = brighter(best, sampleSprite(sprites[i], q, frameAspect));
+    let sample = sampleSprite(sprites[i], q, frameAspect);
+    if (sprites[i].tone.y >= 4.0) {
+      best = over(best, sample);
+    } else {
+      best = brighter(best, sample);
+    }
   }
 
   let luminance = clamp((best.lum - 0.5) * params.contrast + 0.5, 0.0, 1.0);

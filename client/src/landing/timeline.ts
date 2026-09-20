@@ -190,7 +190,7 @@ const tulip = (t: number, pickPose: ArmPose, frameAspect: number) => {
 };
 
 /** How far the bunch turns upright while it is offered, so the blooms face the viewer. */
-const OFFER_TURN = deg(-90);
+const OFFER_TURN = deg(-55);
 /** How much the bunch grows as it comes toward the viewer. */
 const OFFER_GROWTH = 1.5;
 
