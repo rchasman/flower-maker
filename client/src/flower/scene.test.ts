@@ -52,7 +52,7 @@ describe("flower scene", () => {
     scene.destroy();
   });
 
-  test("a spike adds a blurred back layer behind the plant, lit by its own filter", () => {
+  test("a spike adds a back layer behind the plant, lit by its own filter and never blurred", () => {
     const scene = createFlowerScene(
       createFlowerPlan(
         spec({ inflorescence: { kind: "Spike", head_count: 12 } }),
@@ -63,14 +63,10 @@ describe("flower scene", () => {
     const back = scene.root.children[flowerIdx - 1]!;
     expect(back).not.toBe(scene.root.children[0]);
     const backFilters = filtersOf(back.filters);
+    expect(backFilters).toHaveLength(1);
     expect(backFilters[0]).toBeInstanceOf(PlantLightFilter);
-    expect(backFilters[1]).toBeInstanceOf(BlurFilter);
+    expect(backFilters.some(f => f instanceof BlurFilter)).toBe(false);
     scene.draw(70, 1);
-    const blur = backFilters[1];
-    if (!(blur instanceof BlurFilter)) throw new Error("no back blur");
-    expect(blur.strength).toBeCloseTo(0.5, 6);
-    scene.draw(140, 1);
-    expect(blur.strength).toBeCloseTo(1, 6);
     scene.destroy();
   });
 

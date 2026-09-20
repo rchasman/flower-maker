@@ -3,7 +3,6 @@ import { LIFE_STAGES, type LifeStage } from "../data/flower-enums.ts";
 import {
   MAX_LIT_HEADS,
   arrangementHeadLights,
-  backBlurStrength,
   hasBackFlorets,
   headLights,
   inLayer,
@@ -140,11 +139,6 @@ describe("depth layers", () => {
         ),
       ),
     ).toBe(true);
-  });
-
-  test("the back blur scales with the drawn radius", () => {
-    expect(backBlurStrength(70)).toBeCloseTo(0.5, 6);
-    expect(backBlurStrength(140)).toBeCloseTo(1, 6);
   });
 });
 

@@ -30,7 +30,7 @@ per session and rebuilt only when the spec changes.
 | `stem.ts`          | stem outline, surface strokes, branches, `stemPointAt`                      |
 | `color.ts`         | hex color math: darken, lighten, desaturate, hue rotate                     |
 | `pixi-draw.ts`     | `drawFlowerFromPlan`, `drawArrangementFromPlan`, `drawAura`, `drawGlow`     |
-| `lighting.ts`      | the shader's uniforms from a plan: head lights, depth layers, blur sizes    |
+| `lighting.ts`      | the shader's uniforms from a plan: head lights, depth layers, bloom sizes   |
 | `scene.ts`         | `createFlowerScene`: one flower's layers and filters on a pixi stage        |
 | `shaders/`         | `PlantLightFilter`, GLSL and WGSL programs for head volume and translucency |
 
@@ -193,7 +193,7 @@ runs on WebGL and WebGPU alike.
 | Bloom              | the aura and glow layers                           | two `Graphics` share one `GraphicsContext`: the crisp core and, under it, a copy with a `BlurFilter` (quality 3, strength from `glowBloomStrength` and `auraBloomStrength`, which scale with the radius) at lower alpha. The glow pair is additive. The blur never touches the flower `Graphics`.                          |
 | Head volume        | `PlantLightFilter` on the flower `Graphics`        | each head is a uniform (`headLights`: centre and radius in local pixels, strength by stage from `volumeStrength`, 0.35 for a bloom, less for a bud). The fragment finds its nearest head and shades it as a shallow cup: brighter toward `LIGHT_DIRECTION` and the rim, darker toward the shadow side and the centre well. |
 | Petal translucency | the same filter                                    | `translucencyOf(head)`: the outer layer's texture (Papery, Silk, Glassy high; Waxy, Leathery, Metallic low) opened up by the thinnest layer's opacity class. The fragment lifts thin fills (low alpha), luminance edges and pale fills toward a warm white.                                                                |
-| Depth              | a second `Graphics` behind the plant               | florets with `depth > 0.5` (`isBackFloret`) draw there with their pedicels, under their own `PlantLightFilter` and a mild `BlurFilter` (`backBlurStrength`, 0.5 at radius 70). The plan already darkens them.                                                                                                              |
+| Depth              | a second `Graphics` behind the plant               | florets with `depth > 0.5` (`isBackFloret`) draw there with their pedicels, under their own `PlantLightFilter`. The plan tints them slightly darker (`BACK_SHADE`); they are never blurred, a blur read as a smear rather than depth.                                                                                      |
 | Stem cylinders     | `StalkShading` on `StemPlan` and every `StalkPlan` | `stemShading` and `stalkPlan` add a highlight line offset toward the light and a shade line away from it, each stroked half the mid half width, in a lighter and a darker tint of the stalk color.                                                                                                                         |
 
 The filter texture's origin follows the flower's bounds, so `PlantLightFilter`

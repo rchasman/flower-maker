@@ -1312,7 +1312,7 @@ const RACEME_ARCH = 0.02;
 /** petals pointing away from the viewer on a nodding head are this much shorter */
 const PETAL_FORESHORTEN = 0.85;
 /** back florets are drawn this much darker */
-const BACK_SHADE = 0.85;
+const BACK_SHADE = 0.92;
 /** adjacent petals of a spiralled ring overlap by this share of their width */
 const SPIRAL_OVERLAP = 0.38;
 /** each inner ring of a spiralled bloom sits this much deeper in the cup */

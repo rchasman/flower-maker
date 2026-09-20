@@ -150,10 +150,6 @@ export function arrangementHeadLights(
 /** the base radius the blur strengths below were tuned at */
 const REFERENCE_RADIUS = 70;
 
-/** Back florets go half a pixel out of focus at the base radius; pixi blur strength spreads about three times that far. */
-export const backBlurStrength = (r: number): number =>
-  (0.5 * r) / REFERENCE_RADIUS;
-
 /** The soft copy under the bioluminescence and nectary glow. */
 export const glowBloomStrength = (r: number): number =>
   (5 * r) / REFERENCE_RADIUS;

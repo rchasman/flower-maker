@@ -5,7 +5,7 @@
  * flower.
  *
  * Layers, back to front: the aura's soft copy and its crisp core (per
- * frame), the back florets (blurred), the plant, the glow's soft copy and
+ * frame), the back florets, the plant, the glow's soft copy and
  * its crisp core (additive, per frame), the particles (per frame).
  */
 
@@ -20,7 +20,6 @@ import {
 import {
   arrangementHeadLights,
   auraBloomStrength,
-  backBlurStrength,
   glowBloomStrength,
   hasBackFlorets,
   headLights,
@@ -109,14 +108,9 @@ export function createFlowerScene(plan: FlowerPlan): FlowerScene {
     ? {
         graphics: new Graphics(),
         light: new PlantLightFilter(anchor),
-        blur: new BlurFilter({
-          strength: backBlurStrength(70),
-          quality: BLOOM_QUALITY,
-          resolution: "inherit",
-        }),
       }
     : null;
-  if (back) back.graphics.filters = [back.light, back.blur];
+  if (back) back.graphics.filters = [back.light];
 
   const aura = plan.aura
     ? createBloomLayer("normal", AURA_BLOOM_ALPHA, auraBloomStrength)
@@ -154,7 +148,6 @@ export function createFlowerScene(plan: FlowerPlan): FlowerScene {
           layer: "back",
         });
         back.light.setHeads(headLights(plan, r, "back"));
-        back.blur.strength = backBlurStrength(r);
       }
       aura?.setRadius(r);
       glow?.setRadius(r);
@@ -174,7 +167,7 @@ export function createFlowerScene(plan: FlowerPlan): FlowerScene {
       }
     },
     destroy: () => {
-      destroyAll(root, [light, ...(back ? [back.light, back.blur] : [])]);
+      destroyAll(root, [light, ...(back ? [back.light] : [])]);
       aura?.destroy();
       glow?.destroy();
     },
