@@ -7,11 +7,14 @@ import {
   branchPointAt,
   branchTipHeading,
   generateStem,
+  stalkPlan,
   stemAxis,
   stemPointAt,
+  stemShading,
   stemTipHeading,
 } from "./stem.ts";
 import { flattenCmds } from "./test-helpers.ts";
+import { LIGHT_DIRECTION } from "./util.ts";
 
 const HALF_WIDTH = 0.05;
 
@@ -118,5 +121,47 @@ describe("tip bend", () => {
     expect(branchHalfWidthAt(b, 0)).toBeCloseTo(0.03, 9);
     expect(branchHalfWidthAt(b, 0.5)).toBeLessThan(0.03 * 0.6);
     expect(branchHalfWidthAt(b, 1)).toBeLessThan(branchHalfWidthAt(b, 0.5));
+  });
+});
+
+describe("stalk shading", () => {
+  /** Mean signed offset of `line` from the centreline, along the light direction. */
+  const towardLight = (
+    line: readonly Vec2[],
+    centreAt: (t: number) => { x: number; y: number },
+  ): number =>
+    line.reduce((sum, [x, y], i) => {
+      const c = centreAt(i / (line.length - 1));
+      return (
+        sum + (x - c.x) * LIGHT_DIRECTION[0] + (y - c.y) * LIGHT_DIRECTION[1]
+      );
+    }, 0) / line.length;
+
+  test("the stem's shine runs on the lit side and its shade on the other, inside the outline", () => {
+    for (const curvature of [0, 0.4, -0.4]) {
+      const axis = stemAxis([0, 1.6], [0, 0], curvature, "Straight");
+      const { shine, shade, width } = stemShading(axis, HALF_WIDTH);
+      const shineLine = flattenCmds(shine);
+      const shadeLine = flattenCmds(shade);
+      const centreAt = (t: number) => stemPointAt(axis, t);
+      expect(towardLight(shineLine, centreAt)).toBeGreaterThan(0);
+      expect(towardLight(shadeLine, centreAt)).toBeLessThan(0);
+      expect(Math.abs(towardLight(shineLine, centreAt))).toBeLessThan(
+        HALF_WIDTH,
+      );
+      expect(width).toBeGreaterThan(0);
+      expect(width).toBeLessThan(HALF_WIDTH);
+    }
+  });
+
+  test("a branch carries the same two lines, narrower than the branch", () => {
+    const b = branch([0, 1], [0.7, -0.7], [0.6, 0.4], [1, 0], 0.03);
+    const { shading } = stalkPlan(b);
+    const centreAt = (s: number) => branchPointAt(b, s);
+    expect(towardLight(flattenCmds(shading.shine), centreAt)).toBeGreaterThan(
+      0,
+    );
+    expect(towardLight(flattenCmds(shading.shade), centreAt)).toBeLessThan(0);
+    expect(shading.width).toBeLessThan(branchHalfWidthAt(b, 0.5));
   });
 });

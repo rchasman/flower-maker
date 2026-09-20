@@ -4,14 +4,14 @@
  * Instead of creating a separate WebGL context per card (which crashes Chrome
  * at ~8-16 contexts), we use a single shared offscreen PixiJS Application to
  * render each zone's flowers into a RenderTexture, extract it as a data URL,
- * and display a plain <img>. The dither shader is omitted — it's invisible
- * at card thumbnail size.
+ * and display a plain <img>. Every flower is built through the shared scene,
+ * so the snapshot carries the same layers and filters as the designer; only
+ * the stage-wide dither is omitted, which is invisible at card size.
  */
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Application,
-  Graphics,
   Container,
   RenderTexture,
   GraphicsContextSystem,
@@ -22,11 +22,10 @@ import {
   type ArrangementMeta,
 } from "../flower/render.ts";
 import {
-  drawFlowerFromPlan,
-  drawArrangementFromPlan,
-  drawGlow,
-  hasGlow,
-} from "../flower/pixi-draw.ts";
+  createArrangementScene,
+  createFlowerScene,
+  type FlowerScene,
+} from "../flower/scene.ts";
 import type { FlowerSession, FlowerSpec } from "../spacetime/types.ts";
 
 interface PixiMiniCanvasProps {
@@ -114,34 +113,30 @@ function resolvePositions(
   return resolved;
 }
 
-/** One zone member's Graphics: the arrangement, or the flower followed by one frame of its additive glow. */
-function snapshotGraphics(
+/** One zone member's scene, drawn once with one frame of its moving layers. */
+function snapshotScene(
   p: { sid: number; sessionKey: string },
   constituentMap: Map<string, Array<{ spec: string; sid: number }>>,
   specBySessionId: Map<string, FlowerSpec>,
   arrangementMetaMap: Map<string, ArrangementMeta>,
   radius: number,
-): Graphics[] {
-  const g = new Graphics();
+): FlowerScene {
   const constituents = constituentMap.get(p.sessionKey);
-  if (constituents && constituents.length > 1) {
-    const level = Math.min(7, Math.ceil(constituents.length / 3));
-    const meta = arrangementMetaMap.get(p.sessionKey);
-    drawArrangementFromPlan(
-      g,
-      createArrangementPlan(constituents, level, meta),
-      radius,
-      1.0,
-    );
-    return [g];
-  }
-  const plan = createFlowerPlan(specBySessionId.get(p.sessionKey)?.spec, p.sid);
-  drawFlowerFromPlan(g, plan, radius, 1.0);
-  if (!hasGlow(plan)) return [g];
-  const glow = new Graphics();
-  glow.blendMode = "add";
-  drawGlow(glow, plan, radius, 1.0);
-  return [g, glow];
+  const scene =
+    constituents && constituents.length > 1
+      ? createArrangementScene(
+          createArrangementPlan(
+            constituents,
+            Math.min(7, Math.ceil(constituents.length / 3)),
+            arrangementMetaMap.get(p.sessionKey),
+          ),
+        )
+      : createFlowerScene(
+          createFlowerPlan(specBySessionId.get(p.sessionKey)?.spec, p.sid),
+        );
+  scene.draw(radius, 1.0);
+  scene.tick(radius, 1.0);
+  return scene;
 }
 
 // ── Render a zone to a data URL ──────────────────────────────────────────
@@ -159,19 +154,18 @@ async function renderZoneSnapshot(
   const radius = previewRadius(sessions.length);
   const resolved = resolvePositions(sessions, radius);
 
-  for (const p of resolved) {
-    const drawn = snapshotGraphics(
+  const scenes = resolved.map(p => {
+    const scene = snapshotScene(
       p,
       constituentMap,
       specBySessionId,
       arrangementMetaMap,
       radius,
     );
-    for (const g of drawn) {
-      g.position.set(p.x, p.y);
-      container.addChild(g);
-    }
-  }
+    scene.root.position.set(p.x, p.y);
+    container.addChild(scene.root);
+    return scene;
+  });
 
   const bounds = resolved.reduce(
     (acc, p) => ({
@@ -219,7 +213,8 @@ async function renderZoneSnapshot(
   const url = URL.createObjectURL(blob);
 
   renderTexture.destroy(true);
-  container.destroy({ children: true });
+  scenes.map(scene => scene.destroy());
+  container.destroy();
 
   return url;
 }

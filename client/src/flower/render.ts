@@ -75,6 +75,7 @@ import { generateLeaf, type LeafParams, type LeafPose } from "./leaf.ts";
 import {
   DEFAULT_LIFE_STAGE,
   STAGE_PROFILES,
+  budShellColor,
   buildSeedHead,
   generateBuds,
   stageLayers,
@@ -90,6 +91,7 @@ import {
   sideHeading,
   stemAxis,
   stemPointAt,
+  stemShading,
   stemTipHeading,
   type StalkPlan,
   type StemAxis,
@@ -1462,6 +1464,7 @@ function buildStemPlan(
       color,
       seed,
     ),
+    shading: stemShading(axis, halfWidth),
   };
 }
 
@@ -1497,7 +1500,11 @@ function buildHead(src: HeadSource, stage: LifeStage, back: boolean): HeadPlan {
   const tint = (color: number): number =>
     back ? darkenColor(color, BACK_SHADE) : color;
   const stageProfile = STAGE_PROFILES[stage];
-  const stagedLayers = stageLayers(stage, parsed.layers, baseColor);
+  const stagedLayers = stageLayers(
+    stage,
+    parsed.layers,
+    budShellColor(parsed.sepals[0]?.color ?? DEFAULT_SEPAL_COLOR, baseColor),
+  );
   const initialOffset = sidHash(sid, 5) * Math.PI * 2;
   const layerOffsets = stagedLayers.reduce<number[]>(
     (offsets, layer) => [

@@ -14,7 +14,7 @@ import {
   type InflorescenceParams,
 } from "./inflorescence.ts";
 import { createFlowerPlan } from "./render.ts";
-import { generateStem, stemAxis, type StemPlan } from "./stem.ts";
+import { generateStem, stemAxis, stemShading, type StemPlan } from "./stem.ts";
 import { flattenCmds } from "./test-helpers.ts";
 
 const LENGTH = 1.6;
@@ -30,6 +30,7 @@ function straightStem(length = LENGTH, curvature = 0): StemPlan {
     axis,
     halfWidth: HALF_WIDTH,
     surface: [],
+    shading: stemShading(axis, HALF_WIDTH),
   };
 }
 

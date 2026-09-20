@@ -15,7 +15,7 @@ import {
   Rectangle,
 } from "pixi.js";
 import type { FlowerRenderData } from "../wasm/loop.ts";
-import { colorFromSpec, fallbackColor } from "../flower/color.ts";
+import { fallbackColor } from "../flower/color.ts";
 import {
   createFlowerPlan,
   createArrangementPlan,
@@ -24,13 +24,10 @@ import {
   type ArrangementMeta,
 } from "../flower/render.ts";
 import {
-  drawAura,
-  drawFlowerFromPlan,
-  drawArrangementFromPlan,
-  drawGlow,
-  drawParticles,
-  hasGlow,
-} from "../flower/pixi-draw.ts";
+  createArrangementScene,
+  createFlowerScene,
+  type FlowerScene,
+} from "../flower/scene.ts";
 import { setCanvasViewport } from "../spacetime/bridge.ts";
 import {
   createMergeGlowFilter,
@@ -69,13 +66,6 @@ function filterList(filters: Container["filters"]): readonly Filter[] {
   return filters instanceof Filter ? [filters] : filters;
 }
 
-/** Resolve flower color — use spec data if available, fallback to sid hash. */
-function resolveColor(flower: FlowerRenderData): number {
-  const { petal_color_r: r, petal_color_g: g, petal_color_b: b } = flower;
-  if (r + g + b < 0.05) return fallbackColor(flower.sid);
-  return colorFromSpec(r, g, b);
-}
-
 // ── Module-scope constants (hoisted from hot loops) ──
 const MERGE_GLOW_DURATION = 2000;
 
@@ -101,6 +91,20 @@ const _activeSids = new Set<number>();
 type CachedPlan =
   | { kind: "flower"; plan: FlowerPlan }
   | { kind: "arrangement"; plan: ArrangementPlan };
+
+/** The scene a plan draws into, or the plain arrangement scene. */
+function sceneFor(cached: CachedPlan): FlowerScene {
+  return cached.kind === "flower"
+    ? createFlowerScene(cached.plan)
+    : createArrangementScene(cached.plan);
+}
+
+/** Hit area and selection ring for a drawn plan at radius r. */
+function footprintFor(cached: CachedPlan, r: number): Footprint {
+  return cached.kind === "flower"
+    ? flowerFootprint(cached.plan, r)
+    : arrangementFootprint(r);
+}
 
 /** Hit area and selection ring for one drawn plan at radius r, in the flower's local px. */
 type Footprint = {
@@ -146,7 +150,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
     const appRef = useRef<Application | null>(null);
-    const flowerGraphicsRef = useRef<Map<number, Graphics>>(new Map());
+    const scenesRef = useRef<Map<number, FlowerScene>>(new Map());
+    const selectionRingRef = useRef<Graphics | null>(null);
     const stageContainerRef = useRef<Container | null>(null);
     const selectedIdRef = useRef(selectedId);
     const dragRef = useRef<{
@@ -168,13 +173,6 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const mergeOverlayOpacityRef = useRef(0);
     const mergeBloomRef = useRef<Map<number, number>>(new Map()); // sid → startTime
 
-    // Aura graphics — separate from flower graphics to avoid bounding-box artifacts
-    const auraGraphicsRef = useRef<Map<number, Graphics>>(new Map());
-    // Glow graphics — additive, in front of the flower, redrawn every frame
-    const glowGraphicsRef = useRef<Map<number, Graphics>>(new Map());
-    // Particle graphics — in front of the flower, redrawn every frame so the flower itself is not
-    const particleGraphicsRef = useRef<Map<number, Graphics>>(new Map());
-
     // Shader filter refs
     const mergeGlowFiltersRef = useRef<
       Map<number, { filter: Filter; startTime: number }>
@@ -194,9 +192,9 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const planCacheRef = useRef<Map<number, CachedPlan>>(new Map());
 
     // Dirty-flag tracking: skip expensive g.clear() + redraw when nothing visual changed.
-    const drawnStateRef = useRef<
-      Map<number, { scale: number; alpha: number; selected: boolean }>
-    >(new Map());
+    const drawnStateRef = useRef<Map<number, { scale: number; alpha: number }>>(
+      new Map(),
+    );
 
     // Keep refs in sync without re-running effects
     selectedIdRef.current = selectedId;
@@ -260,42 +258,35 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
       (pool: FlowerRenderData[], count: number) => {
         const stage = stageContainerRef.current;
         if (!stage) return;
-        const graphics = flowerGraphicsRef.current;
+        const scenes = scenesRef.current;
 
         _activeSids.clear();
         for (let i = 0; i < count; i++) _activeSids.add(pool[i]!.sid);
 
-        const auras = auraGraphicsRef.current;
-        const glows = glowGraphicsRef.current;
-        const particles = particleGraphicsRef.current;
         const drawnState = drawnStateRef.current;
-        const destroyCompanion = (
-          companions: Map<number, Graphics>,
-          sid: number,
-        ) => {
-          const companion = companions.get(sid);
-          if (!companion) return;
-          stage.removeChild(companion);
-          companion.destroy();
-          companions.delete(sid);
-        };
-        graphics.forEach((g, sid) => {
+        scenes.forEach((scene, sid) => {
           if (_activeSids.has(sid)) return;
-          stage.removeChild(g);
-          g.destroy();
-          graphics.delete(sid);
+          stage.removeChild(scene.root);
+          scene.destroy();
+          scenes.delete(sid);
           planCacheRef.current.delete(sid);
           drawnState.delete(sid);
-          destroyCompanion(auras, sid);
-          destroyCompanion(glows, sid);
-          destroyCompanion(particles, sid);
         });
+
+        if (!selectionRingRef.current) {
+          selectionRingRef.current = new Graphics();
+          stage.addChild(selectionRingRef.current);
+        }
+        const selectionRing = selectionRingRef.current;
+        selectionRing.clear();
 
         for (let fi = 0; fi < count; fi++) {
           const flower = pool[fi]!;
-          let g = graphics.get(flower.sid);
-          if (!g) {
-            g = new Graphics();
+          const cached = getPlan(flower.sid);
+          let scene = scenes.get(flower.sid);
+          if (!scene) {
+            scene = sceneFor(cached);
+            const g = scene.flower;
             g.eventMode = "static";
             g.cursor = "grab";
             const sid = flower.sid;
@@ -309,10 +300,10 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
               e.stopPropagation();
             });
             g.on("pointerup", () => {
-              g!.cursor = "grab";
+              g.cursor = "grab";
             });
-            graphics.set(flower.sid, g);
-            stage.addChild(g);
+            scenes.set(flower.sid, scene);
+            stage.addChildAt(scene.root, stage.getChildIndex(selectionRing));
 
             const bloomSentinel = mergeBloomRef.current.get(-1);
             if (
@@ -326,116 +317,31 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
 
           const r = FLOWER_BASE_RADIUS * flower.scale;
           const alpha = flower.alpha;
-          const cached = getPlan(flower.sid);
-          const isSelected = selectedIdRef.current === flower.sid;
-
-          const flowerPlan = cached.kind === "flower" ? cached.plan : null;
-          const hasAura =
-            flower.has_glow ||
-            flower.has_aura ||
-            (flowerPlan != null && flowerPlan.aura != null);
 
           const prev = drawnState.get(flower.sid);
           const needsRedraw =
-            !prev ||
-            prev.scale !== flower.scale ||
-            prev.alpha !== flower.alpha ||
-            prev.selected !== isSelected;
+            !prev || prev.scale !== flower.scale || prev.alpha !== flower.alpha;
 
           if (needsRedraw) {
-            const footprint = flowerPlan
-              ? flowerFootprint(flowerPlan, r)
-              : arrangementFootprint(r);
-            g.hitArea = footprint.hitArea;
-
-            g.clear();
-
-            if (isSelected) {
-              footprint.drawRing(g);
-              g.stroke({ color: 0xffffff, width: 2, alpha: 0.7 });
-            }
-
-            if (cached.kind === "arrangement") {
-              drawArrangementFromPlan(g, cached.plan, r, alpha);
-            } else {
-              drawFlowerFromPlan(g, cached.plan, r, alpha, {
-                particles: false,
-              });
-            }
-
+            scene.flower.hitArea = footprintFor(cached, r).hitArea;
+            scene.draw(r, alpha);
             drawnState.set(flower.sid, {
               scale: flower.scale,
               alpha: flower.alpha,
-              selected: isSelected,
             });
           }
 
-          // Auras render every frame (they use performance.now() for pulsing animation)
-          {
-            let ag = auras.get(flower.sid);
-            if (hasAura) {
-              if (!ag) {
-                ag = new Graphics();
-                auras.set(flower.sid, ag);
-                const flowerIdx = stage.getChildIndex(g);
-                stage.addChildAt(ag, flowerIdx);
-              }
-              ag.clear();
-              if (flowerPlan?.aura) {
-                drawAura(ag, flowerPlan, r, alpha);
-              } else {
-                const liveColor = resolveColor(flower);
-                ag.circle(0, 0, r + 4);
-                ag.fill({ color: liveColor, alpha: 0.15 * alpha });
-              }
-            } else if (ag) {
-              ag.clear();
-            }
-          }
+          // Aura, glow and particles move every frame
+          scene.tick(r, alpha);
 
-          // Bioluminescence and nectary pulse render every frame, additively, over the flower
-          {
-            let gg = glows.get(flower.sid);
-            if (flowerPlan && hasGlow(flowerPlan)) {
-              if (!gg) {
-                gg = new Graphics();
-                gg.blendMode = "add";
-                glows.set(flower.sid, gg);
-                stage.addChildAt(gg, stage.getChildIndex(g) + 1);
-              }
-              gg.clear();
-              drawGlow(gg, flowerPlan, r, alpha);
-            } else if (gg) {
-              gg.clear();
-            }
-          }
+          scene.root.position.set(flower.x, flower.y);
+          scene.root.rotation = flower.rotation;
 
-          // Particles move every frame, on their own Graphics so the flower keeps its tessellation
-          {
-            let pg = particles.get(flower.sid);
-            if (flowerPlan && flowerPlan.particles.length > 0) {
-              if (!pg) {
-                pg = new Graphics();
-                particles.set(flower.sid, pg);
-                stage.addChildAt(pg, stage.getChildIndex(g) + 1);
-              }
-              pg.clear();
-              drawParticles(pg, flowerPlan, r, alpha);
-            } else if (pg) {
-              pg.clear();
-            }
-          }
-
-          g.position.set(flower.x, flower.y);
-          g.rotation = flower.rotation;
-
-          // Aura, glow and particle positions track the flower
-          for (const companions of [auras, glows, particles]) {
-            const companion = companions.get(flower.sid);
-            if (companion) {
-              companion.position.set(flower.x, flower.y);
-              companion.rotation = flower.rotation;
-            }
+          if (selectedIdRef.current === flower.sid) {
+            selectionRing.position.set(flower.x, flower.y);
+            selectionRing.rotation = flower.rotation;
+            footprintFor(cached, r).drawRing(selectionRing);
+            selectionRing.stroke({ color: 0xffffff, width: 2, alpha: 0.7 });
           }
 
           const bloomStart = mergeBloomRef.current.get(flower.sid);
@@ -445,9 +351,9 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
               const progress = elapsed / BLOOM_DURATION;
               const bloomScale =
                 1 + 0.15 * Math.sin(progress * Math.PI) * (1 - progress * 0.5);
-              g.scale.set(bloomScale);
+              scene.root.scale.set(bloomScale);
             } else {
-              g.scale.set(1);
+              scene.root.scale.set(1);
               mergeBloomRef.current.delete(flower.sid);
             }
           }
@@ -490,7 +396,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
                 }
               : null;
 
-          const g = flowerGraphicsRef.current.get(drag.sid);
+          const g = scenesRef.current.get(drag.sid)?.flower;
           if (g) g.cursor = mergeTargetRef.current ? "cell" : "grabbing";
         } else {
           mergeTargetRef.current = null;
@@ -564,7 +470,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           const elapsed = now - startTime;
           if (elapsed >= MERGE_GLOW_DURATION) {
             // Remove expired glow filter
-            const g = graphics.get(sid);
+            const g = scenes.get(sid)?.flower;
             if (g) {
               g.filters = filterList(g.filters).filter(f => f !== filter);
             }
@@ -679,7 +585,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
               const dy = pos.y - drag.originY;
               if (dx * dx + dy * dy < DRAG_THRESHOLD * DRAG_THRESHOLD) return;
               drag.started = true;
-              const g = flowerGraphicsRef.current.get(drag.sid);
+              const g = scenesRef.current.get(drag.sid)?.flower;
               if (g) g.cursor = "grabbing";
             }
 
@@ -689,8 +595,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           const handlePointerUp = () => {
             const drag = dragRef.current;
             if (drag) {
-              const g = flowerGraphicsRef.current.get(drag.sid);
-              if (g) g.cursor = "grab";
+              const scene = scenesRef.current.get(drag.sid);
+              if (scene) scene.flower.cursor = "grab";
 
               // Click (no drag) — select the flower, don't merge
               if (!drag.started) {
@@ -703,11 +609,11 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
               const mt = mergeTargetRef.current;
               if (mt && mt.dragSid === drag.sid) {
                 // Trigger merge glow on target flower
-                const targetG = flowerGraphicsRef.current.get(mt.targetSid);
-                if (targetG) {
+                const target = scenesRef.current.get(mt.targetSid);
+                if (target) {
                   const glowFilter = createMergeGlowFilter();
-                  targetG.filters = [
-                    ...filterList(targetG.filters),
+                  target.flower.filters = [
+                    ...filterList(target.flower.filters),
                     glowFilter,
                   ];
                   mergeGlowFiltersRef.current.set(mt.targetSid, {
@@ -716,7 +622,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
                   });
                 }
                 // Spawn merge particle burst at target position
-                const targetPos = targetG?.position;
+                const targetPos = target?.root.position;
                 if (targetPos) {
                   const colorA = fallbackColor(drag.sid);
                   const colorB = fallbackColor(mt.targetSid);
@@ -749,11 +655,11 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
                   };
                   requestAnimationFrame(shakeFrame);
                 }
-              } else if (g) {
+              } else if (scene) {
                 onFlowerDragEndRef.current?.(
                   drag.sid,
-                  g.position.x,
-                  g.position.y,
+                  scene.root.position.x,
+                  scene.root.position.y,
                 );
               }
 
@@ -771,10 +677,9 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         resizeObsRef.current?.disconnect();
         resizeObsRef.current = null;
         stageContainerRef.current = null;
-        flowerGraphicsRef.current.clear();
-        auraGraphicsRef.current.clear();
-        glowGraphicsRef.current.clear();
-        particleGraphicsRef.current.clear();
+        scenesRef.current.forEach(scene => scene.destroy());
+        scenesRef.current.clear();
+        selectionRingRef.current = null;
         planCacheRef.current.clear();
         drawnStateRef.current.clear();
         mergeOverlayRef.current = null;
