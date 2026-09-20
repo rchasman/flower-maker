@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { useAuth } from "react-oidc-context";
+import { hasStoredOidcSession } from "../auth/oidcConfig.ts";
 import { useSpacetimeDB, useUsers } from "../spacetime/hooks.ts";
 import {
   getMyIdentity,
@@ -22,8 +23,8 @@ interface SessionContext {
   conn: DbConnection | null;
   identityHex: string | null;
   myUser: User | null;
-  isSignedIn: boolean;
-  authLoading: boolean;
+  /** A visitor with a stored OIDC session, which auth has yet to rehydrate. */
+  authRestoring: boolean;
   /** A signed-in visitor whose anonymous flowers are still being claimed. */
   claimPending: boolean;
 }
@@ -33,8 +34,7 @@ const Ctx = createContext<SessionContext>({
   conn: null,
   identityHex: null,
   myUser: null,
-  isSignedIn: false,
-  authLoading: false,
+  authRestoring: false,
   claimPending: false,
 });
 
@@ -103,8 +103,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         conn,
         identityHex,
         myUser,
-        isSignedIn: auth.isAuthenticated,
-        authLoading: auth.isLoading,
+        authRestoring: auth.isLoading && hasStoredOidcSession(),
         claimPending,
       }}
     >
