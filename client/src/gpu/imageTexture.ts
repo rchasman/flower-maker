@@ -1,12 +1,18 @@
 import { texture, type Gpu, type Texture } from "vgpu";
 
+export interface ImageTexture {
+  readonly texture: Texture;
+  readonly aspect: number;
+}
+
 export const loadImageTexture = async (
   gpu: Gpu,
   url: string,
-): Promise<Texture> => {
+): Promise<ImageTexture> => {
   const response = await fetch(url);
-  if (!response.ok)
+  if (!response.ok) {
     throw new Error(`Image fetch failed: ${url} (${response.status})`);
+  }
   const bitmap = await createImageBitmap(await response.blob(), {
     colorSpaceConversion: "none",
   });
@@ -23,6 +29,7 @@ export const loadImageTexture = async (
     { texture: image.gpu },
     size,
   );
+  const aspect = bitmap.width / bitmap.height;
   bitmap.close();
-  return image;
+  return { texture: image, aspect };
 };
