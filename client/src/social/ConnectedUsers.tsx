@@ -14,8 +14,8 @@ export function ConnectedUsers() {
     <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
       <div
         style={{
-          fontSize: "var(--tui-font-size-xs)",
-          color: "var(--tui-green)",
+          fontSize: "var(--font-size-xs)",
+          color: "var(--positive)",
           marginBottom: "0.25rem",
         }}
       >
@@ -24,10 +24,10 @@ export function ConnectedUsers() {
       {online.map(user => (
         <div
           key={String(user.identity)}
-          className="tui-log-entry"
+          className="log-entry"
           style={{ display: "flex", alignItems: "center", gap: "1ch" }}
         >
-          <span style={{ color: "var(--tui-green)", fontSize: "0.5rem" }}>
+          <span style={{ color: "var(--positive)", fontSize: "0.5rem" }}>
             ●
           </span>
           <span
@@ -41,11 +41,11 @@ export function ConnectedUsers() {
       {online.length === 0 && (
         <div
           style={{
-            color: "var(--tui-fg-4)",
-            fontSize: "var(--tui-font-size-sm)",
+            color: "var(--text-quaternary)",
+            fontSize: "var(--font-size-sm)",
           }}
         >
-          no other operators connected.
+          No one else is connected.
         </div>
       )}
     </div>

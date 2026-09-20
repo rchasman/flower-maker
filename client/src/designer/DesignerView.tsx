@@ -399,33 +399,27 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
       {/* ── Top status bar ── */}
       <div
         style={{
-          padding: "0.25rem 1ch",
+          padding: "0.5rem 1ch",
           display: "flex",
           alignItems: "center",
-          gap: "1ch",
-          borderBottom: "1px solid var(--tui-border)",
-          background: "var(--tui-bg-0)",
-          fontSize: "var(--tui-font-size-xs)",
+          gap: "1.5ch",
+          borderBottom: "1px solid var(--border)",
+          background: "var(--surface)",
+          fontSize: "var(--font-size-xs)",
         }}
       >
         <button
           onClick={onBackToGrid}
-          className="tui-btn"
+          className="btn"
           style={{
             padding: "0.125rem 0.75ch",
-            fontSize: "var(--tui-font-size-xs)",
+            fontSize: "var(--font-size-xs)",
           }}
         >
-          ← GRID
+          ← Grid
         </button>
-        <span style={{ color: "var(--tui-border)" }}>│</span>
-        <span
-          className="tui-glow-green"
-          style={{ color: "var(--tui-green)", fontWeight: 600 }}
-        >
-          DESIGNER
-        </span>
-        <span style={{ color: "var(--tui-fg-4)" }}>
+        <span className="wordmark">Designer</span>
+        <span className="label">
           {flowerCount > 0 && `${flowerCount} flowers`}
         </span>
         <span style={{ marginLeft: "auto" }}>
@@ -439,7 +433,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
           flex: 1,
           minHeight: 0,
           position: "relative",
-          background: "var(--tui-bg-0)",
+          background: "var(--surface)",
         }}
       >
         <FlowerCanvas
@@ -454,7 +448,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
 
       {/* ── COMPOSE popout (templates + AI generator) ── */}
       <PanelPopout
-        label="COMPOSE"
+        label="Compose"
         open={composeOpen}
         onToggle={() => setComposeOpen(o => !o)}
         position="bottom-left"
@@ -482,7 +476,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
 
       {/* ── CANVAS popout (activity feed + order/taxonomy) ── */}
       <PanelPopout
-        label="CANVAS"
+        label="Canvas"
         open={canvasOpen}
         onToggle={() => setCanvasOpen(o => !o)}
         position="top-right"
@@ -495,7 +489,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
             selectedId={selectedId}
           />
         </div>
-        <div className="tui-tabs">
+        <div className="tabs">
           {(
             [
               ["order", "ORDER"],
@@ -505,7 +499,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
             <button
               key={key}
               onClick={() => setRightPanel(key)}
-              className="tui-tab"
+              className="tab"
               data-active={rightPanel === key ? "true" : undefined}
             >
               {label}
@@ -535,8 +529,8 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
           {rightPanel === "parts" && !selected && (
             <div
               style={{
-                color: "var(--tui-fg-4)",
-                fontSize: "var(--tui-font-size-sm)",
+                color: "var(--text-quaternary)",
+                fontSize: "var(--font-size-sm)",
               }}
             >
               select a flower to edit parts.

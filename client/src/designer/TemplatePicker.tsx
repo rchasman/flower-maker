@@ -73,15 +73,15 @@ export function TemplatePicker({
       <div
         style={{
           padding: "0.375rem 0.5ch",
-          borderBottom: "1px solid var(--tui-border-dim)",
+          borderBottom: "1px solid var(--border)",
         }}
       >
-        <div className="tui-input-wrap">
+        <div className="input-wrap">
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="search templates..."
-            className="tui-input"
+            className="input"
           />
         </div>
       </div>
@@ -94,12 +94,9 @@ export function TemplatePicker({
           padding: "0.375rem 0.5ch",
         }}
       >
-        <div className="tui-template-grid">
+        <div className="template-grid">
           {filteredGroups.map(group => [
-            <div
-              key={`cat-${group.category}`}
-              className="tui-template-category"
-            >
+            <div key={`cat-${group.category}`} className="template-category">
               {group.label}
             </div>,
             ...group.templates.map(t => (
@@ -120,8 +117,8 @@ export function TemplatePicker({
           <div
             style={{
               padding: "1rem 0",
-              color: "var(--tui-fg-4)",
-              fontSize: "var(--tui-font-size-sm)",
+              color: "var(--text-quaternary)",
+              fontSize: "var(--font-size-sm)",
               textAlign: "center",
             }}
           >
@@ -150,7 +147,7 @@ function TemplateTile({
     <motion.button
       onClick={onClick}
       disabled={disabled}
-      className="tui-template-tile"
+      className="template-tile"
       data-generating={generating ? "true" : undefined}
       whileHover={{ scale: 1.04 }}
       whileTap={{ scale: 0.97 }}
@@ -165,22 +162,22 @@ function TemplateTile({
           transition: "opacity 0.15s ease",
           zIndex: 0,
         }}
-        className="tui-template-tile__bg"
+        className="template-tile__bg"
       />
-      <span className="tui-template-tile__name">
+      <span className="template-tile__name">
         {generating ? (
-          <span style={{ color: "var(--tui-purple)" }}>
-            <span className="tui-generating" />
+          <span style={{ color: "var(--accent)" }}>
+            <span className="generating" />
           </span>
         ) : (
           t.name
         )}
       </span>
-      <div className="tui-template-tile__colors">
+      <div className="template-tile__colors">
         {t.colors.slice(0, 5).map(c => (
           <span
             key={c}
-            className="tui-template-tile__swatch"
+            className="template-tile__swatch"
             style={{ background: colorToHex(c) }}
           />
         ))}

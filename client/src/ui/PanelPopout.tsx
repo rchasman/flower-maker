@@ -29,9 +29,7 @@ export function PanelPopout({
       className={`popout-toggle ${open ? "popout-toggle-active" : ""}`}
       title={`Toggle ${label}`}
     >
-      <span style={{ fontSize: "var(--tui-font-size-xs)" }}>
-        {open ? `${label} ×` : label}
-      </span>
+      <span>{open ? `${label} ×` : label}</span>
     </button>
   );
 
@@ -49,15 +47,15 @@ export function PanelPopout({
             transition={{ duration: 0.15 }}
           >
             <div className="popout-header">
-              <span style={{ color: "var(--tui-green)", fontWeight: 600 }}>
+              <span className="label" style={{ color: "var(--text-primary)" }}>
                 {label}
               </span>
               <button
                 onClick={onToggle}
-                className="tui-btn"
+                className="btn"
                 style={{
                   padding: "0 0.5ch",
-                  fontSize: "var(--tui-font-size-xs)",
+                  fontSize: "var(--font-size-xs)",
                   lineHeight: 1,
                 }}
               >

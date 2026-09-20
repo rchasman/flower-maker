@@ -15,8 +15,8 @@ export function OrderFeed() {
       <div
         style={{
           padding: "0.5rem 1ch",
-          color: "var(--tui-fg-4)",
-          fontSize: "var(--tui-font-size-sm)",
+          color: "var(--text-quaternary)",
+          fontSize: "var(--font-size-sm)",
         }}
       >
         no orders yet.
@@ -35,7 +35,7 @@ export function OrderFeed() {
       {recentOrders.map(order => (
         <div
           key={Number(order.id)}
-          className="tui-log-entry"
+          className="log-entry"
           style={{
             padding: "0.25rem 1ch",
             display: "flex",
@@ -43,18 +43,18 @@ export function OrderFeed() {
             alignItems: "center",
           }}
         >
-          <span style={{ color: "var(--tui-fg-3)" }}>
+          <span style={{ color: "var(--text-tertiary)" }}>
             #{Number(order.sessionId)}
             {isVariant(order.source, "Agent") && (
               <span
-                className="tui-badge tui-badge-purple"
+                className="badge badge-accent"
                 style={{ marginLeft: "0.5ch" }}
               >
                 AI
               </span>
             )}
           </span>
-          <span style={{ color: "var(--tui-fg-4)" }}>
+          <span style={{ color: "var(--text-quaternary)" }}>
             {order.note ?? "ordered"}
           </span>
         </div>

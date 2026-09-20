@@ -20,9 +20,9 @@ type AssistantMsg =
 type ChatMsg = { id: string } & ({ role: "user"; text: string } | AssistantMsg);
 
 const STATUS_STYLE = {
-  generating: { mark: "⋯ ", color: "var(--tui-fg-2)" },
-  ok: { mark: "✓ ", color: "var(--tui-green)" },
-  err: { mark: "✗ ", color: "var(--tui-red)" },
+  generating: { mark: "⋯ ", color: "var(--text-tertiary)" },
+  ok: { mark: "✓ ", color: "var(--positive)" },
+  err: { mark: "✗ ", color: "var(--negative)" },
 } as const;
 
 function extractName(raw: string): string {
@@ -95,7 +95,7 @@ export function FlowerChat({
       setReply({
         role: "assistant",
         state: "ok",
-        text: `[ok] created: ${extractName(result.spec)}`,
+        text: `Created ${extractName(result.spec)}`,
       });
       onFlowerGenerated?.(genId, result.spec);
     } catch (err) {
@@ -103,7 +103,7 @@ export function FlowerChat({
       setReply({
         role: "assistant",
         state: "err",
-        text: `[err] ${errorMessage(err)}`,
+        text: errorMessage(err),
       });
     } finally {
       setActiveCount(c => c - 1);
@@ -115,7 +115,7 @@ export function FlowerChat({
       <div
         style={{
           padding: "0.375rem 0.5ch",
-          borderTop: "1px solid var(--tui-border)",
+          borderTop: "1px solid var(--border)",
           display: "flex",
           gap: "0.5ch",
           alignItems: "center",
@@ -123,14 +123,14 @@ export function FlowerChat({
       >
         <span
           style={{
-            color: "var(--tui-fg-4)",
-            fontSize: "var(--tui-font-size-2xs)",
+            color: "var(--text-quaternary)",
+            fontSize: "var(--font-size-2xs)",
             whiteSpace: "nowrap",
           }}
         >
           AI
         </span>
-        <div className="tui-input-wrap" style={{ flex: 1 }}>
+        <div className="input-wrap" style={{ flex: 1 }}>
           <input
             value={input}
             onChange={e => setInput(e.target.value)}
@@ -141,13 +141,13 @@ export function FlowerChat({
               }
             }}
             placeholder="describe a flower..."
-            className="tui-input"
+            className="input"
           />
         </div>
         <button
           onClick={handleSubmit}
           disabled={!input.trim()}
-          className={`tui-btn ${input.trim() ? "tui-btn-primary" : ""}`}
+          className={`btn ${input.trim() ? "btn-primary" : ""}`}
         >
           {activeCount > 0 ? `GEN(${activeCount})` : "GEN"}
         </button>
@@ -165,10 +165,10 @@ export function FlowerChat({
       }}
     >
       {/* Header */}
-      <div className="tui-section-header">
+      <div className="section-header">
         <span>── AI PROMPT</span>
         {activeCount > 0 && (
-          <span className="tui-badge tui-badge-amber">GEN×{activeCount}</span>
+          <span className="badge badge-muted">GEN×{activeCount}</span>
         )}
       </div>
 
@@ -187,8 +187,8 @@ export function FlowerChat({
         {messages.length === 0 && (
           <div
             style={{
-              color: "var(--tui-fg-4)",
-              fontSize: "var(--tui-font-size-sm)",
+              color: "var(--text-quaternary)",
+              fontSize: "var(--font-size-sm)",
               padding: "1rem 0",
             }}
           >
@@ -197,7 +197,7 @@ export function FlowerChat({
             the AI will generate a full botanical spec.
             <br />
             <br />
-            <span style={{ color: "var(--tui-fg-3)" }}>
+            <span style={{ color: "var(--text-tertiary)" }}>
               try: "a bioluminescent orchid with frost aura"
             </span>
           </div>
@@ -209,11 +209,11 @@ export function FlowerChat({
               initial={{ opacity: 0, x: -4 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.12 }}
-              className="tui-log-entry"
+              className="log-entry"
             >
               {msg.role === "user" ? (
                 <>
-                  <span style={{ color: "var(--tui-purple)" }}>$ </span>
+                  <span style={{ color: "var(--accent)" }}>$ </span>
                   <span className="msg">{msg.text}</span>
                 </>
               ) : (
@@ -228,12 +228,12 @@ export function FlowerChat({
       <div
         style={{
           padding: "0.375rem 0.5ch",
-          borderTop: "1px solid var(--tui-border)",
+          borderTop: "1px solid var(--border)",
           display: "flex",
           gap: "0.5ch",
         }}
       >
-        <div className="tui-input-wrap" style={{ flex: 1 }}>
+        <div className="input-wrap" style={{ flex: 1 }}>
           <input
             value={input}
             onChange={e => setInput(e.target.value)}
@@ -244,13 +244,13 @@ export function FlowerChat({
               }
             }}
             placeholder="describe a flower..."
-            className="tui-input"
+            className="input"
           />
         </div>
         <button
           onClick={handleSubmit}
           disabled={!input.trim()}
-          className={`tui-btn ${input.trim() ? "tui-btn-primary" : ""}`}
+          className={`btn ${input.trim() ? "btn-primary" : ""}`}
         >
           {activeCount > 0 ? `GEN(${activeCount})` : "GEN"}
         </button>
@@ -277,7 +277,7 @@ function AssistantEntry({ msg }: { msg: AssistantMsg }) {
         <span style={{ color }}>{mark}</span>
         <span className="msg" style={{ color }}>
           generating
-          <span className="tui-generating" />
+          <span className="generating" />
         </span>
       </>
     );
@@ -288,10 +288,10 @@ function AssistantEntry({ msg }: { msg: AssistantMsg }) {
 function AnswerTrace({ answers, mark }: { answers: Answer[]; mark: string }) {
   const lastIndex = answers.length - 1;
   return (
-    <div className="tui-answer-trace">
+    <div className="answer-trace">
       {answers.map((answer, i) => (
-        <div key={answer.id} className="tui-answer-trace__line">
-          <span className="tui-answer-trace__mark">
+        <div key={answer.id} className="answer-trace__line">
+          <span className="answer-trace__mark">
             {i === lastIndex ? mark : "  "}
           </span>
           {describeAnswer(answer)}
