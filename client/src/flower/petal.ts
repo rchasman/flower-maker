@@ -177,6 +177,23 @@ function normalizePetalDims(length: number, width: number, radialOffset = 1.0) {
   };
 }
 
+/**
+ * The spec width at which `count` petals of `length` in one even ring overlap
+ * their neighbours by `overlap` of their width, measured at mid length. The
+ * result is capped at the spec's own width range.
+ */
+export function overlappingWidth(
+  length: number,
+  count: number,
+  overlap: number,
+): number {
+  const { petalLen } = normalizePetalDims(length, 1);
+  const midRadius = BASE_OFFSET + petalLen * 0.5;
+  const chord = (2 * Math.PI * midRadius) / Math.max(1, count);
+  const halfWidth = chord / (1 - overlap) / 2;
+  return Math.max(0.1, Math.min(3, halfWidth / 0.1));
+}
+
 /** One sampled station of the petal spine, in petal-local coordinates. */
 export type SpineSample = {
   /** distance from the flower center along the petal axis, curl included */

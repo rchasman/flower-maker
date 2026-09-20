@@ -1,7 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import { STEM_STYLES } from "../data/flower-enums.ts";
 import type { Vec2 } from "./geometry.ts";
-import { generateStem, stemAxis, stemPointAt } from "./stem.ts";
+import {
+  branch,
+  branchHalfWidthAt,
+  branchPointAt,
+  branchTipHeading,
+  generateStem,
+  stemAxis,
+  stemPointAt,
+  stemTipHeading,
+} from "./stem.ts";
 import { flattenCmds } from "./test-helpers.ts";
 
 const HALF_WIDTH = 0.05;
@@ -86,4 +95,28 @@ describe("stemPointAt is on the drawn stem", () => {
       });
     }
   }
+});
+
+describe("tip bend", () => {
+  test("the tip stays on `to` while its tangent turns to the bend", () => {
+    const bent = stemAxis([0, 1.6], [0, 0], 0, "Straight", 0.15);
+    expect(stemTipHeading(bent)).toBeCloseTo(0.15, 6);
+    const tip = stemPointAt(bent, 1);
+    expect(tip.x).toBeCloseTo(0, 9);
+    expect(tip.y).toBeCloseTo(0, 9);
+    const straight = stemAxis([0, 1.6], [0, 0], 0, "Straight");
+    expect(stemTipHeading(straight)).toBe(0);
+    expect(stemPointAt(bent, 0.5).x).not.toBeCloseTo(0, 3);
+  });
+
+  test("a branch ends exactly where it was told to, facing the way it was told", () => {
+    const b = branch([0, 1], [0, -1], [0.5, 0.6], [1, 0], 0.03);
+    const tip = branchPointAt(b, 1);
+    expect(tip.x).toBeCloseTo(0.5, 9);
+    expect(tip.y).toBeCloseTo(0.6, 9);
+    expect(branchTipHeading(b)).toBeCloseTo(Math.PI / 2, 6);
+    expect(branchHalfWidthAt(b, 0)).toBeCloseTo(0.03, 9);
+    expect(branchHalfWidthAt(b, 0.5)).toBeLessThan(0.03 * 0.6);
+    expect(branchHalfWidthAt(b, 1)).toBeLessThan(branchHalfWidthAt(b, 0.5));
+  });
 });

@@ -17,6 +17,12 @@ import {
   type DrawCmd,
   type Vec2,
 } from "./geometry.ts";
+import {
+  branch,
+  branchTipHalfWidth,
+  stalkPlan,
+  type StalkPlan,
+} from "./stem.ts";
 import { lerp, sidHash, unreachable } from "./util.ts";
 
 // ── Leaf shape profiles — width at t ∈ [0,1] (petiole → tip) ──
@@ -144,6 +150,20 @@ export type LeafGeometry = {
   veins: DrawCmd[];
   /** closed marks in the second color, empty when the kind is None */
   variegation: DrawCmd[];
+  /** the stalk from the stem to the blade, in the stem color; null when the blade sits on the stem */
+  petiole: StalkPlan | null;
+};
+
+/** Where a leaf hangs: its stem attachment, heading and the lengths of its two parts, plan units. */
+export type LeafPose = {
+  x: number;
+  y: number;
+  /** midrib heading, radians, y-down screen space */
+  angle: number;
+  blade: number;
+  petiole: number;
+  /** the stem's half width at the attachment, which the petiole flares into */
+  stemHalfWidth: number;
 };
 
 /** Leaf-local point: [t along the midrib, u across the blade]. */
@@ -155,9 +175,11 @@ const EDGE_U = 0.9;
 const INTERIOR_U = 0.85;
 
 type LeafFrame = {
+  /** `along` runs from the stem attachment, so the blade starts at `petiole` */
   toWorld: (along: number, perp: number) => Vec2;
   /** half width of the blade at t on the side of u's sign, interpolated between the outline's own stations */
   edgeAt: (t: number, side: number) => number;
+  petiole: number;
   len: number;
 };
 
@@ -174,48 +196,57 @@ function sampledAt(samples: readonly number[], t: number): number {
  * t, so reading it between stations would describe an edge that is never
  * drawn. The two sides differ in noise phase and are slightly asymmetric.
  */
-function createLeafFrame(
-  x: number,
-  y: number,
-  angle: number,
-  size: number,
-  leaf: LeafParams,
-): LeafFrame {
-  const len = size * 1.1;
-  const halfW = size * 0.32;
+function createLeafFrame(pose: LeafPose, leaf: LeafParams): LeafFrame {
+  const { angle, blade: len, petiole } = pose;
+  const halfW = len * 0.3;
+  const total = petiole + len;
   const cosA = Math.cos(angle);
   const sinA = Math.sin(angle);
-  const droopAmt = leaf.droop * len * 0.3;
-  const seed = angle * 7.3 + size * 3.1;
+  const sagAmt = leaf.droop * total * GRAVITY_SAG;
+  const seed = angle * 7.3 + len * 3.1;
   const serration = LEAF_SERRATIONS[leaf.serration];
+  const stalkW = petiole > 0 ? branchTipHalfWidth(pose.stemHalfWidth) : 0;
   const edgeSamples = (side: number): number[] =>
     Array.from({ length: OUTLINE_SEGMENTS + 1 }, (_, i) => {
       const t = i / OUTLINE_SEGMENTS;
       const baseW = halfW * leafProfile(leaf.shape, t) * serration(t, seed);
       const noise = leafNoise(t, side > 0 ? seed : seed + 5) * baseW * 0.1;
       const wider = side > 0 === t < 0.5;
-      return (baseW + noise) * (wider ? 1.04 : 0.96);
+      const bladeW = (baseW + noise) * (wider ? 1.04 : 0.96);
+      const flare = smoothstep(Math.min(1, t / BASE_FLARE));
+      return lerp(stalkW, bladeW, flare);
     });
   const plus = edgeSamples(1);
   const minus = edgeSamples(-1);
   return {
+    petiole,
     len,
     // (cos a, sin a) is the midrib heading in y-down screen space, the same
     // convention as petals, stems and buds. Droop is gravity: it pulls the
-    // blade toward larger y whichever way the midrib points.
+    // blade toward larger y whichever way the midrib points, more toward the tip.
     toWorld: (along, perp) => {
-      const sag = droopAmt * (along / len) * (along / len);
+      const sag = sagAmt * (along / total) * (along / total);
       return [
-        x + cosA * along - sinA * perp,
-        y + sinA * along + cosA * perp + sag,
+        pose.x + cosA * along - sinA * perp,
+        pose.y + sinA * along + cosA * perp + sag,
       ];
     },
     edgeAt: (t, side) => sampledAt(side > 0 ? plus : minus, t),
   };
 }
 
+/** Tip drop of a fully drooping leaf as a fraction of its whole length. */
+const GRAVITY_SAG = 0.4;
+/** The share of the blade over which its base widens out of the petiole. */
+const BASE_FLARE = 0.12;
+
+const smoothstep = (s: number): number => s * s * (3 - 2 * s);
+
 const leafPoint = (frame: LeafFrame, [t, u]: TU): Vec2 =>
-  frame.toWorld(t * frame.len, u * frame.edgeAt(t, Math.sign(u) || 1));
+  frame.toWorld(
+    frame.petiole + t * frame.len,
+    u * frame.edgeAt(t, Math.sign(u) || 1),
+  );
 
 /** The outline's own stations, minus the pinched petiole and tip where the edge runs to zero. */
 const sampleTs = (): number[] =>
@@ -289,18 +320,29 @@ function variegationPolygons(kind: VariegationKind, seed: number): TU[][] {
   }
 }
 
-/**
- * Leaf outline, veins and variegation in unit flower space, petiole at
- * (x, y) pointing along `angle`.
- */
-export function generateLeaf(
-  x: number,
-  y: number,
-  angle: number,
-  size: number,
-  leaf: LeafParams,
-): LeafGeometry {
-  const frame = createLeafFrame(x, y, angle, size, leaf);
+/** The petiole as a branch off the stem, arriving along the sagged midrib. */
+function petioleStalk(pose: LeafPose, frame: LeafFrame): StalkPlan | null {
+  if (pose.petiole <= 0) return null;
+  const root: Vec2 = [pose.x, pose.y];
+  const end = frame.toWorld(pose.petiole, 0);
+  const ahead = frame.toWorld(pose.petiole + frame.len * 0.05, 0);
+  const dx = ahead[0] - end[0];
+  const dy = ahead[1] - end[1];
+  const d = Math.hypot(dx, dy) || 1;
+  return stalkPlan(
+    branch(
+      root,
+      [Math.cos(pose.angle), Math.sin(pose.angle)],
+      end,
+      [dx / d, dy / d],
+      pose.stemHalfWidth,
+    ),
+  );
+}
+
+/** Leaf outline, veins, variegation and petiole in plan units, hung as `pose` says. */
+export function generateLeaf(pose: LeafPose, leaf: LeafParams): LeafGeometry {
+  const frame = createLeafFrame(pose, leaf);
   const ts = Array.from(
     { length: OUTLINE_SEGMENTS + 1 },
     (_, i) => i / OUTLINE_SEGMENTS,
@@ -311,8 +353,8 @@ export function generateLeaf(
   ];
   const outline: DrawCmd[] = [...smoothCmds(outlinePts), { op: "Z" }];
 
-  const base = frame.toWorld(0, 0);
-  const tip = frame.toWorld(frame.len, 0);
+  const base = frame.toWorld(frame.petiole, 0);
+  const tip = frame.toWorld(frame.petiole + frame.len, 0);
   const midrib: DrawCmd[] = [
     { op: "M", x: base[0], y: base[1] },
     { op: "L", x: tip[0], y: tip[1] },
@@ -322,9 +364,9 @@ export function generateLeaf(
   const sideVeins = Array.from({ length: veinCount }, (_, i): DrawCmd[] => {
     const vt = 0.15 + (i / (veinCount - 1)) * 0.7;
     const side = i % 2 === 0 ? 1 : -1;
-    const veinBase = frame.toWorld(vt * frame.len, 0);
+    const veinBase = frame.toWorld(frame.petiole + vt * frame.len, 0);
     const veinTip = frame.toWorld(
-      vt * frame.len + frame.len * 0.08,
+      frame.petiole + vt * frame.len + frame.len * 0.08,
       side * frame.edgeAt(vt, side) * 0.85,
     );
     return [
@@ -335,10 +377,15 @@ export function generateLeaf(
 
   const variegation = variegationPolygons(
     leaf.variegation.kind,
-    angle * 3.7 + size * 11.3,
+    pose.angle * 3.7 + pose.blade * 11.3,
   ).flatMap(polygon =>
     polygonCmds(polygon.map(([t, u]) => leafPoint(frame, [t, u]))),
   );
 
-  return { outline, veins: [...midrib, ...sideVeins], variegation };
+  return {
+    outline,
+    veins: [...midrib, ...sideVeins],
+    variegation,
+    petiole: petioleStalk(pose, frame),
+  };
 }

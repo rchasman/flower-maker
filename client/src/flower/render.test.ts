@@ -11,7 +11,7 @@ import {
   generatePetal,
   petalLocalToFlower,
 } from "./petal.ts";
-import { colorFromSpec } from "./color.ts";
+import { colorFromSpec, desaturate } from "./color.ts";
 import {
   createArrangementPlan,
   createFlowerPlan,
@@ -116,7 +116,7 @@ describe("createFlowerPlan veins", () => {
           ]),
           11,
         );
-        return plan.layers.flatMap(layer =>
+        return plan.heads[0].layers.flatMap(layer =>
           layer.petals.flatMap(petal => {
             const polygon = flattenCmds(petal.cmds);
             return flattenCmds(petal.veinCmds)
@@ -130,19 +130,39 @@ describe("createFlowerPlan veins", () => {
   }
 });
 
-describe("parseSymmetry", () => {
-  test("reads the flat divergence_angle for Spiral arrangements", () => {
-    const plan = createFlowerPlan(
-      specWith([{ count: 6, arrangement: "Spiral" }], {
-        symmetry: "Spiral",
-        symmetry_order: 0,
-        divergence_angle: 90,
-      }),
+describe("Spiral arrangement", () => {
+  const spiral = (count: number, width: number) =>
+    createFlowerPlan(
+      specWith([
+        { count, arrangement: "Spiral", shape: "Ovate", width, length: 1.4 },
+        { count: 8, arrangement: "Spiral", shape: "Ovate", width, length: 1.2 },
+      ]),
       3,
-    );
-    const angles = plan.layers[0]!.petals.map(p => p.angle);
+    ).heads[0];
+
+  test("petals sit in an even ring, each overlapping its neighbours", () => {
+    const head = spiral(5, 1);
+    const petals = head.layers[0]!.petals;
+    const angles = petals.map(p => p.angle);
     const steps = angles.slice(1).map((a, i) => a - angles[i]!);
-    expect(steps.every(step => Math.abs(step - Math.PI / 2) < 1e-9)).toBe(true);
+    expect(steps.every(step => Math.abs(step - (2 * Math.PI) / 5) < 1e-9)).toBe(
+      true,
+    );
+    const polygons = petals.map(p => flattenCmds(p.cmds));
+    const overlaps = polygons.map((polygon, i) => {
+      const next = polygons[(i + 1) % polygons.length]!;
+      return next.filter(point => pointInPolygon(point, polygon)).length;
+    });
+    expect(overlaps.every(n => n > 0)).toBe(true);
+  });
+
+  test("inner rings sit deeper in the cup than the outer ring", () => {
+    const head = spiral(5, 1);
+    const reach = (cmds: readonly DrawCmd[]) =>
+      Math.max(...flattenCmds(cmds).map(([x, y]) => Math.hypot(x, y)));
+    const outer = Math.max(...head.layers[0]!.petals.map(p => reach(p.cmds)));
+    const inner = Math.max(...head.layers[1]!.petals.map(p => reach(p.cmds)));
+    expect(inner).toBeLessThan(outer);
   });
 });
 
@@ -172,8 +192,8 @@ describe("parseFoliage", () => {
       7,
     );
     expect(plan.leaves.map(l => l.color)).toEqual([
-      colorFromSpec(0.1, 0.6, 0.2),
-      colorFromSpec(0.5, 0.2, 0.7),
+      desaturate(colorFromSpec(0.1, 0.6, 0.2), 0.12),
+      desaturate(colorFromSpec(0.5, 0.2, 0.7), 0.12),
     ]);
   });
 
@@ -243,3 +263,151 @@ describe("createArrangementPlan", () => {
     );
   });
 });
+
+describe("plant proportions", () => {
+  const plant = (
+    layer: Record<string, unknown>,
+    leaves: Record<string, unknown>[] = [],
+    stem: Record<string, unknown> = { height: 0.6, thickness: 0.45 },
+  ) =>
+    createFlowerPlan(
+      JSON.stringify({
+        petals: { layers: [layer] },
+        reproductive: { stamens: [{ height: 0.8 }] },
+        structure: { sepals: [{ length: 0.5 }], stem },
+        foliage: { leaves },
+      }),
+      5,
+    );
+  const stemLength = (plan: ReturnType<typeof createFlowerPlan>): number =>
+    plan.stem!.axis.fromY;
+  const headDiameter = (plan: ReturnType<typeof createFlowerPlan>): number => {
+    const head = plan.heads[0];
+    const petals = head.layers.flatMap(l => l.petals.map(p => p.cmds));
+    const reach = Math.max(
+      ...petals.map(cmds =>
+        Math.max(...flattenCmds(cmds).map(([x, y]) => Math.hypot(x, y))),
+      ),
+    );
+    return 2 * reach * plan.florets[0].scale;
+  };
+
+  test("a solitary stem is at least 2.5 head diameters long, for big and small petals alike", () => {
+    for (const layer of [
+      { count: 8, length: 2.5, width: 2 },
+      { count: 5, length: 0.4, width: 0.3 },
+      { count: 21, length: 1.4, width: 0.5 },
+    ]) {
+      const plan = plant(layer);
+      const ratio = stemLength(plan) / headDiameter(plan);
+      expect(ratio).toBeGreaterThanOrEqual(2.5 - 1e-9);
+      expect(ratio).toBeLessThanOrEqual(1 / 0.28 + 1e-9);
+    }
+  });
+
+  test("the stem base half width is at most 0.02 of its length, whatever the thickness", () => {
+    for (const thickness of [0, 0.3, 1, 5]) {
+      const plan = plant({ count: 5 }, [], { height: 0.6, thickness });
+      expect(plan.stem!.halfWidth).toBeLessThanOrEqual(
+        0.02 * stemLength(plan) + 1e-9,
+      );
+      expect(plan.stem!.halfWidth).toBeGreaterThan(0);
+    }
+  });
+
+  test("the solitary head leans with the stem tip, 5 to 12 degrees under its weight", () => {
+    const light = plant({ count: 3, length: 0.5, width: 0.3 });
+    const heavy = plant({ count: 30, length: 2, width: 1.5 });
+    for (const plan of [light, heavy]) {
+      const lean = Math.abs(plan.florets[0].angle);
+      expect(lean).toBeGreaterThanOrEqual(Math.PI * (5 / 180) - 1e-9);
+      expect(lean).toBeLessThanOrEqual(Math.PI * (12 / 180) + 1e-9);
+      expect(plan.florets[0].angle).toBeCloseTo(plan.stem!.axis.tipBend, 6);
+    }
+    expect(Math.abs(heavy.florets[0].angle)).toBeGreaterThan(
+      Math.abs(light.florets[0].angle),
+    );
+  });
+
+  const attachY = (leaf: LeafPlan): number => {
+    const root = flattenCmds(leaf.petiole!.fill)[0]!;
+    return root[1];
+  };
+
+  test("no leaf attaches in the top 20 percent of a solitary stem, and they alternate sides", () => {
+    const plan = plant(
+      { count: 5 },
+      [0.05, 0.4, 0.75, 1].map(position => ({ position, side: "Right" })),
+    );
+    const length = stemLength(plan);
+    expect(plan.leaves.length).toBe(4);
+    for (const leaf of plan.leaves) {
+      expect(attachY(leaf)).toBeGreaterThanOrEqual(0.2 * length);
+      expect(attachY(leaf)).toBeLessThanOrEqual(0.85 * length);
+    }
+    const sides = plan.leaves.map(l => Math.sign(centroidXOf(l.cmds)));
+    expect(sides).toEqual([1, -1, 1, -1]);
+  });
+
+  test("lower leaves are larger, and every blade is 0.18 to 0.30 stem lengths long", () => {
+    const plan = plant(
+      { count: 5 },
+      [0.1, 0.5, 0.9].map(position => ({ position, size: 0.5 })),
+    );
+    const length = stemLength(plan);
+    const bladeLength = (leaf: LeafPlan): number => {
+      const [base, tip] = leaf.veins;
+      if (base?.op !== "M" || tip?.op !== "L") throw new Error("no midrib");
+      return Math.hypot(tip.x - base.x, tip.y - base.y);
+    };
+    const blades = plan.leaves.map(bladeLength);
+    expect(blades[0]!).toBeGreaterThan(blades[2]!);
+    for (const blade of blades) {
+      expect(blade).toBeGreaterThanOrEqual(0.18 * length * 0.95);
+      expect(blade).toBeLessThanOrEqual(0.3 * length * 1.05);
+    }
+  });
+});
+
+describe("corymb leaves", () => {
+  test("a corymb carries a pair of opposite leaves just under its dome", () => {
+    const plan = createFlowerPlan(
+      JSON.stringify({
+        petals: { layers: [{ count: 4 }] },
+        structure: { sepals: [], stem: { height: 0.6, thickness: 0.3 } },
+        foliage: { leaves: [{ position: 0.3, side: "Left" }] },
+        inflorescence: { kind: "Corymb", head_count: 12, head_scale: 0.3 },
+      }),
+      4,
+    );
+    const length = plan.stem!.axis.fromY;
+    const rootY = (leaf: LeafPlan) => flattenCmds(leaf.petiole!.fill)[0]![1];
+    const pair = plan.leaves.filter(l => rootY(l) < 0.15 * length);
+    expect(pair.length).toBe(2);
+    const sides = pair.map(l => Math.sign(centroidXOf(l.cmds)));
+    expect(new Set(sides)).toEqual(new Set([1, -1]));
+    expect(Math.abs(rootY(pair[0]!) - rootY(pair[1]!))).toBeLessThan(0.05);
+  });
+});
+
+describe("closed centre", () => {
+  const head = (arrangement: string, curvature: number) =>
+    createFlowerPlan(
+      specWith([
+        { count: 5, arrangement, curvature: 0 },
+        { count: 8, arrangement, curvature },
+      ]),
+      3,
+    ).heads[0];
+
+  test("a spiralled bloom whose inner ring cups closes over its centre", () => {
+    expect(head("Spiral", 0.85).closedCentre).toBe(true);
+    expect(head("Spiral", 0.2).closedCentre).toBe(false);
+    expect(head("Radial", 0.85).closedCentre).toBe(false);
+  });
+});
+
+const centroidXOf = (cmds: readonly DrawCmd[]): number => {
+  const pts = flattenCmds(cmds);
+  return pts.reduce((sum, [x]) => sum + x, 0) / pts.length;
+};

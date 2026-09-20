@@ -1,362 +1,617 @@
 /**
- * Inflorescence (spec section 3.2): where a flower's secondary heads sit
- * relative to the primary at the origin, and the pedicels that carry them.
- * Floret 0 is always the primary at (0, 0) with scale 1. Screen space is
- * y-down: the stem hangs below the primary, so "up the stem" is toward y = 0.
- * Distances along the stem shrink to fit its upper share; distances from the
- * axis follow the head size and `spread`.
+ * Inflorescence (spec section 3.2): where a plant's florets sit on its stem
+ * and the pedicels and branches that carry them. The stem tip is the origin
+ * and the stem hangs below it in y-down screen space, so "up the stem" is
+ * toward smaller y. Every distance derives from the stem length L: florets
+ * are 0.12 to 0.20 L across whatever the kind, and the terminal one is just
+ * the topmost floret. Each floret arrives at the exact end of its own stalk
+ * and faces along it.
  */
 
-import type { InflorescenceKind } from "../data/flower-enums.ts";
-import type { DrawCmd } from "./geometry.ts";
+import type { InflorescenceKind, LifeStage } from "../data/flower-enums.ts";
+import type { Vec2 } from "./geometry.ts";
 import {
-  generateStem,
-  stemAxis,
+  bentEnd,
+  branch,
+  branchDirectionAt,
+  branchHalfWidthAt,
+  branchPointAt,
+  branchTipHeading,
+  drawnHalfWidthAt,
+  headingOf,
+  rotate,
+  stalkPlan,
   stemAxisLength,
   stemPointAt,
+  stemTangentAt,
+  stemTipHeading,
+  type Branch,
+  type StalkPlan,
   type StemPlan,
 } from "./stem.ts";
-import { clamp, sidHash, unreachable } from "./util.ts";
+import { GOLDEN_ANGLE, clamp, lerp, sidHash, unreachable } from "./util.ts";
 
 export type Floret = {
   offsetX: number;
   offsetY: number;
-  /** head size relative to the primary */
+  /** multiplies the head plan, which is drawn in its own unit space */
   scale: number;
-  /** tilt of the head along its pedicel, radians, 0 upright */
+  /** rotation of the head's up vector, radians, 0 screen up, positive toward +x */
   angle: number;
+  stage: LifeStage;
+  /** drawn first, a little smaller and darker */
+  back: boolean;
+  /** 0 at the front of the plant to 1 at the back: what the draw order sorts on */
+  depth: number;
+  /** the pedicel that ends at this floret, in the stem color; null for a sessile floret */
+  stalk: StalkPlan | null;
 };
 
 export type InflorescenceLayout = {
-  /** the primary first, then the secondary heads in layout order */
+  /** the terminal floret first */
   florets: readonly [Floret, ...Floret[]];
-  pedicels: DrawCmd[];
+  /** branches that carry several florets, drawn before the pedicels */
+  branches: readonly StalkPlan[];
 };
 
 export type InflorescenceParams = {
   kind: InflorescenceKind;
   headCount: number;
-  /** 0-1 size of the secondary heads relative to the primary */
+  /** 0-1 floret size class: 0.12 to 0.20 of the stem length across */
   headScale: number;
-  /** 0-1 how far the heads sit from the axis */
+  /** 0-1 how far the florets sit from the axis */
   spread: number;
   stem: StemPlan;
-  /** reach of the primary head's outline from its centre, plan units */
+  /** reach of the bloom head's petals from its centre, in the head's unit space */
   headRadius: number;
+  /** the spec's stage: what the lowest, most mature florets show */
+  stage: LifeStage;
   sid: number;
 };
 
-const PRIMARY_FLORET: Floret = {
-  offsetX: 0,
-  offsetY: 0,
-  scale: 1,
-  angle: 0,
-};
-
-export const SOLITARY_LAYOUT: InflorescenceLayout = {
-  florets: [PRIMARY_FLORET],
-  pedicels: [],
-};
-
-const MAX_HEADS = 12;
-/** Level rings (umbel, corymb) pack heads side by side, so they hold fewer before they sprawl. */
-const LEVEL_MAX_HEADS = 9;
-const SPRAY_MIN_HEADS = 3;
-const SPRAY_MAX_HEADS = 5;
-const MIN_HEAD_SCALE = 0.2;
-/** the part of the stem, from the tip down, that heads may occupy */
-const STEM_SHARE = 0.7;
-const STEM_FLOOR = 1 - STEM_SHARE;
-/** pedicel half width relative to the stem's */
-const PEDICEL_WIDTH = 0.55;
-const TILT_DAMPING = 0.35;
-const MAX_TILT = 0.5;
-/** level-ring spacing between neighbouring heads, in units of (primary + secondary radius) */
-const LEVEL_STEP = 0.55;
-const RACEME_STALK_ANGLE = Math.PI * 0.2;
-const PANICLE_BRANCH_ANGLE = Math.PI * 0.22;
-/** how far below its branch's direction a panicle twig leaves the branch */
-const PANICLE_TWIG_DROP = Math.PI * 0.3;
-const SPRAY_ARCH = 0.6;
-
-type Point = { x: number; y: number };
-
-/** Everything the per-kind layouts share, in plan units. */
-type Frame = {
-  stem: StemPlan;
-  stemLength: number;
-  primaryRadius: number;
-  secondaryRadius: number;
-  secondaryScale: number;
-  /** 0.5-1.5 multiplier on every distance from the axis */
-  lateral: number;
-  firstSide: 1 | -1;
-};
-
-type Placed = { floret: Floret; pedicel: DrawCmd[] };
-
-/** Secondaries alternate sides; the seed picks the side of the first. */
-const sideOf = (frame: Frame, j: number): number =>
-  j % 2 === 1 ? frame.firstSide : -frame.firstSide;
-
-/** 1 for the first pair of secondaries, 2 for the next, and so on. */
-const ringOf = (j: number): number => Math.ceil(j / 2);
-
-const isEven = (j: number): boolean => j % 2 === 0;
-
-/** The axis point `drop` plan units below the tip, never below `minT` of the stem. */
-function axisPointBelowTip(frame: Frame, drop: number, minT: number): Point {
-  const t = clamp(minT, 1, 1 - drop / frame.stemLength);
-  return stemPointAt(frame.stem.axis, t);
-}
-
-/** Shrink factor that keeps the deepest drop inside the stem's share. */
-function fitToStem(frame: Frame, deepestDrop: number): number {
-  return Math.min(1, (frame.stemLength * STEM_SHARE) / deepestDrop);
-}
-
-/** A secondary head at `head`, tilted along its pedicel from `from`, damped. */
-function floretAt(frame: Frame, head: Point, from: Point): Floret {
-  const tilt = Math.atan2(head.x - from.x, from.y - head.y) * TILT_DAMPING;
+/** A solitary head on the stem tip, leaning the way the tip does. */
+export function solitaryLayout(
+  stem: StemPlan | null,
+  scale: number,
+  stage: LifeStage,
+): InflorescenceLayout {
   return {
-    offsetX: head.x,
-    offsetY: head.y,
-    scale: frame.secondaryScale,
-    angle: clamp(-MAX_TILT, MAX_TILT, tilt),
+    florets: [
+      {
+        offsetX: 0,
+        offsetY: 0,
+        scale,
+        angle: stem ? stemTipHeading(stem.axis) : 0,
+        stage,
+        back: false,
+        depth: 0,
+        stalk: null,
+      },
+    ],
+    branches: [],
   };
 }
 
-function pedicel(
-  frame: Frame,
-  from: Point,
-  to: Point,
-  curvature = 0,
-): DrawCmd[] {
-  return generateStem(
-    stemAxis([from.x, from.y], [to.x, to.y], curvature, "Straight"),
-    frame.stem.halfWidth * PEDICEL_WIDTH,
-  );
+const DEG = Math.PI / 180;
+/** floret diameter as a share of the stem length, over the head size class */
+const FLORET_DIAMETER = [0.12, 0.2] as const;
+const SIZE_JITTER = [0.85, 1.15] as const;
+const ANGLE_JITTER = 3 * DEG;
+const BACK_SCALE = 0.9;
+/** heads on a dome span this arc */
+const DOME_ARC = 160 * DEG;
+/** stages of florets above the spec stage ones, top first: the top quarter buds, the next quarter opening */
+const YOUNG_STAGES: readonly LifeStage[] = ["Bud", "Opening"];
+const STAGED_KINDS: readonly LifeStage[] = ["Opening", "Bloom", "Fading"];
+
+type Frame = {
+  stem: StemPlan;
+  length: number;
+  /** floret diameter, plan units */
+  diameter: number;
+  /** floret.scale for a bloom of `diameter` */
+  unitScale: number;
+  /** 0.5-1.5 multiplier on every distance from the axis */
+  lateral: number;
+  stage: LifeStage;
+  firstSide: 1 | -1;
+  rnd: (salt: number) => number;
+};
+
+/** A floret before its stage is known. */
+type Placed = Omit<Floret, "stage">;
+
+const unit = (t: number): number => clamp(0, 1, t);
+
+const axisAt = (frame: Frame, t: number): Vec2 => {
+  const p = stemPointAt(frame.stem.axis, t);
+  return [p.x, p.y];
+};
+
+const stemWidthAt = (frame: Frame, t: number): number =>
+  drawnHalfWidthAt(frame.stem.halfWidth, frame.stem.axis.style, t);
+
+/** Sides alternate up the axis; the seed picks the first. */
+const opposite = (side: 1 | -1): 1 | -1 => (side === 1 ? -1 : 1);
+const sideOf = (frame: Frame, k: number): 1 | -1 =>
+  k % 2 === 0 ? frame.firstSide : opposite(frame.firstSide);
+
+/** Florets on the far half of the phyllotaxis spiral are behind the axis. */
+const isBack = (k: number): boolean => Math.cos(k * GOLDEN_ANGLE) < -0.1;
+
+function floretScale(frame: Frame, k: number, size: number, back: boolean) {
+  const jitter = lerp(SIZE_JITTER[0], SIZE_JITTER[1], frame.rnd(100 + k));
+  return frame.unitScale * size * jitter * (back ? BACK_SCALE : 1);
 }
 
-/** A secondary head on its own pedicel from `from`. */
-const stalked = (
+const angleJitter = (frame: Frame, k: number): number =>
+  (frame.rnd(200 + k) * 2 - 1) * ANGLE_JITTER;
+
+/** A floret at the tip of `b`, facing along it. */
+function stalked(
   frame: Frame,
-  from: Point,
-  head: Point,
-  curvature = 0,
-): Placed => ({
-  floret: floretAt(frame, head, from),
-  pedicel: pedicel(frame, from, head, curvature),
-});
+  k: number,
+  b: Branch,
+  size: number,
+  back: boolean,
+): Placed {
+  return {
+    offsetX: b.p1[0],
+    offsetY: b.p1[1],
+    scale: floretScale(frame, k, size, back),
+    angle: branchTipHeading(b) + angleJitter(frame, k),
+    back,
+    depth: back ? 1 : 0,
+    stalk: stalkPlan(b),
+  };
+}
 
-const assemble = (placed: readonly Placed[]): InflorescenceLayout => ({
-  florets: [PRIMARY_FLORET, ...placed.map(p => p.floret)],
-  pedicels: placed.flatMap(p => p.pedicel),
-});
+/** A branch of `length` off the axis at t, leaving `angle` from the axis toward `side` and bending `bend` toward the ground. */
+function axisBranch(
+  frame: Frame,
+  t: number,
+  side: 1 | -1,
+  angle: number,
+  length: number,
+  bend: number,
+): Branch {
+  const p0 = axisAt(frame, t);
+  const d0 = rotate(stemTangentAt(frame.stem.axis, t), side * angle);
+  const { p1, d1 } = bentEnd(p0, d0, length, bend);
+  return branch(p0, d0, p1, d1, stemWidthAt(frame, t));
+}
 
-const secondaries = (count: number): number[] =>
-  Array.from({ length: count }, (_, k) => k + 1);
+/** A twig of `length` off branch `parent` at s, leaving `angle` toward `side` of the branch and bending toward the ground. */
+function twig(
+  parent: Branch,
+  s: number,
+  side: 1 | -1,
+  angle: number,
+  length: number,
+  bend: number,
+): Branch {
+  const at = branchPointAt(parent, s);
+  const d0 = rotate(branchDirectionAt(parent, s), side * angle);
+  const { p1, d1 } = bentEnd([at.x, at.y], d0, length, bend);
+  return branch([at.x, at.y], d0, p1, d1, branchHalfWidthAt(parent, s));
+}
 
-/** Heads on the axis itself, packed from just under the primary down the stem. */
+/**
+ * Top quarter buds, next quarter opening, the rest at the spec stage. A spec
+ * stage that is itself a bud or past bloom applies to every floret.
+ */
+function stagedByHeight(frame: Frame, placed: readonly Placed[]): Floret[] {
+  if (!STAGED_KINDS.includes(frame.stage)) {
+    return placed.map(p => ({ ...p, stage: frame.stage }));
+  }
+  const byHeight = placed.map(p => p.offsetY).toSorted((a, b) => a - b);
+  return placed.map(p => {
+    const rank = byHeight.indexOf(p.offsetY) / placed.length;
+    const young = YOUNG_STAGES[Math.floor(rank * 4)];
+    return { ...p, stage: young ?? frame.stage };
+  });
+}
+
+const allAt = (stage: LifeStage, placed: readonly Placed[]): Floret[] =>
+  placed.map(p => ({ ...p, stage }));
+
+function layoutOf(
+  florets: readonly Floret[],
+  branches: readonly StalkPlan[] = [],
+): InflorescenceLayout {
+  const [first, ...rest] = florets;
+  if (!first) throw new Error("an inflorescence needs at least one floret");
+  return { florets: [first, ...rest], branches };
+}
+
+/** The terminal floret on the stem tip, leaning with it. */
+function terminal(frame: Frame, size = 1): Placed {
+  return {
+    offsetX: 0,
+    offsetY: 0,
+    scale: floretScale(frame, 0, size, false),
+    angle: stemTipHeading(frame.stem.axis),
+    back: false,
+    depth: 0,
+    stalk: null,
+  };
+}
+
+// ── Spike ──
+
+const SPIKE_SPAN = [0.45, 0.6] as const;
+const SPIKE_FACE = [20 * DEG, 35 * DEG] as const;
+/** the lowest floret of the cone is this much bigger than the top one */
+const SPIKE_CONE = 0.7;
+
+/** Sessile florets packed on the upper stem, alternating sides on the phyllotaxis spiral, a cone tapering to the tip. */
 function spike(frame: Frame, count: number): InflorescenceLayout {
-  const { primaryRadius: rp, secondaryRadius: rs } = frame;
-  const first = 0.8 * (rp + rs);
-  const step = 1.6 * rs;
-  const fit = fitToStem(frame, first + (count - 1) * step);
-  return assemble(
-    secondaries(count).map(j => {
-      const p = axisPointBelowTip(frame, (first + (j - 1) * step) * fit, 0);
-      return {
-        floret: {
-          offsetX: p.x,
-          offsetY: p.y,
-          scale: frame.secondaryScale,
-          angle: 0,
-        },
-        pedicel: [],
-      };
-    }),
-  );
+  const span = lerp(SPIKE_SPAN[0], SPIKE_SPAN[1], unit((count - 8) / 12));
+  const spread = frame.diameter * 0.35 * frame.lateral;
+  const placed = Array.from({ length: count }, (_, i): Placed => {
+    const k = count - 1 - i;
+    const up = k / Math.max(1, count - 1);
+    const t = 1 - span * (1 - up);
+    const p = stemPointAt(frame.stem.axis, t);
+    const offset = Math.sin(k * GOLDEN_ANGLE) * spread;
+    const face =
+      Math.sign(offset) *
+      lerp(SPIKE_FACE[0], SPIKE_FACE[1], Math.abs(offset) / spread);
+    const back = isBack(k);
+    return {
+      offsetX: p.x + Math.cos(p.angle) * offset,
+      offsetY: p.y + Math.sin(p.angle) * offset,
+      scale: floretScale(frame, k, lerp(1, SPIKE_CONE, up), back),
+      angle: axisHeadingAt(frame, t) + face + angleJitter(frame, k),
+      back,
+      depth: back ? 1 : 0,
+      stalk: null,
+    };
+  });
+  return layoutOf(stagedByHeight(frame, placed));
 }
 
-/** Short stalks alternating up the stem, each angled upward from its node. */
+/** Heading of the axis tangent at t. */
+function axisHeadingAt(frame: Frame, t: number): number {
+  const [tx, ty] = stemTangentAt(frame.stem.axis, t);
+  return headingOf(tx, ty);
+}
+
+// ── Raceme ──
+
+const RACEME_SPAN = [0.45, 0.97] as const;
+const RACEME_ANGLE = [35 * DEG, 55 * DEG] as const;
+const RACEME_STALK = [1.2, 0.6] as const;
+const RACEME_BEND = [55 * DEG, 30 * DEG] as const;
+/** same-side neighbours are two steps apart, so half a diameter per step keeps them clear */
+const RACEME_MIN_STEP = 0.5;
+
+/** Stalked florets alternating up the axis, the lower ones on longer, heavier pedicels that bend further down. */
 function raceme(frame: Frame, count: number): InflorescenceLayout {
-  const { primaryRadius: rp, secondaryRadius: rs } = frame;
-  const first = 0.6 * rp + 0.4 * rs;
-  const step = 1.2 * rs;
-  const fit = fitToStem(frame, first + (count - 1) * step);
-  const stalk = frame.stem.halfWidth + rs * 0.9 * frame.lateral;
-  return assemble(
-    secondaries(count).map(j => {
-      const attach = axisPointBelowTip(
-        frame,
-        (first + (j - 1) * step) * fit,
-        0,
-      );
-      const head = {
-        x: attach.x + sideOf(frame, j) * Math.cos(RACEME_STALK_ANGLE) * stalk,
-        y: attach.y - Math.sin(RACEME_STALK_ANGLE) * stalk,
-      };
-      return stalked(frame, attach, head);
-    }),
+  const span = (RACEME_SPAN[1] - RACEME_SPAN[0]) * frame.length;
+  const step = span / Math.max(1, count - 1);
+  const diameter = Math.min(frame.diameter, step / RACEME_MIN_STEP);
+  const fitted: Frame = {
+    ...frame,
+    diameter,
+    unitScale: frame.unitScale * (diameter / frame.diameter),
+  };
+  const placed = Array.from({ length: count }, (_, i): Placed => {
+    const k = count - 1 - i;
+    const up = k / Math.max(1, count - 1);
+    const t = lerp(RACEME_SPAN[0], RACEME_SPAN[1], up);
+    const b = axisBranch(
+      fitted,
+      t,
+      sideOf(fitted, k),
+      lerp(RACEME_ANGLE[0], RACEME_ANGLE[1], fitted.rnd(300 + k)),
+      diameter * lerp(RACEME_STALK[0], RACEME_STALK[1], up) * fitted.lateral,
+      lerp(RACEME_BEND[0], RACEME_BEND[1], up),
+    );
+    return stalked(fitted, k, b, 1, isBack(k));
+  });
+  return layoutOf(stagedByHeight(fitted, placed));
+}
+
+// ── Umbel and corymb ──
+
+const DOME_MIN_RADIUS = 0.2;
+const DOME_MAX_RADIUS = 0.32;
+/** heads overlap along the arc, each taking this share of its diameter */
+const DOME_PACKING = 0.7;
+/** dome heads beyond this angle from the apex are the far side of the dome */
+const DOME_BACK_ANGLE = 55 * DEG;
+
+/** The dome radius that fits `count` heads of the frame's diameter along the arc. */
+function domeRadius(frame: Frame, count: number): number {
+  const needed = (count * frame.diameter * DOME_PACKING) / DOME_ARC;
+  return clamp(
+    DOME_MIN_RADIUS * frame.length,
+    DOME_MAX_RADIUS * frame.length,
+    needed * frame.lateral,
   );
 }
 
-/** Head j of a level ring: pairs step outward from the primary at the primary's height. */
-function levelHead(frame: Frame, j: number): Point {
-  const step =
-    (frame.primaryRadius + frame.secondaryRadius) * LEVEL_STEP * frame.lateral;
-  return { x: sideOf(frame, j) * ringOf(j) * step, y: 0 };
+/** Angles from the apex for `count` heads spread over the dome arc, the middle ones first. */
+function domeAngles(count: number): number[] {
+  return Array.from({ length: count }, (_, j) =>
+    lerp(-DOME_ARC / 2, DOME_ARC / 2, (j + 0.5) / count),
+  ).toSorted((a, b) => Math.abs(a) - Math.abs(b));
 }
 
-/** Stalks fanning from one point below the primary to a level ring of heads. */
+/** The point on a dome of `radius` centred on `centre`, `theta` from its apex. */
+const onDome = (centre: Vec2, radius: number, theta: number): Vec2 => [
+  centre[0] + Math.sin(theta) * radius,
+  centre[1] - Math.cos(theta) * radius,
+];
+
+const radial = (theta: number): Vec2 => [Math.sin(theta), -Math.cos(theta)];
+
+/** Equal stalks fanning from the stem tip to heads on one dome, the outer ones behind and lower. */
 function umbel(frame: Frame, count: number): InflorescenceLayout {
-  const fan = axisPointBelowTip(
-    frame,
-    frame.primaryRadius * (0.6 + 0.4 * frame.lateral),
-    STEM_FLOOR,
-  );
-  return assemble(
-    secondaries(count).map(j => stalked(frame, fan, levelHead(frame, j))),
-  );
+  const radius = domeRadius(frame, count);
+  const fan = axisAt(frame, 1);
+  const up = stemTangentAt(frame.stem.axis, 1);
+  const width = stemWidthAt(frame, 1);
+  const placed = domeAngles(count).map((theta, k): Placed => {
+    const b = branch(
+      fan,
+      rotate(up, theta * 0.6),
+      onDome(fan, radius, theta),
+      radial(theta),
+      width,
+    );
+    return stalked(frame, k, b, 1, Math.abs(theta) > DOME_BACK_ANGLE);
+  });
+  return layoutOf(allAt(frame.stage, placed));
 }
 
-/** Stalks from different heights, the outer ones lower, all reaching a level top. */
-function corymb(frame: Frame, count: number): InflorescenceLayout {
-  const rp = frame.primaryRadius;
-  const dropOf = (j: number): number =>
-    rp * (0.5 + 0.5 * ringOf(j)) + (isEven(j) ? rp * 0.2 : 0);
-  const fit = fitToStem(frame, dropOf(count));
-  return assemble(
-    secondaries(count).map(j => {
-      const attach = axisPointBelowTip(frame, dropOf(j) * fit, STEM_FLOOR);
-      return stalked(frame, attach, levelHead(frame, j));
-    }),
+/** corymb heads overlap their neighbours by this share of their width */
+const CORYMB_OVERLAP = 0.45;
+/** a corymb stalk shows for at most this many floret diameters under its head */
+const CORYMB_STALK = 0.5;
+/** the ball's centre sits this far up the axis from the tip, as a share of the stem length */
+const CORYMB_HUB_LIFT = 0.04;
+/** the ball bulges this share of its radius below the hub at its sides */
+const CORYMB_BULGE = 0.2;
+/** heads at the rim of the ball are this much smaller than the front centre one */
+const CORYMB_RIM_SIZE = 0.8;
+/** heads farther than this share of the radius from the front centre are the back of the ball */
+const CORYMB_BACK_DEPTH = 0.6;
+const CORYMB_MIN_RADIUS = 0.15;
+const CORYMB_MAX_RADIUS = 0.35;
+
+/** The radius of a half disc whose area holds `count` heads packed at CORYMB_OVERLAP. */
+function corymbRadius(frame: Frame, count: number): number {
+  const cell = frame.diameter * (1 - CORYMB_OVERLAP);
+  const needed = cell * Math.sqrt((2 * count) / Math.PI) * frame.lateral;
+  return clamp(
+    CORYMB_MIN_RADIUS * frame.length,
+    CORYMB_MAX_RADIUS * frame.length,
+    needed,
   );
 }
 
 /**
- * Branches alternating down the stem, each with a head at its tip and a second
- * head on a twig from its middle; lower branches are longer, so the heads form
- * a pyramid under the primary. On a short stem the branches flatten rather
- * than rise past the primary.
+ * A filled hemisphere of heads: a sunflower packing (r grows with the square
+ * root of k, the angle steps by the golden angle folded into a half turn)
+ * over the upper half disc about the hub, bulging a little below it at the
+ * sides. Depth is the distance from the front centre, so the middle heads
+ * are largest and drawn last, and each stalk is only the stub under its head.
  */
-function panicle(frame: Frame, count: number): InflorescenceLayout {
-  const { primaryRadius: rp, secondaryRadius: rs } = frame;
-  const branchCount = Math.ceil(count / 2);
-  const dropOf = (b: number): number => (rp + rs) * (0.9 + 0.8 * (b - 1));
-  const fit = fitToStem(frame, dropOf(branchCount));
-  const tipFloor = rs * 0.3;
-  const placed = secondaries(branchCount).flatMap(b => {
-    const side = sideOf(frame, b);
-    const attach = axisPointBelowTip(frame, dropOf(b) * fit, STEM_FLOOR);
-    const length = (rp + rs * 1.2 * b) * frame.lateral;
-    const rise = Math.min(
-      Math.sin(PANICLE_BRANCH_ANGLE) * length,
-      Math.max(0, attach.y - tipFloor),
-    );
-    const run = Math.sqrt(length * length - rise * rise);
-    const dir = { x: (side * run) / length, y: -rise / length };
-    const tip = { x: attach.x + dir.x * length, y: attach.y + dir.y * length };
-    const branch = stalked(frame, attach, tip);
-    if (2 * b > count) return [branch];
-    const fork = {
-      x: attach.x + dir.x * length * 0.45,
-      y: attach.y + dir.y * length * 0.45,
+function corymb(frame: Frame, count: number): InflorescenceLayout {
+  const tip = axisAt(frame, 1);
+  const up = stemTangentAt(frame.stem.axis, 1);
+  const lift = frame.length * CORYMB_HUB_LIFT;
+  const hub: Vec2 = [tip[0] + up[0] * lift, tip[1] + up[1] * lift];
+  const radius = corymbRadius(frame, count);
+  const shown = frame.diameter * CORYMB_STALK;
+  const placed = Array.from({ length: count }, (_, k): Placed => {
+    const depth = Math.sqrt((k + 0.5) / count);
+    const r = radius * depth;
+    const phi = ((k * GOLDEN_ANGLE) % Math.PI) - Math.PI / 2;
+    const bulge = radius * CORYMB_BULGE * (1 - Math.cos(phi)) * depth;
+    const head: Vec2 = [
+      hub[0] + Math.sin(phi) * r,
+      hub[1] - Math.cos(phi) * r + bulge,
+    ];
+    const dx = head[0] - hub[0];
+    const dy = head[1] - hub[1];
+    const dist = Math.hypot(dx, dy) || 1;
+    const dir: Vec2 = dist > 1e-6 ? [dx / dist, dy / dist] : radial(0);
+    const stub = Math.min(shown, dist);
+    const p0: Vec2 = [head[0] - dir[0] * stub, head[1] - dir[1] * stub];
+    const b = branch(p0, dir, head, dir, stemWidthAt(frame, 1) * 0.8);
+    const back = depth > CORYMB_BACK_DEPTH;
+    return {
+      ...stalked(frame, k, b, lerp(1, CORYMB_RIM_SIZE, depth), back),
+      depth,
     };
-    const twigAngle = Math.atan2(rise, run) - PANICLE_TWIG_DROP;
-    const twigDir = { x: side * Math.cos(twigAngle), y: -Math.sin(twigAngle) };
-    const roomBelow = frame.stem.axis.fromY - fork.y;
-    const twigLength =
-      twigDir.y > 0
-        ? Math.min(length * 0.6, roomBelow / twigDir.y)
-        : length * 0.6;
-    const twig = {
-      x: fork.x + twigDir.x * twigLength,
-      y: fork.y + twigDir.y * twigLength,
-    };
-    return [branch, stalked(frame, fork, twig)];
   });
-  return assemble(placed);
+  return layoutOf(allAt(frame.stage, placed));
 }
 
-/** Arching branches from the upper stem to heads beside and below the primary. */
-function spray(frame: Frame, count: number): InflorescenceLayout {
-  const { primaryRadius: rp, secondaryRadius: rs } = frame;
-  return assemble(
-    secondaries(count).map(j => {
-      const side = sideOf(frame, j);
-      const ring = ringOf(j);
-      const head = {
-        x: side * (rp + rs) * 0.85 * frame.lateral * (1 + 0.3 * (ring - 1)),
-        y: rs * 0.6 + rp * 0.4 * (ring - 1) + (isEven(j) ? rs * 0.4 : 0),
-      };
-      const attach = axisPointBelowTip(
-        frame,
-        frame.stemLength * (0.25 + 0.18 * (ring - 1) + (isEven(j) ? 0.09 : 0)),
-        STEM_FLOOR,
-      );
-      return stalked(frame, attach, head, -SPRAY_ARCH * side);
-    }),
+// ── Panicle ──
+
+const PANICLE_BRANCHES = [3, 5] as const;
+const PANICLE_SPAN = [0.5, 0.9] as const;
+const PANICLE_LENGTH = [0.32, 0.14] as const;
+const PANICLE_ANGLE = 35 * DEG;
+const PANICLE_BEND = [50 * DEG, 30 * DEG] as const;
+const PANICLE_TWIG = 0.7;
+const PANICLE_TWIG_ANGLE = 45 * DEG;
+const PANICLE_TWIG_BEND = 30 * DEG;
+
+/** Florets on a branch: one at its tip and the rest on twigs alternating along it. */
+function branchFlorets(
+  frame: Frame,
+  b: Branch,
+  count: number,
+  firstK: number,
+): Placed[] {
+  return Array.from({ length: count }, (_, j): Placed => {
+    const k = firstK + j;
+    if (j === 0) return stalked(frame, k, b, 1, false);
+    const s = lerp(0.75, 0.35, (j - 1) / Math.max(1, count - 2));
+    const side: 1 | -1 = j % 2 === 1 ? -1 : 1;
+    const tw = twig(
+      b,
+      s,
+      side,
+      PANICLE_TWIG_ANGLE,
+      frame.diameter * PANICLE_TWIG * frame.lateral,
+      PANICLE_TWIG_BEND,
+    );
+    return stalked(frame, k, tw, 1, side === -1);
+  });
+}
+
+/** Three to five branches alternating up the axis, each a little raceme, shorter toward the top under a terminal floret. */
+function panicle(frame: Frame, count: number): InflorescenceLayout {
+  const branchCount = clamp(
+    PANICLE_BRANCHES[0],
+    PANICLE_BRANCHES[1],
+    Math.ceil((count - 1) / 3),
+  );
+  const perBranch = Array.from({ length: branchCount }, (_, b) => {
+    const base = Math.floor((count - 1) / branchCount);
+    return base + (b < (count - 1) % branchCount ? 1 : 0);
+  });
+  const branches = Array.from({ length: branchCount }, (_, b) => {
+    const up = b / Math.max(1, branchCount - 1);
+    return axisBranch(
+      frame,
+      lerp(PANICLE_SPAN[0], PANICLE_SPAN[1], up),
+      sideOf(frame, b),
+      PANICLE_ANGLE,
+      frame.length *
+        lerp(PANICLE_LENGTH[0], PANICLE_LENGTH[1], up) *
+        frame.lateral,
+      lerp(PANICLE_BEND[0], PANICLE_BEND[1], up),
+    );
+  });
+  const firstKs = perBranch.reduce<number[]>(
+    (acc, n, b) => [...acc, (acc[b - 1] ?? 1) + (perBranch[b - 1] ?? 0)],
+    [],
+  );
+  const placed = [
+    terminal(frame),
+    ...branches.flatMap((b, i) =>
+      branchFlorets(frame, b, perBranch[i] ?? 0, firstKs[i] ?? 1),
+    ),
+  ];
+  return layoutOf(
+    stagedByHeight(frame, placed),
+    branches.map(b => stalkPlan(b)),
   );
 }
 
-/** The head count a kind draws for a requested count: Solitary is 1, Spray 3-5, level rings 1-9, the rest 1-12. */
-function headCountFor(kind: InflorescenceKind, requested: number): number {
-  const wanted = Number.isFinite(requested) ? Math.round(requested) : 1;
-  switch (kind) {
-    case "Solitary":
-      return 1;
-    case "Spray":
-      return clamp(SPRAY_MIN_HEADS, SPRAY_MAX_HEADS, wanted);
-    case "Umbel":
-    case "Corymb":
-      return clamp(1, LEVEL_MAX_HEADS, wanted);
-    case "Spike":
-    case "Raceme":
-    case "Panicle":
-      return clamp(1, MAX_HEADS, wanted);
-    default:
-      return unreachable(kind);
-  }
+// ── Spray ──
+
+const SPRAY_SPAN = [0.68, 0.92] as const;
+const SPRAY_LENGTH = [0.25, 0.17] as const;
+const SPRAY_ANGLE = [30 * DEG, 45 * DEG] as const;
+const SPRAY_BEND = [55 * DEG, 95 * DEG] as const;
+const SPRAY_BUD_AT = 0.78;
+const SPRAY_BUD_LENGTH = 0.45;
+const SPRAY_BUD_ANGLE = 40 * DEG;
+const SPRAY_BUD_BEND = 20 * DEG;
+const SPRAY_BUD_SIZE = 0.8;
+
+/** Branches from the upper third arching down to a nodding head each, with a bud just behind it, under a terminal head. */
+function spray(frame: Frame, count: number): InflorescenceLayout {
+  const branchCount = count - 1;
+  const branches = Array.from({ length: branchCount }, (_, b) => {
+    const up = b / Math.max(1, branchCount - 1);
+    return axisBranch(
+      frame,
+      lerp(SPRAY_SPAN[0], SPRAY_SPAN[1], up),
+      sideOf(frame, b),
+      lerp(SPRAY_ANGLE[0], SPRAY_ANGLE[1], frame.rnd(400 + b)),
+      frame.length * lerp(SPRAY_LENGTH[0], SPRAY_LENGTH[1], up) * frame.lateral,
+      lerp(SPRAY_BEND[0], SPRAY_BEND[1], frame.rnd(500 + b)),
+    );
+  });
+  const heads = branches.map((b, i) => stalked(frame, 1 + i, b, 1, false));
+  const buds = branches.map((b, i): Placed => {
+    const tw = twig(
+      b,
+      SPRAY_BUD_AT,
+      -1,
+      SPRAY_BUD_ANGLE,
+      frame.diameter * SPRAY_BUD_LENGTH,
+      SPRAY_BUD_BEND,
+    );
+    return stalked(frame, 20 + i, tw, SPRAY_BUD_SIZE, true);
+  });
+  return layoutOf(
+    [...allAt(frame.stage, [terminal(frame), ...heads]), ...allAt("Bud", buds)],
+    branches.map(b => stalkPlan(b)),
+  );
 }
 
-/** Positions and pedicels for every head of the inflorescence. Deterministic in all inputs. */
+// ── Entry ──
+
+const MAX_HEADS: Record<InflorescenceKind, number> = {
+  Solitary: 1,
+  Spike: 20,
+  Raceme: 12,
+  Umbel: 16,
+  Corymb: 24,
+  Panicle: 16,
+  Spray: 5,
+};
+const SPRAY_MIN_HEADS = 3;
+
+/** The head count a kind draws for a requested count. */
+export function headCountFor(
+  kind: InflorescenceKind,
+  requested: number,
+): number {
+  const wanted = Number.isFinite(requested) ? Math.round(requested) : 1;
+  const floor = kind === "Spray" ? SPRAY_MIN_HEADS : 1;
+  return clamp(floor, MAX_HEADS[kind], wanted);
+}
+
+/** Positions, stages and stalks for every floret of the inflorescence. Deterministic in all inputs. */
 export function layoutInflorescence(
   params: InflorescenceParams,
 ): InflorescenceLayout {
-  const { kind, stem, sid } = params;
+  const { kind, stem, sid, stage } = params;
   const headCount = headCountFor(kind, params.headCount);
-  const stemLength = stemAxisLength(stem.axis);
-  if (headCount <= 1 || stemLength < 1e-6) return SOLITARY_LAYOUT;
-
-  const secondaryScale = clamp(MIN_HEAD_SCALE, 1, params.headScale);
+  const length = stemAxisLength(stem.axis);
+  const diameter =
+    length *
+    lerp(FLORET_DIAMETER[0], FLORET_DIAMETER[1], unit(params.headScale));
   const frame: Frame = {
     stem,
-    stemLength,
-    primaryRadius: params.headRadius,
-    secondaryRadius: params.headRadius * secondaryScale,
-    secondaryScale,
-    lateral: 0.5 + clamp(0, 1, params.spread),
+    length,
+    diameter,
+    unitScale: diameter / (2 * Math.max(1e-6, params.headRadius)),
+    lateral: 0.5 + unit(params.spread),
+    stage,
     firstSide: sidHash(sid, 1) < 0.5 ? -1 : 1,
+    rnd: salt => sidHash(sid, salt),
   };
-  const count = headCount - 1;
+  if (headCount <= 1 || length < 1e-6) {
+    return solitaryLayout(stem, frame.unitScale, stage);
+  }
 
   switch (kind) {
     case "Solitary":
-      return SOLITARY_LAYOUT;
+      return solitaryLayout(stem, frame.unitScale, stage);
     case "Spike":
-      return spike(frame, count);
+      return spike(frame, headCount);
     case "Raceme":
-      return raceme(frame, count);
+      return raceme(frame, headCount);
     case "Umbel":
-      return umbel(frame, count);
+      return umbel(frame, headCount);
     case "Corymb":
-      return corymb(frame, count);
+      return corymb(frame, headCount);
     case "Panicle":
-      return panicle(frame, count);
+      return panicle(frame, headCount);
     case "Spray":
-      return spray(frame, count);
+      return spray(frame, headCount);
     default:
       return unreachable(kind);
   }

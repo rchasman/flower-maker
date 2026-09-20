@@ -33,6 +33,15 @@ export function lightenColor(color: number, amount: number): number {
   return (r << 16) | (g << 8) | b;
 }
 
+/** Linearly interpolate between two packed-int colors. t=0 → a, t=1 → b. */
+export function lerpColor(a: number, b: number, t: number): number {
+  const t1 = Math.max(0, Math.min(1, t));
+  const r = Math.round(((a >> 16) & 0xff) * (1 - t1) + ((b >> 16) & 0xff) * t1);
+  const g = Math.round(((a >> 8) & 0xff) * (1 - t1) + ((b >> 8) & 0xff) * t1);
+  const bl = Math.round((a & 0xff) * (1 - t1) + (b & 0xff) * t1);
+  return (r << 16) | (g << 8) | bl;
+}
+
 /** Blend a color toward its luminance gray; 0 leaves it unchanged, 1 is gray. */
 export function desaturate(color: number, amount: number): number {
   const r = (color >> 16) & 0xff;

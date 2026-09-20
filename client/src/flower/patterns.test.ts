@@ -148,7 +148,7 @@ describe("createFlowerPlan marks", () => {
       }),
       11,
     );
-    const petals = plan.layers[0]!.petals;
+    const petals = plan.heads[0].layers[0]!.petals;
     expect(petals.length).toBe(5);
     expect(petals.map(p => p.marks.map(m => m.color))).toEqual(
       petals.map(() => [colorFromSpec(0.1, 0.1, 0.6)]),
@@ -160,13 +160,15 @@ describe("createFlowerPlan marks", () => {
       spec({ pattern: { kind: "Spots", density: 1 } }),
       11,
     );
-    const [first, second] = plan.layers[0]!.petals;
+    const [first, second] = plan.heads[0].layers[0]!.petals;
     expect(first!.marks[0]!.cmds.length).toBe(second!.marks[0]!.cmds.length);
     expect(first!.marks).not.toEqual(second!.marks);
   });
 
   test("a layer without a pattern has no marks", () => {
     const plan = createFlowerPlan(spec({}), 11);
-    expect(plan.layers[0]!.petals.every(p => p.marks.length === 0)).toBe(true);
+    expect(
+      plan.heads[0].layers[0]!.petals.every(p => p.marks.length === 0),
+    ).toBe(true);
   });
 });

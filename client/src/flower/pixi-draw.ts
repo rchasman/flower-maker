@@ -20,11 +20,13 @@ import type {
   ArrangementPlan,
   CorollaPlan,
   FlowerPlan,
+  HeadPlan,
   LayerPlan,
   LeafPlan,
   PetalPlan,
+  PlacedFloret,
 } from "./render.ts";
-import type { StemPlan } from "./stem.ts";
+import type { StalkPlan, StemPlan } from "./stem.ts";
 import { GOLDEN_ANGLE, LIGHT_ANGLE, unreachable } from "./util.ts";
 
 // ── Low-level path helpers ──
@@ -453,6 +455,7 @@ function drawPetals(
   layers: readonly LayerPlan[],
   scale: number,
   alpha: number,
+  firstLayerIdx = 0,
 ) {
   const lightOffsetX = LIGHT_COS * scale * 0.012;
   const lightOffsetY = LIGHT_SIN * scale * 0.012;
@@ -471,7 +474,7 @@ function drawPetals(
     };
 
     // Pass 1: petal overlap depth shadows (inner layers cast onto outer)
-    if (layerIdx > 0) {
+    if (firstLayerIdx + layerIdx > 0) {
       for (const cmds of layerOutlines(layer)) {
         fillCmds(
           g,
@@ -501,7 +504,7 @@ function drawPetals(
 /** Draw stamens with curved filaments and anther highlights. */
 function drawStamens(
   g: Graphics,
-  stamens: FlowerPlan["center"]["stamens"],
+  stamens: HeadPlan["center"]["stamens"],
   scale: number,
   alpha: number,
 ) {
@@ -603,7 +606,7 @@ function drawSeedHead(
 /** Draw center disc with outline, radial depth, stippling, seed head and pistil highlight. */
 function drawCenterDisc(
   g: Graphics,
-  center: FlowerPlan["center"],
+  center: HeadPlan["center"],
   scale: number,
   alpha: number,
 ) {
@@ -658,7 +661,7 @@ export function drawAura(
   alpha: number,
 ) {
   if (!plan.aura) return;
-  const scale = r;
+  const scale = r * anchorFloret(plan).scale;
   const now = performance.now();
   const auraR = plan.aura.radius * scale * 2.5;
   const pulse = 0.85 + 0.15 * Math.sin(now / 800);
@@ -744,7 +747,7 @@ export function drawAura(
 
 // ── Full flower / arrangement drawing ──
 
-/** A stem, pedicel or branch outline with its darker edge. */
+/** A closed stem outline with its darker edge. */
 function drawStalk(
   g: Graphics,
   cmds: readonly DrawCmd[],
@@ -756,6 +759,27 @@ function drawStalk(
   strokeCmds(
     g,
     cmds,
+    {
+      color: darkenColor(color, 0.5),
+      width: Math.max(0.4, scale * 0.008),
+      alpha: alpha * 0.45,
+    },
+    scale,
+  );
+}
+
+/** A branch, pedicel or petiole: its fill, then only its two long edges, so nothing is stroked across the join. */
+function drawBranch(
+  g: Graphics,
+  stalk: StalkPlan,
+  color: number,
+  scale: number,
+  alpha: number,
+): void {
+  fillCmds(g, stalk.fill, { color, alpha: alpha * 0.9 }, scale);
+  strokeCmds(
+    g,
+    stalk.edges,
     {
       color: darkenColor(color, 0.5),
       width: Math.max(0.4, scale * 0.008),
@@ -789,6 +813,8 @@ function drawBlades(
 
 function drawLeaf(g: Graphics, leaf: LeafPlan, scale: number, alpha: number) {
   const leafAlpha = alpha * leaf.alpha;
+  if (leaf.petiole)
+    drawBranch(g, leaf.petiole, leaf.petioleColor, scale, alpha);
   fillCmds(g, leaf.cmds, { color: leaf.color, alpha: leafAlpha * 0.9 }, scale);
   if (leaf.variegation) {
     fillCmds(
@@ -847,10 +873,9 @@ function drawBud(g: Graphics, bud: BudPlan, scale: number, alpha: number) {
   fillCmds(g, bud.petal, { color: bud.petalColor, alpha: alpha * 0.9 }, scale);
 }
 
-/** The stem fill and edge, then its branches, surface detail and thorns. */
+/** The stem fill and edge, then its surface detail and thorns. */
 function drawStem(g: Graphics, stem: StemPlan, scale: number, alpha: number) {
   drawStalk(g, stem.cmds, stem.color, scale, alpha);
-  drawStalk(g, stem.branches, stem.color, scale, alpha);
   for (const layer of stem.surface) {
     strokeCmds(
       g,
@@ -891,15 +916,22 @@ function drawStem(g: Graphics, stem: StemPlan, scale: number, alpha: number) {
  */
 function drawHead(
   g: Graphics,
-  plan: FlowerPlan,
+  head: HeadPlan,
   scale: number,
   alpha: number,
 ): void {
-  drawBlades(g, plan.bracts, scale, alpha);
-  drawBlades(g, plan.sepals, scale, alpha);
-  drawPetals(g, plan.layers, scale, alpha);
+  drawBlades(g, head.bracts, scale, alpha);
+  drawBlades(g, head.sepals, scale, alpha);
+  if (head.closedCentre) {
+    drawPetals(g, head.layers.slice(0, -1), scale, alpha);
+    drawStamens(g, head.center.stamens, scale, alpha);
+    drawCenterDisc(g, head.center, scale, alpha);
+    drawPetals(g, head.layers.slice(-1), scale, alpha, head.layers.length - 1);
+  } else {
+    drawPetals(g, head.layers, scale, alpha);
+  }
 
-  for (const dd of plan.dewdrops) {
+  for (const dd of head.dewdrops) {
     const dx = dd.x * scale;
     const dy = dd.y * scale;
     const dr = dd.radius * scale;
@@ -909,25 +941,47 @@ function drawHead(
     g.fill({ color: 0xffffff, alpha: alpha * 0.7 });
   }
 
-  drawStamens(g, plan.center.stamens, scale, alpha);
-  drawCenterDisc(g, plan.center, scale, alpha);
+  if (!head.closedCentre) {
+    drawStamens(g, head.center.stamens, scale, alpha);
+    drawCenterDisc(g, head.center, scale, alpha);
+  }
 }
 
 /** drawHead translated to (x, y) and rotated by `angle`, leaving the transform as it was. */
 function drawHeadAt(
   g: Graphics,
-  plan: FlowerPlan,
+  head: HeadPlan,
   x: number,
   y: number,
   angle: number,
   scale: number,
   alpha: number,
 ): void {
+  // Pixi's rotateTransform turns the accumulated matrix about the graphics
+  // origin, so the rotation must come before the translation that places the head.
   g.save();
-  g.translateTransform(x, y);
   g.rotateTransform(angle);
-  drawHead(g, plan, scale, alpha);
+  g.translateTransform(x, y);
+  drawHead(g, head, scale, alpha);
   g.restore();
+}
+
+/** The head plan a floret draws; every floret indexes a head by construction. */
+function headOf(plan: FlowerPlan, floret: PlacedFloret): HeadPlan {
+  return plan.heads[floret.head] ?? plan.heads[0];
+}
+
+/** The floret that carries the spec's own head: particles and the aura hang on it. */
+function anchorFloret(plan: FlowerPlan): PlacedFloret {
+  return plan.florets.find(f => f.head === 0) ?? plan.florets[0];
+}
+
+/** Deepest florets first, then from the highest on screen down, so nearer and lower heads overlap the ones behind them. */
+function drawOrder(florets: readonly PlacedFloret[]): PlacedFloret[] {
+  return florets.toSorted((a, b) => {
+    if (a.depth !== b.depth) return b.depth - a.depth;
+    return a.offsetY - b.offsetY;
+  });
 }
 
 export type DrawFlowerOptions = {
@@ -939,7 +993,7 @@ export type DrawFlowerOptions = {
   particles: boolean;
 };
 
-/** Draw a flower from its pre-computed plan: stem, pedicels, leaves, buds, then every head back to front. */
+/** Draw a flower from its pre-computed plan: stem, branches and pedicels, leaves, buds, then every head back to front. */
 export function drawFlowerFromPlan(
   g: Graphics,
   plan: FlowerPlan,
@@ -948,22 +1002,24 @@ export function drawFlowerFromPlan(
   options: DrawFlowerOptions = { particles: true },
 ) {
   const scale = r;
+  const ordered = drawOrder(plan.florets);
 
-  // Stem (behind everything else)
   if (plan.stem) {
+    const stemColor = plan.stem.color;
     drawStem(g, plan.stem, scale, alpha);
-    drawStalk(g, plan.pedicels, plan.stem.color, scale, alpha);
+    for (const b of plan.branches) drawBranch(g, b, stemColor, scale, alpha);
+    for (const floret of ordered) {
+      if (floret.stalk) drawBranch(g, floret.stalk, stemColor, scale, alpha);
+    }
   }
 
   for (const leaf of plan.leaves) drawLeaf(g, leaf, scale, alpha);
   for (const bud of plan.buds) drawBud(g, bud, scale, alpha);
 
-  // Heads, the highest on screen first so lower heads overlap them
-  const backToFront = plan.florets.toSorted((a, b) => a.offsetY - b.offsetY);
-  for (const floret of backToFront) {
+  for (const floret of ordered) {
     drawHeadAt(
       g,
-      plan,
+      headOf(plan, floret),
       floret.offsetX * scale,
       floret.offsetY * scale,
       floret.angle,
@@ -982,11 +1038,15 @@ export function drawParticles(
   r: number,
   alpha: number,
 ): void {
-  const scale = r;
+  const anchor = anchorFloret(plan);
+  const scale = r * anchor.scale;
   const t = performance.now() / 1000;
 
   for (const p of plan.particles) {
-    const { px, py, fade } = particlePosition(p, t, scale);
+    const at = particlePosition(p, t, scale);
+    const px = at.px + anchor.offsetX * r;
+    const py = at.py + anchor.offsetY * r;
+    const fade = at.fade;
     const pr = p.size * scale;
     const alphaNow = alpha * fade;
 
@@ -1083,9 +1143,13 @@ function bioWaveAt(pattern: BioPattern, now: number): number {
   return 0.6 + 0.4 * slowPulse(now, 2800);
 }
 
-/** True when the plan has per-frame glow to draw over the head (see drawGlow). */
+/** True when a head has per-frame glow to draw over it (see drawGlow). */
+const headGlows = (head: HeadPlan): boolean =>
+  head.bio !== null || head.center.nectary?.glow?.pulse != null;
+
+/** True when the plan has per-frame glow to draw over its heads (see drawGlow). */
 export function hasGlow(plan: FlowerPlan): boolean {
-  return plan.bio !== null || plan.center.nectary?.glow?.pulse != null;
+  return plan.heads.some(headGlows);
 }
 
 /**
@@ -1100,19 +1164,19 @@ export function drawGlow(
   alpha: number,
 ): void {
   const now = performance.now();
-  const bio = plan.bio;
-  const pulse = plan.center.nectary?.glow?.pulse
-    ? plan.center.nectary.glow
-    : null;
-  if (!bio && !pulse) return;
-
-  const bioWave = bio ? bioWaveAt(bio.pattern, now) : 0;
+  if (!hasGlow(plan)) return;
 
   for (const floret of plan.florets) {
+    const head = headOf(plan, floret);
+    const bio = head.bio;
+    const pulse = head.center.nectary?.glow?.pulse
+      ? head.center.nectary.glow
+      : null;
+    const bioWave = bio ? bioWaveAt(bio.pattern, now) : 0;
     const scale = r * floret.scale;
     g.save();
-    g.translateTransform(floret.offsetX * r, floret.offsetY * r);
     g.rotateTransform(floret.angle);
+    g.translateTransform(floret.offsetX * r, floret.offsetY * r);
 
     if (pulse?.pulse) {
       const wave = slowPulse(now, 1000 / pulse.pulse.speed);
@@ -1203,7 +1267,7 @@ export function drawArrangementFromPlan(
   for (const member of plan.members.toReversed()) {
     drawHeadAt(
       g,
-      member.flowerPlan,
+      member.flowerPlan.heads[0],
       member.offsetX * scale,
       member.offsetY * scale,
       0,

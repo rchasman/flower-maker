@@ -1,13 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
   BIO_PATTERNS,
-  BRANCH_PATTERNS,
   DISPERSAL_PATTERNS,
   LEAF_SHAPES,
   NECTARY_POSITIONS,
   SURFACE_TEXTURES,
   VARIEGATION_KINDS,
-  type BranchPattern,
   type LeafShape,
   type SurfaceTexture,
   type VariegationKind,
@@ -15,7 +13,7 @@ import {
 import { colorFromSpec, hueRotate } from "./color.ts";
 import { generateLeaf, type LeafParams } from "./leaf.ts";
 import { createFlowerPlan } from "./render.ts";
-import { generateBranches, generateStemSurface, stemAxis } from "./stem.ts";
+import { branchTipHalfWidth, generateStemSurface, stemAxis } from "./stem.ts";
 import { flattenCmds, pointInPolygon } from "./test-helpers.ts";
 
 const rgb = (r: number, g: number, b: number) => ({ r, g, b, a: 1 });
@@ -68,14 +66,14 @@ describe("bracts", () => {
       }),
       3,
     );
-    expect(four.bracts.length).toBe(8);
+    expect(four.heads[0].bracts.length).toBe(8);
     const one = createFlowerPlan(
       spec({ foliage: { bracts: [bract(true, "Cordate")] } }),
       3,
     );
-    expect(one.bracts.length).toBe(3);
+    expect(one.heads[0].bracts.length).toBe(3);
     expect(
-      one.bracts.every(b => b.color === colorFromSpec(0.9, 0.2, 0.3)),
+      one.heads[0].bracts.every(b => b.color === colorFromSpec(0.9, 0.2, 0.3)),
     ).toBe(true);
   });
 
@@ -87,8 +85,12 @@ describe("bracts", () => {
       );
       const reach = (cmds: Parameters<typeof flattenCmds>[0]) =>
         Math.max(...flattenCmds(cmds).map(([x, y]) => Math.hypot(x, y)));
-      const bractReach = Math.max(...plan.bracts.map(b => reach(b.cmds)));
-      const sepalReach = Math.max(...plan.sepals.map(s => reach(s.cmds)));
+      const bractReach = Math.max(
+        ...plan.heads[0].bracts.map(b => reach(b.cmds)),
+      );
+      const sepalReach = Math.max(
+        ...plan.heads[0].sepals.map(s => reach(s.cmds)),
+      );
       expect(bractReach).toBeGreaterThan(sepalReach);
     }
   });
@@ -98,7 +100,7 @@ describe("bracts", () => {
       spec({ foliage: { bracts: [bract(false), bract(false), bract(false)] } }),
       3,
     );
-    expect(plan.bracts).toEqual([]);
+    expect(plan.heads[0].bracts).toEqual([]);
     expect(plan.leaves.length).toBe(3);
     // Position 0.95 is just under the head, so the scales sit near the stem tip
     for (const leaf of plan.leaves) {
@@ -135,7 +137,7 @@ describe("pollen", () => {
       );
       const grains = plan.particles.filter(p => p.kind === "Pollen");
       expect(grains.length).toBe(10);
-      const anthers = plan.center.stamens;
+      const anthers = plan.heads[0].center.stamens;
       for (const grain of grains) {
         const nearest = Math.min(
           ...anthers.map(a =>
@@ -173,7 +175,7 @@ describe("pollen", () => {
     expect(grains.length).toBe(6);
     for (const grain of grains) {
       expect(Math.hypot(grain.x, grain.y)).toBeLessThanOrEqual(
-        plan.center.discRadius + 0.02,
+        plan.heads[0].center.discRadius + 0.02,
       );
     }
   });
@@ -201,7 +203,7 @@ describe("nectary", () => {
         }),
         4,
       );
-      const nectary = plan.center.nectary;
+      const nectary = plan.heads[0].center.nectary;
       expect(nectary).not.toBeNull();
       expect(nectary!.position).toBe(position);
       expect(nectary!.fills.length + nectary!.strokes.length).toBeGreaterThan(
@@ -222,14 +224,14 @@ describe("nectary", () => {
       }),
       4,
     );
-    const marks = flattenCmds(plan.center.nectary!.fills);
+    const marks = flattenCmds(plan.heads[0].center.nectary!.fills);
     expect(marks.length).toBeGreaterThan(0);
-    const outer = plan.layers[0]!.petals.map(p => flattenCmds(p.cmds));
+    const outer = plan.heads[0].layers[0]!.petals.map(p => flattenCmds(p.cmds));
     const escaped = marks.filter(
       point => !outer.some(polygon => pointInPolygon(point, polygon)),
     );
     expect(escaped).toEqual([]);
-    expect(plan.center.nectary!.glow).toBeNull();
+    expect(plan.heads[0].center.nectary!.glow).toBeNull();
   });
 
   test("a pulse in the glow is kept for the per-frame overlay", () => {
@@ -249,7 +251,7 @@ describe("nectary", () => {
       }),
       4,
     );
-    expect(plan.center.nectary!.glow!.pulse).toEqual({
+    expect(plan.heads[0].center.nectary!.glow!.pulse).toEqual({
       speed: 0.5,
       minIntensity: 0.2,
     });
@@ -291,7 +293,7 @@ describe("iridescence", () => {
     );
 
   test("each petal gets a sheen shifted by how it faces the light", () => {
-    const petals = iridescent().layers[0]!.petals;
+    const petals = iridescent().heads[0].layers[0]!.petals;
     expect(petals.every(p => p.iridescence !== null)).toBe(true);
     const sheens = new Set(petals.map(p => p.iridescence!.color));
     expect(sheens.size).toBeGreaterThan(1);
@@ -299,10 +301,10 @@ describe("iridescence", () => {
   });
 
   test("affected_parts without petals leaves the petals plain", () => {
-    const petals = iridescent(["stem"]).layers[0]!.petals;
+    const petals = iridescent(["stem"]).heads[0].layers[0]!.petals;
     expect(petals.every(p => p.iridescence === null)).toBe(true);
     expect(
-      createFlowerPlan(spec(), 6).layers[0]!.petals.every(
+      createFlowerPlan(spec(), 6).heads[0].layers[0]!.petals.every(
         p => p.iridescence === null,
       ),
     ).toBe(true);
@@ -325,11 +327,11 @@ describe("bioluminescence", () => {
         }),
         8,
       );
-      expect(plan.bio).not.toBeNull();
-      expect(plan.bio!.pattern).toBe(pattern);
-      expect(plan.bio!.strokes.length + plan.bio!.fills.length).toBeGreaterThan(
-        0,
-      );
+      expect(plan.heads[0].bio).not.toBeNull();
+      expect(plan.heads[0].bio!.pattern).toBe(pattern);
+      expect(
+        plan.heads[0].bio!.strokes.length + plan.heads[0].bio!.fills.length,
+      ).toBeGreaterThan(0);
     });
   }
 
@@ -342,9 +344,11 @@ describe("bioluminescence", () => {
       }),
       8,
     );
-    const veins = plan.layers.flatMap(l => l.petals.flatMap(p => p.veinCmds));
-    expect(plan.bio!.strokes).toEqual(veins);
-    expect(createFlowerPlan(spec(), 8).bio).toBeNull();
+    const veins = plan.heads[0].layers.flatMap(l =>
+      l.petals.flatMap(p => p.veinCmds),
+    );
+    expect(plan.heads[0].bio!.strokes).toEqual(veins);
+    expect(createFlowerPlan(spec(), 8).heads[0].bio).toBeNull();
   });
 });
 
@@ -361,10 +365,14 @@ describe("leaf variegation and translucency", () => {
       const escaped = LEAF_SHAPES.flatMap(shape =>
         [0.3, 1.9, -1.1].flatMap(angle => {
           const geometry = generateLeaf(
-            0.1,
-            0.4,
-            angle,
-            0.45,
+            {
+              x: 0.1,
+              y: 0.4,
+              angle,
+              blade: 0.45,
+              petiole: 0.09,
+              stemHalfWidth: 0.02,
+            },
             leaf(kind, shape),
           );
           const polygon = flattenCmds(geometry.outline);
@@ -378,9 +386,38 @@ describe("leaf variegation and translucency", () => {
     });
   }
 
+  test("the blade base is as wide as the petiole tip, so the join has no step", () => {
+    const stemHalfWidth = 0.03;
+    const pose = {
+      x: 0,
+      y: 0,
+      angle: 0.4,
+      blade: 0.4,
+      petiole: 0.08,
+      stemHalfWidth,
+    };
+    const geometry = generateLeaf(pose, leaf("None", "Ovate"));
+    const outline = flattenCmds(geometry.outline);
+    const first = outline[0]!;
+    const last = outline.at(-1)!;
+    const baseWidth = Math.hypot(first[0] - last[0], first[1] - last[1]);
+    expect(baseWidth).toBeCloseTo(2 * branchTipHalfWidth(stemHalfWidth), 6);
+    const bract = generateLeaf({ ...pose, petiole: 0 }, leaf("None", "Ovate"));
+    const bractOutline = flattenCmds(bract.outline);
+    expect(
+      Math.hypot(
+        bractOutline[0]![0] - bractOutline.at(-1)![0],
+        bractOutline[0]![1] - bractOutline.at(-1)![1],
+      ),
+    ).toBeCloseTo(0, 6);
+  });
+
   test("None draws no marks", () => {
     expect(
-      generateLeaf(0, 0, 0.5, 0.4, leaf("None", "Ovate")).variegation,
+      generateLeaf(
+        { x: 0, y: 0, angle: 0.5, blade: 0.4, petiole: 0, stemHalfWidth: 0.02 },
+        leaf("None", "Ovate"),
+      ).variegation,
     ).toEqual([]);
   });
 
@@ -417,8 +454,7 @@ describe("leaf variegation and translucency", () => {
   });
 });
 
-describe("stem surface and branching", () => {
-  const axis = stemAxis([0, 1], [0, 0], 0, "Straight");
+describe("stem surface", () => {
   const surface = (texture: SurfaceTexture, style: "Straight" | "Woody") =>
     generateStemSurface(
       stemAxis([0, 1], [0, 0], 0, style),
@@ -472,50 +508,12 @@ describe("stem surface and branching", () => {
     }
   });
 
-  const BRANCHED: BranchPattern[] = [
-    "Alternate",
-    "Opposite",
-    "Whorled",
-    "Dichotomous",
-  ];
-  test("branching patterns add branches that leave the stem", () => {
-    for (const branching of BRANCH_PATTERNS) {
-      const branches = generateBranches(axis, 0.05, branching);
-      if (BRANCHED.includes(branching)) {
-        expect(branches.length).toBeGreaterThan(0);
-        const xs = flattenCmds(branches).map(([x]) => Math.abs(x));
-        expect(Math.max(...xs)).toBeGreaterThan(0.05);
-      } else {
-        expect(branches).toEqual([]);
-      }
-    }
-  });
-
-  test("the plan reads surface and branching from the stem", () => {
+  test("the plan reads the surface from the stem", () => {
     const plan = createFlowerPlan(
-      spec({
-        stem: { surface: "Hairy", branching: "Opposite", style: "Woody" },
-      }),
+      spec({ stem: { surface: "Hairy", style: "Woody" } }),
       3,
     );
     expect(plan.stem!.surface.length).toBe(2);
-    expect(plan.stem!.branches.length).toBeGreaterThan(0);
-    const bare = createFlowerPlan(spec(), 3);
-    expect(bare.stem!.surface).toEqual([]);
-    expect(bare.stem!.branches).toEqual([]);
-  });
-
-  test("branches widen the plan's bounds", () => {
-    // A headless stem, so the branches are the widest thing drawn
-    const headless = (branching: BranchPattern) =>
-      JSON.stringify({
-        petals: { layers: [] },
-        structure: { sepals: [], stem: { height: 1.2, branching } },
-      });
-    const branched = createFlowerPlan(headless("Dichotomous"), 3);
-    const plain = createFlowerPlan(headless("None"), 3);
-    expect(branched.bounds.maxX - branched.bounds.minX).toBeGreaterThan(
-      plain.bounds.maxX - plain.bounds.minX,
-    );
+    expect(createFlowerPlan(spec(), 3).stem!.surface).toEqual([]);
   });
 });

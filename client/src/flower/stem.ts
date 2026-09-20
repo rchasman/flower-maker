@@ -4,12 +4,7 @@
  * pedicels all attach through stemPointAt.
  */
 
-import type {
-  BranchPattern,
-  Side,
-  StemStyle,
-  SurfaceTexture,
-} from "../data/flower-enums.ts";
+import type { Side, StemStyle, SurfaceTexture } from "../data/flower-enums.ts";
 import { darkenColor, lightenColor } from "./color.ts";
 import {
   assembleOutline,
@@ -36,6 +31,12 @@ export type StemAxis = {
   toY: number;
   curvature: number;
   style: StemStyle;
+  /**
+   * Heading of the tip tangent, radians from screen up, positive toward +x.
+   * The last TIP_BEND_SPAN of the axis bends into it, so a head that sits
+   * on the tip leans the way the stem bows under its weight.
+   */
+  tipBend: number;
 };
 
 /** How each stem style bends the spec's curvature before anything is drawn. */
@@ -56,6 +57,7 @@ export function stemAxis(
   [toX, toY]: Vec2,
   curvature: number,
   style: StemStyle,
+  tipBend = 0,
 ): StemAxis {
   return {
     fromX,
@@ -64,6 +66,7 @@ export function stemAxis(
     toY,
     curvature: STYLE_CURVATURE[style](curvature),
     style,
+    tipBend,
   };
 }
 
@@ -87,8 +90,6 @@ export type StemPlan = {
   halfWidth: number;
   /** bark from a Woody style, then the surface texture's own detail; empty for a smooth stem */
   surface: readonly StemSurfacePlan[];
-  /** closed outlines of side branches, drawn in the stem color */
-  branches: DrawCmd[];
 };
 
 type StemWidthModifiers = {
@@ -101,18 +102,18 @@ const STEM_WIDTH_MODIFIERS: Record<
   StemStyle,
   (halfWidth: number) => StemWidthModifiers
 > = {
-  Straight: halfWidth => ({ halfWidth, tipRatio: 0.5 }),
-  Arching: halfWidth => ({ halfWidth, tipRatio: 0.45 }),
-  Sinuous: halfWidth => ({ halfWidth, tipRatio: 0.5 }),
-  Zigzag: halfWidth => ({ halfWidth: halfWidth * 0.9, tipRatio: 0.6 }),
-  Twining: halfWidth => ({ halfWidth: halfWidth * 0.85, tipRatio: 0.5 }),
-  Succulent: halfWidth => ({ halfWidth: halfWidth * 2.2, tipRatio: 0.8 }),
-  Woody: halfWidth => ({ halfWidth: halfWidth * 1.6, tipRatio: 0.35 }),
-  Trailing: halfWidth => ({ halfWidth, tipRatio: 0.55 }),
+  Straight: halfWidth => ({ halfWidth, tipRatio: 0.6 }),
+  Arching: halfWidth => ({ halfWidth, tipRatio: 0.55 }),
+  Sinuous: halfWidth => ({ halfWidth, tipRatio: 0.6 }),
+  Zigzag: halfWidth => ({ halfWidth: halfWidth * 0.9, tipRatio: 0.65 }),
+  Twining: halfWidth => ({ halfWidth: halfWidth * 0.85, tipRatio: 0.6 }),
+  Succulent: halfWidth => ({ halfWidth: halfWidth * 1.6, tipRatio: 0.8 }),
+  Woody: halfWidth => ({ halfWidth: halfWidth * 1.25, tipRatio: 0.5 }),
+  Trailing: halfWidth => ({ halfWidth, tipRatio: 0.6 }),
 };
 
 /** Half width of the drawn outline at t, after the style's width and taper. */
-function drawnHalfWidthAt(
+export function drawnHalfWidthAt(
   halfWidth: number,
   style: StemStyle,
   t: number,
@@ -219,12 +220,36 @@ function zigzagCentreAt(axis: StemAxis, t: number): CentrePoint {
   };
 }
 
-/** The one centreline every stem style is drawn around and attached to. */
-function stemCentreAt(axis: StemAxis, t: number): CentrePoint {
+function styledCentreAt(axis: StemAxis, t: number): CentrePoint {
   const sway = SWAY[axis.style];
   if (sway !== undefined) return swayingCentreAt(axis, sway, t);
   if (axis.style === "Zigzag") return zigzagCentreAt(axis, t);
   return quadraticCentreAt(axis, t);
+}
+
+/** The share of the axis, from the tip down, that bends into the tip heading. */
+const TIP_BEND_SPAN = 0.3;
+
+/**
+ * The styled centreline with its tip bent to `tipBend`. Below the span the
+ * whole axis is shifted sideways by a constant, so the tip still lands on
+ * `to` while the tangent there turns to the requested heading.
+ */
+function stemCentreAt(axis: StemAxis, t: number): CentrePoint {
+  const base = styledCentreAt(axis, t);
+  const frame = chordFrame(axis);
+  if (!frame || axis.tipBend === 0) return base;
+  const span = TIP_BEND_SPAN * frame.len;
+  const shift = (-Math.tan(axis.tipBend) * span) / 2;
+  const u = Math.max(0, (t - (1 - TIP_BEND_SPAN)) / TIP_BEND_SPAN);
+  const offset = shift * (1 - u * u);
+  const slope = (-2 * shift * u) / TIP_BEND_SPAN;
+  return {
+    x: base.x + frame.nx * offset,
+    y: base.y + frame.ny * offset,
+    tx: base.tx + frame.nx * slope,
+    ty: base.ty + frame.ny * slope,
+  };
 }
 
 /** Unit vector perpendicular to the tangent, pointing to the stem's left. */
@@ -293,6 +318,24 @@ export function stemPointAt(
 ): { x: number; y: number; angle: number } {
   const { x, y, tx, ty } = stemCentreAt(axis, t);
   return { x, y, angle: Math.atan2(-tx, ty) };
+}
+
+/** Unit tangent toward the tip at t. */
+export function stemTangentAt(axis: StemAxis, t: number): Vec2 {
+  const { tx, ty } = stemCentreAt(axis, t);
+  const len = Math.hypot(tx, ty) || 1;
+  return [tx / len, ty / len];
+}
+
+/** Rotation of an up vector that points along (tx, ty): 0 is screen up, positive leans toward +x. */
+export function headingOf(tx: number, ty: number): number {
+  return Math.atan2(tx, -ty);
+}
+
+/** Heading of the axis tangent at its tip; a head sitting there leans this way. */
+export function stemTipHeading(axis: StemAxis): number {
+  const { tx, ty } = stemCentreAt(axis, 1);
+  return headingOf(tx, ty);
 }
 
 /**
@@ -475,86 +518,139 @@ export function generateStemSurface(
   ];
 }
 
-// ── Branching ──
-
-type BranchNode = {
-  /** 0-1 along the stem */
-  t: number;
-  side: 1 | -1;
-  /** relative to the standard branch length */
-  length: number;
-  /** radians above the perpendicular, toward the tip */
-  rise: number;
-};
-
-const BRANCH_RISE = Math.PI * 0.28;
-const STEEP_RISE = Math.PI * 0.38;
-/** fraction of the stem length for a full-length branch */
-const BRANCH_LENGTH = 0.16;
-
-const node = (
-  t: number,
-  side: 1 | -1,
-  length: number,
-  rise = BRANCH_RISE,
-): BranchNode => ({ t, side, length, rise });
-
-const BRANCH_NODES: Record<BranchPattern, readonly BranchNode[]> = {
-  None: [],
-  Alternate: [node(0.38, 1, 1), node(0.58, -1, 0.85), node(0.76, 1, 0.7)],
-  Opposite: [
-    node(0.42, 1, 1),
-    node(0.42, -1, 1),
-    node(0.68, 1, 0.75),
-    node(0.68, -1, 0.75),
-  ],
-  Whorled: [
-    node(0.45, 1, 0.9),
-    node(0.45, -1, 0.9),
-    node(0.45, 1, 0.55, STEEP_RISE),
-    node(0.45, -1, 0.55, STEEP_RISE),
-    node(0.72, 1, 0.6),
-    node(0.72, -1, 0.6),
-  ],
-  Dichotomous: [
-    node(0.55, 1, 1.1),
-    node(0.55, -1, 1.1),
-    node(0.8, 1, 0.6),
-    node(0.8, -1, 0.6),
-  ],
-  // grow by replacing or extending the main axis: no side branches to draw
-  Sympodial: [],
-  Monopodial: [],
-};
+// ── Branches ──
 
 /**
- * Side branches as closed outlines at half the stem's width; the
- * inflorescence draws its own pedicels, these are the stem's own habit.
+ * A side branch or pedicel: a cubic that leaves its parent at p0 along d0 and
+ * arrives at p1 along d1, so the part it carries sits exactly at p1 facing
+ * along the branch. Widths flare into the parent at the join.
  */
-export function generateBranches(
-  axis: StemAxis,
-  halfWidth: number,
-  branching: BranchPattern,
-): DrawCmd[] {
-  const stemLength = stemAxisLength(axis);
-  if (stemLength < 0.001) return [];
-  const upX = (axis.toX - axis.fromX) / stemLength;
-  const upY = (axis.toY - axis.fromY) / stemLength;
-  return BRANCH_NODES[branching].flatMap(({ t, side, length, rise }) => {
-    const p = stemPointAt(axis, t);
-    const perpX = Math.cos(p.angle) * side;
-    const perpY = Math.sin(p.angle) * side;
-    const dirX = perpX * Math.cos(rise) + upX * Math.sin(rise);
-    const dirY = perpY * Math.cos(rise) + upY * Math.sin(rise);
-    const len = stemLength * BRANCH_LENGTH * length;
-    return generateStem(
-      stemAxis(
-        [p.x, p.y],
-        [p.x + dirX * len, p.y + dirY * len],
-        0.25 * side,
-        "Straight",
-      ),
-      halfWidth * 0.5,
-    );
+export type Branch = {
+  p0: Vec2;
+  c1: Vec2;
+  c2: Vec2;
+  p1: Vec2;
+  /** the parent's half width at the join */
+  parentHalfWidth: number;
+};
+
+/** fraction of the chord each handle reaches along its tangent */
+const BRANCH_HANDLE = 0.38;
+/** a branch is this much of its parent's width where it leaves the flare */
+const BRANCH_WIDTH = 0.5;
+/** width at the branch tip relative to its width after the flare */
+const BRANCH_TIP_RATIO = 0.55;
+/** the share of the branch over which the base flares to the parent's width */
+const FLARE_SPAN = 0.12;
+const BRANCH_STATIONS = 8;
+
+/** Unit vector `d` turned by `angle` radians (positive is clockwise on screen). */
+export function rotate([x, y]: Vec2, angle: number): Vec2 {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return [x * cos - y * sin, x * sin + y * cos];
+}
+
+export function branch(
+  p0: Vec2,
+  d0: Vec2,
+  p1: Vec2,
+  d1: Vec2,
+  parentHalfWidth: number,
+): Branch {
+  const h = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) * BRANCH_HANDLE;
+  return {
+    p0,
+    c1: [p0[0] + d0[0] * h, p0[1] + d0[1] * h],
+    c2: [p1[0] - d1[0] * h, p1[1] - d1[1] * h],
+    p1,
+    parentHalfWidth,
+  };
+}
+
+/**
+ * The end point and arriving direction of a branch of `length` that leaves
+ * along d0 and bends `bend` radians toward the ground. The chord follows
+ * the bisector of the two directions, as a circular arc's does.
+ */
+export function bentEnd(
+  p0: Vec2,
+  d0: Vec2,
+  length: number,
+  bend: number,
+): { p1: Vec2; d1: Vec2 } {
+  const toGround = d0[0] >= 0 ? 1 : -1;
+  const d1 = rotate(d0, toGround * bend);
+  const mx = d0[0] + d1[0];
+  const my = d0[1] + d1[1];
+  const m = Math.hypot(mx, my) || 1;
+  return {
+    p1: [p0[0] + (mx / m) * length, p0[1] + (my / m) * length],
+    d1,
+  };
+}
+
+/** Point and unnormalised tangent at s in [0, 1] along the branch. */
+export function branchPointAt(b: Branch, s: number): CentrePoint {
+  const u = 1 - s;
+  const [x0, y0] = b.p0;
+  const [x1, y1] = b.c1;
+  const [x2, y2] = b.c2;
+  const [x3, y3] = b.p1;
+  return {
+    x:
+      u * u * u * x0 + 3 * u * u * s * x1 + 3 * u * s * s * x2 + s * s * s * x3,
+    y:
+      u * u * u * y0 + 3 * u * u * s * y1 + 3 * u * s * s * y2 + s * s * s * y3,
+    tx: 3 * u * u * (x1 - x0) + 6 * u * s * (x2 - x1) + 3 * s * s * (x3 - x2),
+    ty: 3 * u * u * (y1 - y0) + 6 * u * s * (y2 - y1) + 3 * s * s * (y3 - y2),
+  };
+}
+
+/** Unit tangent at s along the branch. */
+export function branchDirectionAt(b: Branch, s: number): Vec2 {
+  const { tx, ty } = branchPointAt(b, s);
+  const len = Math.hypot(tx, ty) || 1;
+  return [tx / len, ty / len];
+}
+
+/** Heading of the branch tip: the up vector of whatever it carries. */
+export function branchTipHeading(b: Branch): number {
+  const { tx, ty } = branchPointAt(b, 1);
+  return headingOf(tx, ty);
+}
+
+/** Half width of a branch at its tip, for whatever grows on from it. */
+export const branchTipHalfWidth = (parentHalfWidth: number): number =>
+  parentHalfWidth * BRANCH_WIDTH * BRANCH_TIP_RATIO;
+
+/** Drawn half width at s: the parent's width at the join, flaring down to the tapered branch. */
+export function branchHalfWidthAt(b: Branch, s: number): number {
+  const body = b.parentHalfWidth * BRANCH_WIDTH * lerp(1, BRANCH_TIP_RATIO, s);
+  const flare = Math.max(0, 1 - s / FLARE_SPAN);
+  return body + b.parentHalfWidth * (1 - BRANCH_WIDTH) * flare * flare;
+}
+
+/** A drawn stalk: the closed fill and the two open edge strokes, so no cap is stroked across the parent. */
+export type StalkPlan = {
+  fill: DrawCmd[];
+  edges: DrawCmd[];
+};
+
+export function stalkPlan(b: Branch): StalkPlan {
+  const pairs = steps(BRANCH_STATIONS).map((s): EdgePair => {
+    const c = branchPointAt(b, s);
+    const [nx, ny] = centreNormal(c);
+    const w = branchHalfWidthAt(b, s);
+    return {
+      left: [c.x + nx * w, c.y + ny * w],
+      right: [c.x - nx * w, c.y - ny * w],
+    };
   });
+  const left = pairs.map(pair => pair.left);
+  const right = pairs.map(pair => pair.right);
+  return {
+    fill: assembleOutline(left, right),
+    edges: [...smoothCmds(left), ...smoothCmds(right)],
+  };
 }

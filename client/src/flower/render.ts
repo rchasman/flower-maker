@@ -13,6 +13,7 @@ import {
   darkenColor,
   desaturate,
   fallbackColor,
+  lerpColor,
   lightenColor,
 } from "./color.ts";
 import {
@@ -32,15 +33,18 @@ import {
   type Vec2,
 } from "./geometry.ts";
 import {
-  SOLITARY_LAYOUT,
+  headCountFor,
   layoutInflorescence,
+  solitaryLayout,
   type Floret,
+  type InflorescenceLayout,
 } from "./inflorescence.ts";
 import { generatePetalMarks, type PetalMark } from "./patterns.ts";
 import {
   createPetalFrame,
   generatePetal,
   generatePetalPartial,
+  overlappingWidth,
   petalLocalToFlower,
   placePetal,
   type PetalFrame,
@@ -67,7 +71,7 @@ import {
   type PetalIridescence,
   type PollenSource,
 } from "./effects.ts";
-import { generateLeaf, type LeafParams } from "./leaf.ts";
+import { generateLeaf, type LeafParams, type LeafPose } from "./leaf.ts";
 import {
   DEFAULT_LIFE_STAGE,
   STAGE_PROFILES,
@@ -75,16 +79,19 @@ import {
   generateBuds,
   stageLayers,
   type BudPlan,
+  type StageLayerFields,
   type BudSource,
   type SeedHeadPlan,
 } from "./lifeStage.ts";
 import {
-  generateBranches,
+  drawnHalfWidthAt,
   generateStem,
   generateStemSurface,
   sideHeading,
   stemAxis,
   stemPointAt,
+  stemTipHeading,
+  type StalkPlan,
   type StemAxis,
   type StemPlan,
   type ThornPlan,
@@ -93,13 +100,14 @@ import {
   GOLDEN_ANGLE,
   LIGHT_ANGLE,
   clamp,
+  lerp,
   sidHash,
+  sideSign,
   unreachable,
 } from "./util.ts";
 import {
   AURA_KINDS,
   BIO_PATTERNS,
-  BRANCH_PATTERNS,
   DEWDROP_PLACEMENTS,
   DISPERSAL_PATTERNS,
   EDGE_STYLES,
@@ -117,12 +125,10 @@ import {
   SIDES,
   STEM_STYLES,
   SURFACE_TEXTURES,
-  SYMMETRIES,
   VARIEGATION_KINDS,
   VEIN_PATTERNS,
   isVariant,
   type AuraKind,
-  type BranchPattern,
   type DewdropPlacement,
   type EdgeStyle,
   type FlowerFamily,
@@ -137,7 +143,6 @@ import {
   type Side,
   type StemStyle,
   type SurfaceTexture,
-  type Symmetry,
   type VariegationKind,
   type VeinPattern,
 } from "../data/flower-enums.ts";
@@ -185,6 +190,9 @@ export type LeafPlan = {
   /** 1 opaque; translucent leaves let the stem show through */
   alpha: number;
   variegation: { cmds: DrawCmd[]; color: number } | null;
+  /** the stalk from the stem to the blade, drawn in the stem color under the blade */
+  petiole: StalkPlan | null;
+  petioleColor: number;
 };
 
 export type DewdropPlan = {
@@ -244,29 +252,47 @@ export type LayerPlan = {
 };
 
 /**
- * Pre-computed rendering plan for a flower — cached per spec, scale-independent.
- * The head parts (sepals, layers, center, dewdrops) describe the primary head at
- * the origin; every floret draws that same head at its offset and scale.
+ * One flower head in its own unit space, centred on the origin: everything a
+ * floret draws at its offset, scale and angle. A plan holds one head per
+ * (stage, depth) its florets need; the first is the spec's own stage in front.
  */
-export type FlowerPlan = {
+export type HeadPlan = {
   /** showy bracts, a petal-like ring drawn behind the sepals */
   bracts: readonly BractPlan[];
   sepals: ReadonlyArray<{ cmds: DrawCmd[]; color: number }>;
   layers: readonly LayerPlan[];
   center: CenterPlan;
+  dewdrops: readonly DewdropPlan[];
+  /** glow geometry drawn additively over the head every frame */
+  bio: BioPlan | null;
+  /** farthest drawn point from the head centre, unit space */
+  reach: number;
+  /** the innermost ring closes over the centre, so the stamens and disc are drawn under it */
+  closedCentre: boolean;
+  stage: LifeStage;
+  back: boolean;
+};
+
+/** A floret with the index of the head plan it draws. */
+export type PlacedFloret = Floret & { head: number };
+
+/**
+ * Pre-computed rendering plan for a flower — cached per spec, scale-independent.
+ * The stem tip is the origin; the stem hangs below it and every floret draws
+ * one of the heads at its offset, scale and angle.
+ */
+export type FlowerPlan = {
+  heads: readonly [HeadPlan, ...HeadPlan[]];
   stem: StemPlan | null;
   leaves: readonly LeafPlan[];
   /** side buds on the stem, drawn after the leaves and before the heads */
   buds: readonly BudPlan[];
-  dewdrops: readonly DewdropPlan[];
   aura: AuraPlan | null;
   particles: readonly ParticleSeed[];
-  /** glow geometry drawn additively over the head every frame */
-  bio: BioPlan | null;
-  /** the primary first, at (0, 0) with scale 1 */
-  florets: readonly [Floret, ...Floret[]];
-  /** stalks from the stem to the secondary heads */
-  pedicels: DrawCmd[];
+  /** the terminal floret first */
+  florets: readonly [PlacedFloret, ...PlacedFloret[]];
+  /** branches carrying several florets, drawn in the stem color before the pedicels */
+  branches: readonly StalkPlan[];
   /** box around everything drawn, plan units */
   bounds: Bounds;
 };
@@ -274,15 +300,6 @@ export type FlowerPlan = {
 // ═══════════════════════════════════════════════════════════════════════════
 // Color utilities
 // ═══════════════════════════════════════════════════════════════════════════
-
-/** Linearly interpolate between two packed-int colors. t=0 → a, t=1 → b. */
-function lerpColor(a: number, b: number, t: number): number {
-  const t1 = Math.max(0, Math.min(1, t));
-  const r = Math.round(((a >> 16) & 0xff) * (1 - t1) + ((b >> 16) & 0xff) * t1);
-  const g = Math.round(((a >> 8) & 0xff) * (1 - t1) + ((b >> 8) & 0xff) * t1);
-  const bl = Math.round((a & 0xff) * (1 - t1) + (b & 0xff) * t1);
-  return (r << 16) | (g << 8) | bl;
-}
 
 /** Per-petal color scatter — deterministic hue/brightness jitter for organic variation. */
 function scatterColor(color: number, amount: number, seed: number): number {
@@ -625,20 +642,6 @@ function parsePattern(raw: RawPattern | undefined): ParsedPattern {
   };
 }
 
-type ParsedSymmetry = {
-  kind: Symmetry;
-  /** Radial order, 0 = unspecified. */
-  order: number;
-  /** Degrees, Spiral only. */
-  divergenceAngle: number;
-};
-
-type RawPetalSystem = {
-  symmetry?: unknown;
-  symmetry_order?: unknown;
-  divergence_angle?: unknown;
-};
-
 type ParsedCenter = {
   receptacleSize: number;
   pistilColor: number | null;
@@ -742,20 +745,10 @@ type ParsedSpec = {
   layers: ParsedLayer[];
   center: ParsedCenter;
   sepals: ParsedSepal[];
-  symmetry: ParsedSymmetry;
   inflorescence: ParsedInflorescence;
   stage: LifeStage;
   family: FlowerFamily;
 };
-
-/** Read the flat symmetry form: a unit variant plus two scalars on PetalSystem. */
-function parseSymmetry(petals: RawPetalSystem | undefined): ParsedSymmetry {
-  return {
-    kind: variantOr(SYMMETRIES, petals?.symmetry),
-    order: finiteOr(petals?.symmetry_order, 0),
-    divergenceAngle: finiteOr(petals?.divergence_angle, 137.5),
-  };
-}
 
 type ParsedGradientStop = { position: number; color: number };
 
@@ -799,8 +792,6 @@ function parseFlowerSpec(spec: any): ParsedSpec | null {
       }),
     );
 
-    const symmetry = parseSymmetry(spec.petals);
-
     const reproductive = spec.reproductive ?? {};
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const stamens = (reproductive.stamens ?? []).map((s: any) => ({
@@ -830,7 +821,6 @@ function parseFlowerSpec(spec: any): ParsedSpec | null {
       layers,
       center,
       sepals,
-      symmetry,
       inflorescence: parseInflorescence(spec.inflorescence),
       stage: variantOr(LIFE_STAGES, spec.petals?.stage, DEFAULT_LIFE_STAGE),
       family: variantOr(FLOWER_FAMILIES, spec.taxonomy?.family),
@@ -1098,7 +1088,7 @@ function buildCenter(
 }
 
 /**
- * Compute petal angles for a layer based on arrangement type and symmetry.
+ * Compute petal angles for a layer based on arrangement type.
  * This is what makes roses look different from daisies from orchids.
  */
 type PetalPlacement = { angle: number; radialOffset: number };
@@ -1107,7 +1097,6 @@ function computePetalAngles(
   count: number,
   baseOffset: number,
   arrangement: PetalArrangement,
-  symmetry: ParsedSymmetry,
   sid: number,
   layerIdx: number,
 ): PetalPlacement[] {
@@ -1124,17 +1113,14 @@ function computePetalAngles(
     );
 
   switch (arrangement) {
-    case "Spiral": {
-      // Fibonacci spiral — each petal offset by the golden angle (~137.5°)
-      // Compress radial spread to [0.65, 1.0] so within-layer petals stay similar
-      // size (rose-like concentric rings) rather than sunflower-like tiny→large gradient
-      const divergence = symmetry.divergenceAngle * (Math.PI / 180);
-      const sqrtCount = Math.sqrt(count);
-      return Array.from({ length: count }, (_, i) => ({
-        angle: baseOffset + i * divergence,
-        radialOffset: 0.65 + (0.35 * Math.sqrt(i + 1)) / sqrtCount,
+    // A spiralled bloom is rings of overlapping petals, each ring set deeper
+    // in the cup than the one outside it; the overlap comes from the width
+    // (see SPIRAL_OVERLAP), the depth from the layer inset.
+    case "Spiral":
+      return evenRing().map(p => ({
+        ...p,
+        radialOffset: Math.max(0.4, 1 - SPIRAL_INSET * layerIdx),
       }));
-    }
 
     case "Bilateral": {
       // Mirror symmetry — petals concentrated on two sides
@@ -1293,32 +1279,83 @@ const MIN_HEAD_REACH = 0.15;
 
 const DEFAULT_SEPAL_COLOR = 0x2d5a27;
 
-/** how far a leaf turns from the stem's perpendicular toward the tip */
-const LEAF_RISE = Math.PI * 0.35;
+/** how far a leaf turns from the stem's perpendicular toward the tip: 45 degrees from the stem */
+const LEAF_RISE = Math.PI * 0.25;
+/** the spec's angle offset can swing a leaf this far either way of LEAF_RISE, so 35 to 55 degrees from the stem */
+const LEAF_RISE_SWING = Math.PI * (10 / 180);
 /** a scale bract hugs the stem, almost along it */
 const SCALE_BRACT_RISE = Math.PI * 0.42;
+/** the stem length as a share of the spec's stem height, plus one */
+const STEM_LENGTH = [1.2, 2] as const;
+/** stem base half width as a share of its length, over the spec's thickness */
+const STEM_HALF_WIDTH = [0.012, 0.02] as const;
+/** the stem green is the leaf green this much darker, tinted toward the spec's stem color by STEM_TINT */
+const STEM_SHADE = 0.75;
+const STEM_TINT = 0.4;
+/** how far leaf green moves toward gray */
+const LEAF_DESATURATION = 0.12;
+/** where leaves may attach, as shares of the stem length from the base */
+const SOLITARY_LEAF_BAND = [0.15, 0.7] as const;
+const CLUSTER_LEAF_BAND = [0.12, 0.42] as const;
+/** blade length as a share of the stem length, low leaves first */
+const LEAF_BLADE = [0.3, 0.18] as const;
+const LEAF_PETIOLE = 0.2;
+/** a solitary head is this many stem lengths across */
+const SOLITARY_DIAMETER = [0.28, 0.4] as const;
+/** petal count times petal area that bows the tip the least and the most */
+const HEAD_WEIGHT = [4, 30] as const;
+const HEAD_BOW = [Math.PI * (5 / 180), Math.PI * (12 / 180)] as const;
+/** each raceme head past five arches the axis by this much curvature */
+const RACEME_ARCH = 0.02;
+/** petals pointing away from the viewer on a nodding head are this much shorter */
+const PETAL_FORESHORTEN = 0.85;
+/** back florets are drawn this much darker */
+const BACK_SHADE = 0.85;
+/** adjacent petals of a spiralled ring overlap by this share of their width */
+const SPIRAL_OVERLAP = 0.38;
+/** each inner ring of a spiralled bloom sits this much deeper in the cup */
+const SPIRAL_INSET = 0.18;
+/** a corymb carries a pair of opposite leaves this far below its dome, as a share of the stem */
+const CORYMB_LEAF_DROP = 0.1;
+const CORYMB_LEAF_RISE = Math.PI * 0.3;
 
-const EMPTY_PLAN: FlowerPlan = {
+const EMPTY_HEAD: HeadPlan = {
   bracts: [],
   sepals: [],
   layers: [],
   center: EMPTY_CENTER,
+  dewdrops: [],
+  bio: null,
+  reach: MIN_HEAD_REACH,
+  closedCentre: false,
+  stage: DEFAULT_LIFE_STAGE,
+  back: false,
+};
+
+const EMPTY_PLAN: FlowerPlan = {
+  heads: [EMPTY_HEAD],
   stem: null,
   leaves: [],
   buds: [],
-  dewdrops: [],
   aura: null,
   particles: [],
-  bio: null,
-  florets: SOLITARY_LAYOUT.florets,
-  pedicels: [],
+  florets: [
+    { ...solitaryLayout(null, 1, DEFAULT_LIFE_STAGE).florets[0], head: 0 },
+  ],
+  branches: [],
   bounds: circleBounds(0, 0, MIN_HEAD_REACH),
 };
 
-/** Farthest point of the primary head's drawn parts from its centre, plan units. */
+/** Outlines of everything petal-like a layer draws. */
+const layerPetalCmds = (layer: LayerPlan): DrawCmd[][] => [
+  ...layer.petals.map(p => p.cmds),
+  ...(layer.corolla?.lobes.map(lobe => lobe.cmds) ?? []),
+];
+
+/** Farthest point of the head's drawn parts from its centre, unit space. */
 function headReach(
   bracts: readonly BractPlan[],
-  sepals: FlowerPlan["sepals"],
+  sepals: HeadPlan["sepals"],
   layers: readonly LayerPlan[],
   center: CenterPlan,
 ): number {
@@ -1332,15 +1369,19 @@ function headReach(
     ...bracts.map(b => cmdsReach(b.cmds)),
     ...sepals.map(s => cmdsReach(s.cmds)),
     ...layers.flatMap(layer => [
-      ...layer.petals.map(p => cmdsReach(p.cmds)),
-      ...(layer.corolla
-        ? [
-            layer.corolla.bodyRadius,
-            ...layer.corolla.lobes.map(lobe => cmdsReach(lobe.cmds)),
-          ]
-        : []),
+      ...layerPetalCmds(layer).map(cmdsReach),
+      ...(layer.corolla ? [layer.corolla.bodyRadius] : []),
     ]),
   );
+}
+
+/** Farthest petal point from the head centre: the head's visual diameter is twice this. Falls back to the full reach for a petalless head. */
+function petalReach(head: HeadPlan): number {
+  const reach = Math.max(
+    0,
+    ...head.layers.flatMap(layer => layerPetalCmds(layer).map(cmdsReach)),
+  );
+  return reach > 0 ? reach : head.reach;
 }
 
 /** One built layer with what its petals lend the effects: frames for marks, outlines and veins. */
@@ -1354,13 +1395,11 @@ type LeafBlade = LeafParams & {
 };
 
 function buildLeafPlan(
-  x: number,
-  y: number,
-  angle: number,
-  size: number,
+  pose: LeafPose,
   blade: LeafBlade,
+  stemColor: number,
 ): LeafPlan {
-  const leaf = generateLeaf(x, y, angle, size, blade);
+  const leaf = generateLeaf(pose, blade);
   const translucent = blade.translucency > 0.5;
   return {
     cmds: leaf.outline,
@@ -1377,19 +1416,42 @@ function buildLeafPlan(
             color: blade.variegation.color ?? lightenColor(blade.color, 0.35),
           }
         : null,
+    petiole: leaf.petiole,
+    petioleColor: stemColor,
   };
 }
 
+/** Stem base half width for a stem of `length` at the spec's 0-1 thickness. */
+function stemHalfWidth(length: number, thickness: number): number {
+  return (
+    length *
+    lerp(STEM_HALF_WIDTH[0], STEM_HALF_WIDTH[1], clamp(0, 1, thickness))
+  );
+}
+
+/** The stem green: the leaf green darkened, with the spec's own stem color as a tint. */
+function plantStemColor(leafGreen: number, specStemColor: number): number {
+  return lerpColor(
+    darkenColor(leafGreen, STEM_SHADE),
+    specStemColor,
+    STEM_TINT,
+  );
+}
+
+const leafBladeColor = (leafGreen: number): number =>
+  desaturate(leafGreen, LEAF_DESATURATION);
+
 function buildStemPlan(
   axis: StemAxis,
+  halfWidth: number,
+  color: number,
   stemData: ParsedStem,
   thorns: ParsedThorns | null,
   seed: number,
 ): StemPlan {
-  const halfWidth = clamp(0.03, 0.08, stemData.thickness * 0.08);
   return {
     cmds: generateStem(axis, halfWidth),
-    color: stemData.color,
+    color,
     thorns: thorns ? generateThorns(axis, thorns) : [],
     axis,
     halfWidth,
@@ -1397,10 +1459,9 @@ function buildStemPlan(
       axis,
       halfWidth,
       stemData.surface,
-      stemData.color,
+      color,
       seed,
     ),
-    branches: generateBranches(axis, halfWidth, stemData.branching),
   };
 }
 
@@ -1416,32 +1477,34 @@ function scaleBractBlade(bract: BractSource): LeafBlade {
   };
 }
 
-/** Create a complete, scale-independent rendering plan from a flower spec. */
-export function createFlowerPlan(
-  spec: string | undefined,
-  sid: number,
-): FlowerPlan {
-  const raw = parseSpec(spec);
-  const parsed = parseFlowerSpec(raw);
+/** Everything a head is built from that does not change with its stage or depth. */
+type HeadSource = {
+  parsed: ParsedSpec;
+  baseColor: number;
+  iridescence: IridescenceSource | null;
+  bio: BioSource | null;
+  dewdrops: ParsedDewdrops[];
+  bractSources: readonly BractSource[];
+  sid: number;
+};
 
-  if (!parsed) return EMPTY_PLAN;
-
-  const baseColor = parsed.layers[0]?.color ?? fallbackColor(sid);
-  const effects = parseEffects(raw, baseColor);
-  const iridescence =
-    effects.iridescence && affectsPetals(effects.iridescence)
-      ? effects.iridescence
-      : null;
-
-  // ── Petal layers (outer first for correct z-order) ──
-  const stage = parsed.stage;
+/**
+ * One head at `stage`, in unit space. A back head is the same head with
+ * every color darkened, for florets on the far side of the axis.
+ */
+function buildHead(src: HeadSource, stage: LifeStage, back: boolean): HeadPlan {
+  const { parsed, baseColor, iridescence, sid } = src;
+  const tint = (color: number): number =>
+    back ? darkenColor(color, BACK_SHADE) : color;
   const stageProfile = STAGE_PROFILES[stage];
   const stagedLayers = stageLayers(stage, parsed.layers, baseColor);
   const initialOffset = sidHash(sid, 5) * Math.PI * 2;
   const layerOffsets = stagedLayers.reduce<number[]>(
     (offsets, layer) => [
       ...offsets,
-      (offsets.at(-1) ?? initialOffset) + layer.angularOffset,
+      (offsets.at(-1) ?? initialOffset) +
+        layer.angularOffset +
+        (offsets.length > 0 ? GOLDEN_ANGLE : 0),
     ],
     [],
   );
@@ -1451,10 +1514,12 @@ export function createFlowerPlan(
     const count = Math.max(1, Math.min(55, layer.count));
     const layerOffset = layerOffsets[layerIdx] ?? initialOffset;
 
-    // Each layer gets progressively lighter/darker for depth
-    const layerColor = desaturate(
-      layer.color ?? darkenColor(baseColor, 1 - layerIdx * 0.06),
-      stageProfile.desaturation,
+    // Inner layers sit deeper in the cup, so each is a little darker
+    const layerColor = tint(
+      desaturate(
+        darkenColor(layer.color ?? baseColor, 1 - layerIdx * 0.06),
+        stageProfile.desaturation,
+      ),
     );
 
     /** Colors, veins and marks for one placed petal or lobe, index i in its layer. */
@@ -1475,7 +1540,7 @@ export function createFlowerPlan(
         layer.gradientStops.length >= 2
           ? layer.gradientStops.map((stop, si) => {
               const stopScattered = scatterColor(
-                stop.color,
+                tint(stop.color),
                 0.04,
                 i * 5.1 + si * 3.7,
               );
@@ -1580,34 +1645,38 @@ export function createFlowerPlan(
       };
     }
 
-    // ── Petal angle computation — arrangement-aware ──
     const petalAngles = computePetalAngles(
       count,
       layerOffset,
       layer.arrangement,
-      parsed.symmetry,
       sid,
       layerIdx,
     );
+    const width =
+      layer.arrangement === "Spiral"
+        ? Math.max(
+            layer.width,
+            overlappingWidth(layer.length, count, SPIRAL_OVERLAP),
+          )
+        : layer.width;
 
     const petals = planAll(
       petalAngles.map(({ angle, radialOffset }, i) => {
-        const lenJitter =
-          1 + (sidHash(sid, 400 + layerIdx * 100 + i) * 0.08 - 0.04);
-        const widJitter =
-          1 + (sidHash(sid, 500 + layerIdx * 100 + i) * 0.06 - 0.03);
-        const curvJitter = sidHash(sid, 600 + layerIdx * 100 + i) * 0.1 - 0.05;
-        const curlJitter = sidHash(sid, 700 + layerIdx * 100 + i) * 0.06 - 0.03;
-
+        const salt = layerIdx * 100 + i;
         const frame = createPetalFrame({
-          angle,
+          angle: angle + petalAngleJitter(sid, salt),
           shape: layer.shape,
           edge: layer.edgeStyle,
-          length: layer.length * lenJitter,
-          width: layer.width * widJitter,
-          curvature: layer.curvature + layer.droop * 0.3 + curvJitter,
-          curl: layer.curl + curlJitter,
-          seed: sidHash(sid, 10 + layerIdx * 100 + i),
+          length:
+            layer.length * petalLengthJitter(sid, salt) * foreshortening(angle),
+          width: width * petalWidthJitter(sid, salt),
+          curvature:
+            layer.curvature +
+            layer.droop * 0.3 +
+            sidHash(sid, 600 + salt) * 0.1 -
+            0.05,
+          curl: layer.curl + sidHash(sid, 700 + salt) * 0.06 - 0.03,
+          seed: sidHash(sid, 10 + salt),
           radialOffset: radialOffset * stageProfile.radialOffset,
         });
         return placePetal(frame, angle);
@@ -1649,7 +1718,7 @@ export function createFlowerPlan(
       curl: 0,
       seed: sidHash(sid, 50 + i),
     }),
-    color: s.color ?? DEFAULT_SEPAL_COLOR,
+    color: tint(s.color ?? DEFAULT_SEPAL_COLOR),
   }));
   const sepals = sepalBuilds.map(b => ({
     cmds: generatePetal(b.frame),
@@ -1657,57 +1726,12 @@ export function createFlowerPlan(
   }));
 
   // ── Bracts: showy ones ring the head behind the sepals ──
-  const bractSources = parseBracts(raw);
-  const bracts = generateBractRing(bractSources, {
+  const bracts = generateBractRing(src.bractSources, {
     petalLength: parsed.layers[0]?.length ?? 1,
     petalWidth: parsed.layers[0]?.width ?? 0.8,
     baseAngle: layerOffsets[0] ?? initialOffset,
     sid,
-  });
-
-  // ── Stem + leaves (only when spec contains stem/foliage data) ──
-  const stemData = parseSpecStem(raw);
-  const leafSpecs = parseFoliage(raw);
-  const stemLen = stemData
-    ? Math.max(0.6, Math.min(1.8, stemData.height * 1.4))
-    : 0;
-
-  const axis = stemAxis(
-    [0, stemLen],
-    [0, 0],
-    stemData?.curvature ?? DEFAULT_STEM.curvature,
-    stemData?.style ?? DEFAULT_STEM.style,
-  );
-
-  const stem: StemPlan | null = stemData
-    ? buildStemPlan(axis, stemData, effects.thorns, sid)
-    : null;
-
-  const leaves: LeafPlan[] = stemData
-    ? leafSpecs.map(l => {
-        const pt = stemPointAt(axis, l.position);
-        const leafAngle =
-          sideHeading(pt.angle, l.side, LEAF_RISE) + l.angleOffset;
-        return buildLeafPlan(pt.x, pt.y, leafAngle, 0.3 + l.size * 0.25, l);
-      })
-    : [];
-
-  // Non-showy bracts are small scales on the stem, alternating sides
-  const scaleBracts: LeafPlan[] = stemData
-    ? bractSources
-        .filter(b => !b.showy)
-        .map((b, i) => {
-          const pt = stemPointAt(axis, clamp(0.05, 0.98, b.position));
-          const side: Side = i % 2 === 0 ? "Left" : "Right";
-          return buildLeafPlan(
-            pt.x,
-            pt.y,
-            sideHeading(pt.angle, side, SCALE_BRACT_RISE),
-            0.1 + b.size * 0.15,
-            scaleBractBlade(b),
-          );
-        })
-    : [];
+  }).map(b => ({ ...b, color: tint(b.color) }));
 
   // ── Centre per stage: hidden inside a bud, a seed head after the petals ──
   const stagedCenter = run((): CenterPlan => {
@@ -1728,92 +1752,369 @@ export function createFlowerPlan(
     }
     return stageProfile.throatOpen ? centerBase : EMPTY_CENTER;
   });
+  const shadedCenter: CenterPlan = {
+    ...stagedCenter,
+    discColor: tint(stagedCenter.discColor),
+    highlightColor: tint(stagedCenter.highlightColor),
+    stamens: stagedCenter.stamens.map(s => ({
+      ...s,
+      filamentColor: tint(s.filamentColor),
+      antherColor: tint(s.antherColor),
+    })),
+  };
 
-  const dewdrops = generateDewdrops(effects.dewdrops, sid);
-  const particles = [
-    ...generateParticleSeeds(effects.particles, sid),
-    ...(parsed.center.pollen && stageProfile.throatOpen
-      ? generatePollenSeeds(
-          parsed.center.pollen,
-          stagedCenter.stamens,
-          stagedCenter.discRadius,
-          sid,
-        )
-      : []),
-  ];
-
-  const reach = headReach(bracts, sepals, layers, stagedCenter);
+  const reach = headReach(bracts, sepals, layers, shadedCenter);
   const center: CenterPlan =
     parsed.center.nectary && stageProfile.throatOpen
       ? {
-          ...stagedCenter,
+          ...shadedCenter,
           nectary: buildNectary(parsed.center.nectary, {
-            discRadius: stagedCenter.discRadius,
-            discColor: stagedCenter.discColor,
+            discRadius: shadedCenter.discRadius,
+            discColor: shadedCenter.discColor,
             headReach: reach,
             petalFrames: layerBuilds[0]?.bio.map(b => b.frame) ?? [],
             sepalFrames: sepalBuilds.map(b => b.frame),
             sid,
           }),
         }
-      : stagedCenter;
-
-  const buds: BudPlan[] = stem
-    ? generateBuds(parseBuds(raw), {
-        axis,
-        stemHalfWidth: stem.halfWidth,
-        stemColor: stem.color,
-        headReach: reach,
-        shellColor: sepalBuilds[0]?.color ?? DEFAULT_SEPAL_COLOR,
-        petalColor: baseColor,
-      })
-    : [];
-
-  const bio = effects.bio
-    ? generateBio(
-        effects.bio,
-        layerBuilds.flatMap(b => b.bio),
-        sidHash(sid, 1700),
-      )
-    : null;
-
-  const { florets, pedicels } = stem
-    ? layoutInflorescence({
-        ...parsed.inflorescence,
-        stem,
-        headRadius: reach,
-        sid,
-      })
-    : SOLITARY_LAYOUT;
-
-  const allLeaves = [...leaves, ...scaleBracts];
-  const floretBounds = (f: Floret): Bounds =>
-    circleBounds(f.offsetX, f.offsetY, reach * f.scale);
-  const [primary, ...secondaries] = florets;
-  const bounds = [
-    ...secondaries.map(floretBounds),
-    cmdsBounds(stem?.cmds ?? []),
-    cmdsBounds(stem?.branches ?? []),
-    ...(stem?.thorns.map(t => cmdsBounds(t.cmds)) ?? []),
-    cmdsBounds(pedicels),
-    ...allLeaves.map(l => cmdsBounds(l.cmds)),
-    ...buds.flatMap(b => [cmdsBounds(b.shell), cmdsBounds(b.pedicel)]),
-  ].reduce(unionBounds, floretBounds(primary));
+      : shadedCenter;
 
   return {
     bracts,
     sepals,
     layers,
     center,
+    dewdrops: generateDewdrops(src.dewdrops, sid),
+    bio: src.bio
+      ? generateBio(
+          src.bio,
+          layerBuilds.flatMap(b => b.bio),
+          sidHash(sid, 1700),
+        )
+      : null,
+    reach,
+    closedCentre: hasClosedCentre(stagedLayers),
+    stage,
+    back,
+  };
+}
+
+/** a spiralled bloom whose innermost ring cups at least this much hides its centre, like a garden rose */
+const CLOSED_CENTRE_CURVATURE = 0.6;
+
+function hasClosedCentre(layers: readonly StageLayerFields[]): boolean {
+  const inner = layers.at(-1);
+  return (
+    layers.length >= 2 &&
+    inner?.arrangement === "Spiral" &&
+    inner.curvature >= CLOSED_CENTRE_CURVATURE
+  );
+}
+
+/** Per-petal volume: lengths 0.92 to 1.08, widths 0.94 to 1.06, headings within 3 degrees. */
+const petalLengthJitter = (sid: number, salt: number): number =>
+  lerp(0.92, 1.08, sidHash(sid, 400 + salt));
+const petalWidthJitter = (sid: number, salt: number): number =>
+  lerp(0.94, 1.06, sidHash(sid, 500 + salt));
+/**
+ * A head on a bowing stem nods toward the viewer, so the petals on its far
+ * half (pointing up the screen in head space) are seen shorter, the way a
+ * cup is seen slightly from the side rather than as a stamp.
+ */
+const foreshortening = (petalAngle: number): number =>
+  1 - (1 - PETAL_FORESHORTEN) * Math.max(0, -Math.sin(petalAngle));
+const petalAngleJitter = (sid: number, salt: number): number =>
+  (sidHash(sid, 300 + salt) * 2 - 1) * Math.PI * (3 / 180);
+
+/** Petal count times petal area, in spec units, summed over the layers: what bows the stem tip. */
+function headWeight(layers: readonly ParsedLayer[]): number {
+  return layers.reduce(
+    (sum, layer) => sum + layer.count * layer.length * layer.width,
+    0,
+  );
+}
+
+/** How far the tip bows under a head of `weight`: 5 to 12 degrees. */
+function weightBow(weight: number): number {
+  const w = clamp(
+    0,
+    1,
+    (weight - HEAD_WEIGHT[0]) / (HEAD_WEIGHT[1] - HEAD_WEIGHT[0]),
+  );
+  return lerp(HEAD_BOW[0], HEAD_BOW[1], w);
+}
+
+/** The stem axis from (0, length) up to the origin, bowed at the tip the way it already leans, or by the seed when it is upright. */
+function plantAxis(
+  stemData: ParsedStem,
+  length: number,
+  arch: number,
+  bow: number,
+  sid: number,
+): StemAxis {
+  const unbowed = stemAxis(
+    [0, length],
+    [0, 0],
+    stemData.curvature + arch,
+    stemData.style,
+  );
+  const lean = stemTipHeading(unbowed);
+  const side = run(() => {
+    if (Math.abs(lean) > 1e-6) return Math.sign(lean);
+    return sidHash(sid, 3) < 0.5 ? -1 : 1;
+  });
+  return stemAxis(
+    [0, length],
+    [0, 0],
+    stemData.curvature + arch,
+    stemData.style,
+    side * bow,
+  );
+}
+
+type HeadKey = { stage: LifeStage; back: boolean };
+
+const sameKey = (a: HeadKey, b: HeadKey): boolean =>
+  a.stage === b.stage && a.back === b.back;
+
+/** The distinct (stage, depth) heads the florets need, the spec's own front head first. */
+function headKeys(
+  florets: readonly Floret[],
+  primary: HeadKey,
+): [HeadKey, ...HeadKey[]] {
+  return florets.reduce<[HeadKey, ...HeadKey[]]>(
+    (keys, f) =>
+      keys.some(k => sameKey(k, f))
+        ? keys
+        : [...keys, { stage: f.stage, back: f.back }],
+    [primary],
+  );
+}
+
+/** Create a complete, scale-independent rendering plan from a flower spec. */
+export function createFlowerPlan(
+  spec: string | undefined,
+  sid: number,
+): FlowerPlan {
+  const raw = parseSpec(spec);
+  const parsed = parseFlowerSpec(raw);
+
+  if (!parsed) return EMPTY_PLAN;
+
+  const baseColor = parsed.layers[0]?.color ?? fallbackColor(sid);
+  const effects = parseEffects(raw, baseColor);
+  const source: HeadSource = {
+    parsed,
+    baseColor,
+    iridescence:
+      effects.iridescence && affectsPetals(effects.iridescence)
+        ? effects.iridescence
+        : null,
+    bio: effects.bio,
+    dewdrops: effects.dewdrops,
+    bractSources: parseBracts(raw),
+    sid,
+  };
+  const stage = parsed.stage;
+  const primaryHead = buildHead(source, stage, false);
+
+  // ── Stem: the unit everything else derives from ──
+  const stemData = parseSpecStem(raw);
+  const leafSpecs = parseFoliage(raw);
+  const kind = parsed.inflorescence.kind;
+  const headCount = headCountFor(kind, parsed.inflorescence.headCount);
+  const solitary = headCount <= 1;
+  const stemLength = stemData
+    ? clamp(STEM_LENGTH[0], STEM_LENGTH[1], 1 + stemData.height)
+    : 0;
+  const leafGreen = leafSpecs[0]?.color ?? DEFAULT_LEAF_COLOR;
+  const stemColor = plantStemColor(
+    leafGreen,
+    stemData?.color ?? DEFAULT_STEM.color,
+  );
+  const axis = plantAxis(
+    stemData ?? DEFAULT_STEM,
+    stemLength,
+    kind === "Raceme" ? RACEME_ARCH * Math.max(0, headCount - 5) : 0,
+    weightBow(headWeight(parsed.layers)),
+    sid,
+  );
+  const halfWidth = stemHalfWidth(stemLength, stemData?.thickness ?? 0);
+  const stem: StemPlan | null = stemData
+    ? buildStemPlan(axis, halfWidth, stemColor, stemData, effects.thorns, sid)
+    : null;
+
+  // ── Leaves: alternate up the lower stem, the low ones largest, on petioles ──
+  const leafBand = solitary ? SOLITARY_LEAF_BAND : CLUSTER_LEAF_BAND;
+  const firstLeafSide = sideSign(leafSpecs[0]?.side ?? "Left");
+  const leaves: LeafPlan[] = stemData
+    ? leafSpecs.map((l, i) => {
+        const t = lerp(leafBand[0], leafBand[1], l.position);
+        const pt = stemPointAt(axis, t);
+        const side = i % 2 === 0 ? firstLeafSide : -firstLeafSide;
+        const blade =
+          stemLength *
+          clamp(
+            LEAF_BLADE[1],
+            LEAF_BLADE[0],
+            lerp(LEAF_BLADE[0], LEAF_BLADE[1], l.position) *
+              (0.85 + 0.3 * l.size),
+          );
+        const rise =
+          LEAF_RISE + clamp(-LEAF_RISE_SWING, LEAF_RISE_SWING, l.angleOffset);
+        return buildLeafPlan(
+          {
+            x: pt.x,
+            y: pt.y,
+            angle: pt.angle + Math.PI / 2 - side * (Math.PI / 2 - rise),
+            blade,
+            petiole: blade * LEAF_PETIOLE,
+            stemHalfWidth: drawnHalfWidthAt(halfWidth, axis.style, t),
+          },
+          { ...l, color: leafBladeColor(l.color) },
+          stemColor,
+        );
+      })
+    : [];
+
+  // A corymb carries a pair of opposite leaves right under its dome, as a hydrangea does
+  const domeLeaf = leafSpecs[0];
+  const domeLeaves: LeafPlan[] =
+    stemData && kind === "Corymb" && !solitary && domeLeaf
+      ? [1, -1].map(side => {
+          const t = 1 - CORYMB_LEAF_DROP;
+          const pt = stemPointAt(axis, t);
+          const blade = stemLength * LEAF_BLADE[1] * 1.2;
+          return buildLeafPlan(
+            {
+              x: pt.x,
+              y: pt.y,
+              angle:
+                pt.angle +
+                Math.PI / 2 -
+                side * (Math.PI / 2 - CORYMB_LEAF_RISE),
+              blade,
+              petiole: blade * LEAF_PETIOLE,
+              stemHalfWidth: drawnHalfWidthAt(halfWidth, axis.style, t),
+            },
+            { ...domeLeaf, color: leafBladeColor(domeLeaf.color) },
+            stemColor,
+          );
+        })
+      : [];
+
+  // Non-showy bracts are small scales on the stem, alternating sides
+  const scaleBracts: LeafPlan[] = stemData
+    ? source.bractSources
+        .filter(b => !b.showy)
+        .map((b, i) => {
+          const pt = stemPointAt(axis, clamp(0.05, 0.98, b.position));
+          const side: Side = i % 2 === 0 ? "Left" : "Right";
+          return buildLeafPlan(
+            {
+              x: pt.x,
+              y: pt.y,
+              angle: sideHeading(pt.angle, side, SCALE_BRACT_RISE),
+              blade: stemLength * (0.05 + b.size * 0.07),
+              petiole: 0,
+              stemHalfWidth: halfWidth,
+            },
+            scaleBractBlade(b),
+            stemColor,
+          );
+        })
+    : [];
+
+  // ── Florets: one head on the tip, or the inflorescence's cluster of small ones ──
+  const reach = petalReach(primaryHead);
+  const layout: InflorescenceLayout = run(() => {
+    if (!stem) return solitaryLayout(null, 1, stage);
+    if (solitary) {
+      const diameter = clamp(
+        SOLITARY_DIAMETER[0] * stemLength,
+        SOLITARY_DIAMETER[1] * stemLength,
+        2 * reach,
+      );
+      return solitaryLayout(stem, diameter / (2 * reach), stage);
+    }
+    return layoutInflorescence({
+      ...parsed.inflorescence,
+      stem,
+      headRadius: reach,
+      stage,
+      sid,
+    });
+  });
+  const keys = headKeys(layout.florets, { stage, back: false });
+  const [, ...secondaryKeys] = keys;
+  const heads: [HeadPlan, ...HeadPlan[]] = [
+    primaryHead,
+    ...secondaryKeys.map(k => buildHead(source, k.stage, k.back)),
+  ];
+  const [firstFloret, ...otherFlorets] = layout.florets;
+  const place = (f: Floret): PlacedFloret => ({
+    ...f,
+    head: keys.findIndex(k => sameKey(k, f)),
+  });
+  const florets: [PlacedFloret, ...PlacedFloret[]] = [
+    place(firstFloret),
+    ...otherFlorets.map(place),
+  ];
+
+  const anchorScale =
+    florets.find(f => f.head === 0)?.scale ?? firstFloret.scale;
+  const buds: BudPlan[] = stem
+    ? generateBuds(parseBuds(raw), {
+        axis,
+        stemHalfWidth: stem.halfWidth,
+        stemColor: stem.color,
+        headReach: primaryHead.reach * anchorScale,
+        shellColor: primaryHead.sepals[0]?.color ?? DEFAULT_SEPAL_COLOR,
+        petalColor: baseColor,
+      })
+    : [];
+
+  const particles = [
+    ...generateParticleSeeds(effects.particles, sid),
+    ...(parsed.center.pollen && STAGE_PROFILES[stage].throatOpen
+      ? generatePollenSeeds(
+          parsed.center.pollen,
+          primaryHead.center.stamens,
+          primaryHead.center.discRadius,
+          sid,
+        )
+      : []),
+  ];
+
+  const allLeaves = [...leaves, ...domeLeaves, ...scaleBracts];
+  const floretBounds = (f: PlacedFloret): Bounds =>
+    circleBounds(
+      f.offsetX,
+      f.offsetY,
+      (heads[f.head] ?? primaryHead).reach * f.scale,
+    );
+  const bounds = [
+    ...florets.slice(1).map(floretBounds),
+    cmdsBounds(stem?.cmds ?? []),
+    ...(stem?.thorns.map(t => cmdsBounds(t.cmds)) ?? []),
+    ...layout.branches.map(b => cmdsBounds(b.fill)),
+    ...florets.map(f => cmdsBounds(f.stalk?.fill ?? [])),
+    ...allLeaves.flatMap(l => [
+      cmdsBounds(l.cmds),
+      cmdsBounds(l.petiole?.fill ?? []),
+    ]),
+    ...buds.flatMap(b => [cmdsBounds(b.shell), cmdsBounds(b.pedicel)]),
+  ].reduce(unionBounds, floretBounds(florets[0]));
+
+  return {
+    heads,
     stem,
     leaves: allLeaves,
     buds,
-    dewdrops,
     aura: effects.aura,
     particles,
-    bio,
     florets,
-    pedicels,
+    branches: layout.branches,
     bounds,
   };
 }
@@ -1924,7 +2225,6 @@ type ParsedStem = {
   color: number;
   style: StemStyle;
   surface: SurfaceTexture;
-  branching: BranchPattern;
 };
 
 /** The Rust `Stem` defaults; arrangements fall back to them when a member spec has no stem. */
@@ -1935,7 +2235,6 @@ const DEFAULT_STEM: ParsedStem = {
   color: 0x2d5a27,
   style: STEM_STYLES[0],
   surface: SURFACE_TEXTURES[0],
-  branching: BRANCH_PATTERNS[0],
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1951,7 +2250,6 @@ function parseSpecStem(spec: any): ParsedStem | null {
       color: colorToHex(stem.color) ?? DEFAULT_STEM.color,
       style: variantOr(STEM_STYLES, stem.style),
       surface: variantOr(SURFACE_TEXTURES, stem.surface),
-      branching: variantOr(BRANCH_PATTERNS, stem.branching),
     };
   } catch {
     return null;
@@ -2008,7 +2306,7 @@ function parseFoliage(spec: any): ParsedLeaf[] {
       droop: l.droop ?? 0,
       curl: l.curl ?? 0,
       translucency: l.translucency ?? 0.5,
-      position: clamp(0.25, 0.85, l.position ?? 0.5),
+      position: unitOr(l.position, 0.5),
       side: variantOr(SIDES, l.side),
       angleOffset: clamp(-0.3, 0.3, l.angle_offset ?? 0),
       variegation: {
@@ -2917,6 +3215,10 @@ export function createArrangementPlan(
     // stem in its spec still gets the default one
     const stemData = parseSpecStem(raw) ?? DEFAULT_STEM;
     const firstLeaf = parseFoliage(raw)[0];
+    const stemColor = plantStemColor(
+      firstLeaf?.color ?? DEFAULT_LEAF_COLOR,
+      stemData.color,
+    );
     const stemCurvature = stemData.curvature + slot.stemAngle * 0.3;
     // Extend stem slightly past the head center so the tip overlaps into the
     // flower head, covering the BASE_OFFSET gap between center and petal ring.
@@ -2938,7 +3240,8 @@ export function createArrangementPlan(
       stemCurvature,
       stemData.style,
     );
-    const stem = buildStemPlan(axis, stemData, null, sid);
+    const halfWidth = stemHalfWidth(stemDist, stemData.thickness);
+    const stem = buildStemPlan(axis, halfWidth, stemColor, stemData, null, sid);
 
     // One leaf per arrangement stem, placed mid-stem, smaller to avoid overlap
     const leaves: LeafPlan[] = firstLeaf
@@ -2946,10 +3249,19 @@ export function createArrangementPlan(
           // Place at 40-60% up the stem (avoid crowded base area)
           const pos = clamp(0.4, 0.6, l.position);
           const pt = stemPointAt(axis, pos);
-          const leafAngle =
-            sideHeading(pt.angle, l.side, LEAF_RISE) + l.angleOffset;
-          const leafScale = (0.2 + l.size * 0.15) * slot.scale;
-          return buildLeafPlan(pt.x, pt.y, leafAngle, leafScale, l);
+          const blade = stemDist * LEAF_BLADE[1] * slot.scale;
+          return buildLeafPlan(
+            {
+              x: pt.x,
+              y: pt.y,
+              angle: sideHeading(pt.angle, l.side, LEAF_RISE + l.angleOffset),
+              blade,
+              petiole: blade * LEAF_PETIOLE,
+              stemHalfWidth: drawnHalfWidthAt(halfWidth, stemData.style, pos),
+            },
+            { ...l, color: leafBladeColor(l.color) },
+            stemColor,
+          );
         })
       : [];
 

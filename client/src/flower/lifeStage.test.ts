@@ -52,7 +52,11 @@ function spec(o: Overrides = {}): string {
 const SID = 7;
 const plan = (o: Overrides = {}): FlowerPlan => createFlowerPlan(spec(o), SID);
 const outerReach = (p: FlowerPlan): number =>
-  Math.max(...(p.layers[0]?.petals.map(petal => cmdsReach(petal.cmds)) ?? [0]));
+  Math.max(
+    ...(p.heads[0].layers[0]?.petals.map(petal => cmdsReach(petal.cmds)) ?? [
+      0,
+    ]),
+  );
 const saturation = (color: number): number => {
   const channels = [(color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff];
   return Math.max(...channels) - Math.min(...channels);
@@ -63,10 +67,10 @@ describe("life stage", () => {
 
   test("Bud draws one closed shell of three to five petals and hides the centre", () => {
     const bud = plan({ stage: "Bud" });
-    expect(bud.center.stamens).toEqual([]);
-    expect(bud.center.discRadius).toBe(0);
-    expect(bud.layers).toHaveLength(1);
-    const shell = bud.layers[0]!.petals;
+    expect(bud.heads[0].center.stamens).toEqual([]);
+    expect(bud.heads[0].center.discRadius).toBe(0);
+    expect(bud.heads[0].layers).toHaveLength(1);
+    const shell = bud.heads[0].layers[0]!.petals;
     expect(shell.length).toBeGreaterThanOrEqual(3);
     expect(shell.length).toBeLessThanOrEqual(5);
     expect(outerReach(bud)).toBeLessThan(outerReach(bloom));
@@ -75,56 +79,66 @@ describe("life stage", () => {
 
   test("the Bud shell stays inside its sepals", () => {
     const bud = plan({ stage: "Bud" });
-    const sepalReach = Math.max(...bud.sepals.map(s => cmdsReach(s.cmds)));
+    const sepalReach = Math.max(
+      ...bud.heads[0].sepals.map(s => cmdsReach(s.cmds)),
+    );
     expect(outerReach(bud)).toBeLessThan(sepalReach);
     expect(outerReach(bloom)).toBeGreaterThan(
-      Math.max(...bloom.sepals.map(s => cmdsReach(s.cmds))),
+      Math.max(...bloom.heads[0].sepals.map(s => cmdsReach(s.cmds))),
     );
   });
 
   test("Opening keeps the outer layer only, shorter than the bloom", () => {
     const opening = plan({ stage: "Opening" });
-    expect(opening.layers).toHaveLength(1);
-    expect(opening.layers[0]!.petals).toHaveLength(8);
+    expect(opening.heads[0].layers).toHaveLength(1);
+    expect(opening.heads[0].layers[0]!.petals).toHaveLength(8);
     expect(outerReach(opening)).toBeLessThan(outerReach(bloom));
-    expect(opening.center.stamens.length).toBe(bloom.center.stamens.length);
+    expect(opening.heads[0].center.stamens.length).toBe(
+      bloom.heads[0].center.stamens.length,
+    );
   });
 
   test("Bloom is unchanged: two layers, all petals, stamens and pollen", () => {
-    expect(bloom.layers).toHaveLength(2);
-    expect(bloom.layers.map(l => l.petals.length)).toEqual([8, 5]);
-    expect(bloom.center.stamens).toHaveLength(6);
+    expect(bloom.heads[0].layers).toHaveLength(2);
+    expect(bloom.heads[0].layers.map(l => l.petals.length)).toEqual([8, 5]);
+    expect(bloom.heads[0].center.stamens).toHaveLength(6);
     expect(bloom.particles.filter(p => p.kind === "Pollen")).toHaveLength(8);
   });
 
   test("Fading lowers opacity, drops about a fifth of the petals and grays them", () => {
     const fading = plan({ stage: "Fading" });
-    expect(fading.layers[0]!.opacity).toBeLessThan(bloom.layers[0]!.opacity);
-    expect(fading.layers.map(l => l.petals.length)).toEqual([
+    expect(fading.heads[0].layers[0]!.opacity).toBeLessThan(
+      bloom.heads[0].layers[0]!.opacity,
+    );
+    expect(fading.heads[0].layers.map(l => l.petals.length)).toEqual([
       fadedCount(8),
       fadedCount(5),
     ]);
     expect(fadedCount(8)).toBe(6);
     expect(fadedCount(1)).toBe(1);
-    expect(saturation(fading.layers[0]!.petals[0]!.color)).toBeLessThan(
-      saturation(bloom.layers[0]!.petals[0]!.color),
-    );
+    expect(
+      saturation(fading.heads[0].layers[0]!.petals[0]!.color),
+    ).toBeLessThan(saturation(bloom.heads[0].layers[0]!.petals[0]!.color));
   });
 
   test("SeedHead has no petal layers and a receptacle larger than the bloom's", () => {
     const seedHead = plan({ stage: "SeedHead" });
-    expect(seedHead.layers).toEqual([]);
-    expect(seedHead.center.discRadius).toBeGreaterThan(bloom.center.discRadius);
-    expect(seedHead.center.stamens).toEqual([]);
-    expect(seedHead.center.seedHead).not.toBeNull();
-    expect(seedHead.center.seedHead!.stipple.length).toBeGreaterThan(0);
-    expect(bloom.center.seedHead).toBeNull();
+    expect(seedHead.heads[0].layers).toEqual([]);
+    expect(seedHead.heads[0].center.discRadius).toBeGreaterThan(
+      bloom.heads[0].center.discRadius,
+    );
+    expect(seedHead.heads[0].center.stamens).toEqual([]);
+    expect(seedHead.heads[0].center.seedHead).not.toBeNull();
+    expect(seedHead.heads[0].center.seedHead!.stipple.length).toBeGreaterThan(
+      0,
+    );
+    expect(bloom.heads[0].center.seedHead).toBeNull();
   });
 
   test("disc families carry a pappus, every other family carries seed marks", () => {
-    const aster = plan({ stage: "SeedHead", family: "Asteraceae" }).center
-      .seedHead!;
-    const rose = plan({ stage: "SeedHead", family: "Rosaceae" }).center
+    const aster = plan({ stage: "SeedHead", family: "Asteraceae" }).heads[0]
+      .center.seedHead!;
+    const rose = plan({ stage: "SeedHead", family: "Rosaceae" }).heads[0].center
       .seedHead!;
     expect(hasPappus("Asteraceae")).toBe(true);
     expect(hasPappus("Apiaceae")).toBe(true);
@@ -146,7 +160,7 @@ describe("life stage", () => {
       spec().replace('"stage":"Bloom"', '"stage":"Wilting"'),
       SID,
     );
-    expect(odd.layers.map(l => l.petals.length)).toEqual([8, 5]);
+    expect(odd.heads[0].layers.map(l => l.petals.length)).toEqual([8, 5]);
   });
 
   for (const stage of LIFE_STAGES) {
@@ -213,7 +227,7 @@ describe("side buds", () => {
     const p = plan({ buds });
     expect(p.buds.map(b => b.petal.length > 0)).toEqual([false, true, false]);
     expect(p.buds[1]!.petalColor).toBe(colorFromSpec(0.9, 0.2, 0.4));
-    expect(p.buds[1]!.shellColor).toBe(p.sepals[0]!.color);
+    expect(p.buds[1]!.shellColor).toBe(p.heads[0].sepals[0]!.color);
   });
 
   test("a bud on the outside of a bowed stem widens the plan bounds", () => {
@@ -231,6 +245,8 @@ describe("side buds", () => {
       spec().replace('"stage":"Bloom",', ""),
       SID,
     );
-    expect(withoutStage.layers.map(l => l.petals.length)).toEqual([8, 5]);
+    expect(withoutStage.heads[0].layers.map(l => l.petals.length)).toEqual([
+      8, 5,
+    ]);
   });
 });

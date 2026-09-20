@@ -171,7 +171,7 @@ describe("createFlowerPlan fusion", () => {
       spec({ fusion: { kind: "Bell", depth: 0.6 } }),
       9,
     );
-    const layer = plan.layers[0]!;
+    const layer = plan.heads[0].layers[0]!;
     expect(layer.petals).toEqual([]);
     expect(layer.corolla).not.toBeNull();
     expect(layer.corolla!.lobes.length).toBe(5);
@@ -181,8 +181,8 @@ describe("createFlowerPlan fusion", () => {
   test("a free layer and a layer without fusion keep their petals", () => {
     for (const layer of [{}, { fusion: { kind: "Free", depth: 0.9 } }]) {
       const plan = createFlowerPlan(spec(layer), 9);
-      expect(plan.layers[0]!.corolla).toBeNull();
-      expect(plan.layers[0]!.petals.length).toBe(5);
+      expect(plan.heads[0].layers[0]!.corolla).toBeNull();
+      expect(plan.heads[0].layers[0]!.petals.length).toBe(5);
     }
   });
 
@@ -192,9 +192,9 @@ describe("createFlowerPlan fusion", () => {
       spec({ fusion: { kind: "Tube", depth: 0.5 } }),
       9,
     );
-    const throat = fused.layers[0]!.corolla!.throat.radius;
-    expect(free.center.discRadius).toBeGreaterThan(throat);
-    expect(fused.center.discRadius).toBe(throat);
+    const throat = fused.heads[0].layers[0]!.corolla!.throat.radius;
+    expect(free.heads[0].center.discRadius).toBeGreaterThan(throat);
+    expect(fused.heads[0].center.discRadius).toBe(throat);
   });
 
   test("lobes get the layer's pattern marks and color passes", () => {
@@ -206,7 +206,7 @@ describe("createFlowerPlan fusion", () => {
       }),
       9,
     );
-    const corollaPlan = plan.layers[0]!.corolla!;
+    const corollaPlan = plan.heads[0].layers[0]!.corolla!;
     expect(corollaPlan.lobes.every(lobe => lobe.marks.length === 1)).toBe(true);
     expect(corollaPlan.color).toBe(0xe64d80);
     expect(corollaPlan.throat.innerColor).toBeLessThan(corollaPlan.color);
@@ -221,8 +221,8 @@ describe("createFlowerPlan fusion", () => {
       spec({ fusion: { kind: "Funnel", depth: 1 } }),
       9,
     );
-    expect(over.layers[0]!.corolla!.bodyRadius).toBe(
-      full.layers[0]!.corolla!.bodyRadius,
+    expect(over.heads[0].layers[0]!.corolla!.bodyRadius).toBe(
+      full.heads[0].layers[0]!.corolla!.bodyRadius,
     );
   });
 });
