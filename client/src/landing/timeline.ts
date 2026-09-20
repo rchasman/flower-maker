@@ -1,7 +1,8 @@
 /**
  * The assembly line loop. Pure: the same time always yields the same sprites.
- * Frame coordinates are uv with y down. Arms are rigged: the timeline drives joint angles and
- * the rig turns them into link sprites and gripper positions.
+ * Frame coordinates are uv with y down. One tulip enters on the belt from the right, is lifted
+ * and checked by the first arm, wrapped under the second arm's paddle, carried up by the third
+ * and leaves to the left. Arms are rigged: joint angles become link sprites and gripper positions.
  */
 
 import { PLATES, plateIndex, type Point } from "./plates.ts";
@@ -15,21 +16,26 @@ import {
   type SpriteTransform,
 } from "./rig.ts";
 
-export const LOOP_SECONDS = 6;
+export const LOOP_SECONDS = 8;
 /** Width over height of the frame the transforms are laid out for. */
 export const DEFAULT_FRAME_ASPECT = 16 / 9;
 
-/** The belt runs right to left, so every arm works the belt on its left: pick, wrap, hand off. */
-const STATION_X = [0.78, 0.5, 0.22] as const;
-const BELT_Y = 0.66;
-const ARM_BASE_Y = 0.86;
-const ARM_BASE_DX = 0.06;
-const ARM_SCALE = 0.48;
+/** The belt runs right to left along the bottom of the frame; the copy lives above it. */
+const STATION_X = [0.85, 0.49, 0.13] as const;
+const BELT_Y = 0.8;
+const ARM_BASE_Y = 0.98;
+const ARM_SCALE = 0.42;
+/** Where an item rests on the belt surface. */
+const ITEM_Y = BELT_Y - 0.035;
+/** Where the tulip starts, just off the right edge. */
+const ENTRY_X = 1.15;
 
 const ARM_IDS = ["arm-pick", "arm-wrap", "arm-handoff"] as const;
 const ARM_PLATES = ARM_IDS.map(id => PLATES[plateIndex(id)]!);
-const PLACEMENTS: readonly ArmPlacement[] = STATION_X.map(x => ({
-  x: x + ARM_BASE_DX,
+/** Base offsets put each arm's rest gripper over its station; the paddle reaches further left. */
+const ARM_BASE_DX = [0.07, 0.13, 0.07] as const;
+const PLACEMENTS: readonly ArmPlacement[] = STATION_X.map((x, i) => ({
+  x: x + ARM_BASE_DX[i]!,
   y: ARM_BASE_Y,
   scale: ARM_SCALE,
 }));
@@ -42,23 +48,6 @@ const seg = (t: number, from: number, to: number) =>
 const lerp = (a: number, b: number, u: number) => a + (b - a) * u;
 const deg = (d: number) => (d * Math.PI) / 180;
 const wrap = (t: number) => ((t % LOOP_SECONDS) + LOOP_SECONDS) % LOOP_SECONDS;
-
-/**
- * 1 while something is present: fades in over [inFrom, inTo], out over [outFrom, outTo].
- * When the window straddles the loop seam (inFrom > outFrom) the early part of the loop
- * counts as still present, so t=0 and t=LOOP_SECONDS agree.
- */
-const present = (
-  t: number,
-  inFrom: number,
-  inTo: number,
-  outFrom: number,
-  outTo: number,
-) => {
-  if (inFrom <= outFrom) return seg(t, inFrom, inTo) - seg(t, outFrom, outTo);
-  if (t < outTo) return 1 - seg(t, outFrom, outTo);
-  return seg(t, inFrom, inTo);
-};
 
 const pose = (shoulder: number, elbow: number, wrist: number): ArmPose => ({
   shoulder: deg(shoulder),
@@ -87,50 +76,68 @@ const track = (t: number, keys: readonly Keyframe[]): ArmPose => {
 };
 
 /** Poses were fitted with a grid search over the rig so each gripper lands on its target. */
-/** Reaching down to the tray below the belt: shoulder leans out, elbow folds. */
-const REACH = pose(16, 30, -6);
-/** Setting the tulip down on the belt, a little higher than the tray. */
-const PLACE = pose(14, 12, -4);
-/** Paddle pressed down onto the belt. */
-const PRESS = pose(-4, 21, 6);
-/** Dipping to the belt to grab the bunch. */
-const GRAB = pose(16, 17, -6);
-/** Holding the bouquet up and out. */
-const HOLD = pose(14, -32, 4);
+/** Gripper down on the tulip at station one. */
+const PICK_DOWN = pose(-22, 44, 0);
+/** Tulip lifted for a look. */
+const PICK_UP = pose(-9, 8, 0);
+/** Paddle pressed onto the tulip at station two. */
+const PRESS = pose(-10, 28, 6);
+/** Gripper down on the wrapped bunch at station three. */
+const GRAB_DOWN = pose(-28, 50, 0);
+/** Bunch held up. */
+const GRAB_UP = pose(-11, 4, 0);
+
+/**
+ * The belt moves in four eased runs and stands still while an arm works. Everything on the
+ * belt, including the shader's stripes, follows this travel, so nothing slides under a gripper.
+ */
+const BELT_RUNS: readonly (readonly [number, number, number])[] = [
+  [0, 1.0, 0.3],
+  [2.4, 3.6, 0.36],
+  [4.7, 5.9, 0.36],
+  [7.6, 8.0, 0.12],
+];
+
+/** Distance the belt has carried since the loop started. */
+export const beltTravel = (t: number): number =>
+  BELT_RUNS.reduce(
+    (sum, [from, to, distance]) => sum + distance * seg(t, from, to),
+    0,
+  );
+
+const LOOP_TRAVEL = BELT_RUNS.reduce((sum, run) => sum + run[2], 0);
 
 const PICK_TRACK: readonly Keyframe[] = [
-  [0, REACH],
-  [0.9, REACH],
-  [1.5, REST],
-  [2.1, PLACE],
-  [2.6, PLACE],
-  [3.4, REST],
-  [4.8, REST],
-  [5.4, REACH],
-  [LOOP_SECONDS, REACH],
+  [0, REST],
+  [1.0, REST],
+  [1.5, PICK_DOWN],
+  [1.9, PICK_UP],
+  [2.0, PICK_UP],
+  [2.4, PICK_DOWN],
+  [2.9, REST],
+  [LOOP_SECONDS, REST],
 ];
 
 const WRAP_TRACK: readonly Keyframe[] = [
   [0, REST],
-  [3.4, REST],
-  [3.9, PRESS],
+  [3.6, REST],
+  [4.0, PRESS],
   [4.3, PRESS],
-  [4.8, REST],
+  [4.7, REST],
   [LOOP_SECONDS, REST],
 ];
 
 const HANDOFF_TRACK: readonly Keyframe[] = [
-  [0, GRAB],
-  [0.2, GRAB],
-  [0.8, HOLD],
-  [3.0, HOLD],
-  [3.6, REST],
-  [5.4, REST],
-  [5.8, GRAB],
-  [LOOP_SECONDS, GRAB],
+  [0, REST],
+  [5.9, REST],
+  [6.3, GRAB_DOWN],
+  [6.8, GRAB_UP],
+  [7.1, GRAB_UP],
+  [7.5, GRAB_DOWN],
+  [8.0, REST],
 ];
 
-/** Joint angles of the three arms at time `t` (already wrapped into the loop). */
+/** Joint angles of the three arms at time `t`. */
 export const armPoses = (
   time: number,
 ): readonly [ArmPose, ArmPose, ArmPose] => {
@@ -139,7 +146,7 @@ export const armPoses = (
 };
 
 const item = (
-  id: "tulip" | "bunch" | "bouquet",
+  id: "tulip" | "bunch",
   [x, y]: Point,
   scale: number,
   visible: number,
@@ -161,43 +168,42 @@ const belt: SpriteTransform = {
   y: BELT_Y,
   pivot: PLATES[plateIndex("belt")]!.pivot,
   angle: 0,
-  scale: 0.95,
+  scale: 1.19,
   visible: 1,
   cutA: NO_CUT,
   cutB: NO_CUT,
 };
 
 /** Held objects hang a little below the gripper tip. */
-const HELD_DROP = 0.03;
+const HELD_DROP = 0.02;
 
+const tip = (arm: number, armPose: ArmPose, frameAspect: number): Point =>
+  armTip(ARM_PLATES[arm]!, PLACEMENTS[arm]!, armPose, frameAspect);
+
+/** The tulip rides in from the right, is lifted at station one, and is wrapped at station two. */
 const tulip = (t: number, pickPose: ArmPose, frameAspect: number) => {
-  const held = armTip(ARM_PLATES[0]!, PLACEMENTS[0]!, pickPose, frameAspect);
-  const released = armTip(ARM_PLATES[0]!, PLACEMENTS[0]!, PLACE, frameAspect);
-  const ride = seg(t, 2.6, 4.0);
-  const onBelt = t >= 2.6 && t < 4.3;
-  const x = onBelt ? lerp(released[0], STATION_X[1], ride) : held[0];
-  const y = onBelt
-    ? lerp(released[1] + HELD_DROP, BELT_Y - 0.04, seg(t, 2.6, 2.9))
-    : held[1] + HELD_DROP;
-  return item("tulip", [x, y], 0.2, present(t, 0.6, 0.9, 3.9, 4.2));
+  const onBelt: Point = [ENTRY_X - beltTravel(t), ITEM_Y];
+  const held = t >= 1.5 && t < 2.4;
+  const [gx, gy] = tip(0, pickPose, frameAspect);
+  const position: Point = held ? [gx, gy + HELD_DROP] : onBelt;
+  return item("tulip", position, 0.22, 1 - seg(t, 4.05, 4.25));
 };
 
-const bunch = (t: number) =>
-  item(
-    "bunch",
-    [lerp(STATION_X[1], STATION_X[2] + 0.08, seg(t, 4.3, 5.6)), BELT_Y - 0.05],
-    0.2,
-    present(t, 4.0, 4.3, 5.5, 5.8),
-  );
-
-const bouquet = (t: number, handoffPose: ArmPose, frameAspect: number) => {
-  const [x, y] = armTip(
-    ARM_PLATES[2]!,
-    PLACEMENTS[2]!,
-    handoffPose,
-    frameAspect,
-  );
-  return item("bouquet", [x, y + 0.06], 0.24, present(t, 5.6, 5.9, 3.0, 3.4));
+/**
+ * The bunch appears under the paddle where the tulip was, rides to station three, is carried up
+ * and set down, then leaves left; the tail of its exit runs into the start of the next loop.
+ */
+const bunch = (t: number, handoffPose: ArmPose, frameAspect: number) => {
+  const travelSinceWrap =
+    t < 4.05
+      ? LOOP_TRAVEL - beltTravel(4.05) + beltTravel(t)
+      : beltTravel(t) - beltTravel(4.05);
+  const onBelt: Point = [STATION_X[1] - travelSinceWrap, ITEM_Y];
+  const held = t >= 6.3 && t < 7.5;
+  const [gx, gy] = tip(2, handoffPose, frameAspect);
+  const position: Point = held ? [gx, gy + HELD_DROP] : onBelt;
+  const stillLeaving = t < 1.4;
+  return item("bunch", position, 0.26, stillLeaving ? 1 : seg(t, 4.05, 4.25));
 };
 
 export const timeline = (
@@ -218,10 +224,9 @@ export const timeline = (
       ),
     ),
     tulip(t, poses[0], frameAspect),
-    bunch(t),
-    bouquet(t, poses[2], frameAspect),
+    bunch(t, poses[2], frameAspect),
   ];
 };
 
-export const SPRITE_COUNT = 1 + ARM_IDS.length * 4 + 3;
+export const SPRITE_COUNT = 1 + ARM_IDS.length * 4 + 2;
 export type { SpriteTransform } from "./rig.ts";

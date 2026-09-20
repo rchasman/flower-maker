@@ -10,14 +10,14 @@ import { PNG } from "pngjs";
 import { resolveShader } from "@vgpu/wgsl/runtime";
 import { effect, init, sampler, target, texture } from "vgpu/node";
 import { PLATES } from "../src/landing/plates.ts";
-import { timeline } from "../src/landing/timeline.ts";
+import { beltTravel, timeline } from "../src/landing/timeline.ts";
 import { spriteUniforms } from "../src/gpu/startAssemblyLine.ts";
 
 const ART_DIR = join(import.meta.dirname, "../public/art");
 const SHADER = join(import.meta.dirname, "../src/gpu/line.wgsl");
 const SIZE: readonly [number, number] = [1920, 1080];
-const PIXEL = 3;
-const CONTRAST = 1.3;
+const PIXEL = 2;
+const CONTRAST = 1.15;
 
 const { values } = parseArgs({
   options: {
@@ -61,7 +61,7 @@ const line = effect(gpu, wgsl, {
       pixel: PIXEL,
       reveal: 1,
       contrast: CONTRAST,
-      time: FROZEN_AT_SECONDS,
+      travel: beltTravel(FROZEN_AT_SECONDS),
       resolution: SIZE,
     },
     sprites: spriteUniforms(

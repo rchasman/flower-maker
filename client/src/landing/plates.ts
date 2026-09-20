@@ -5,7 +5,6 @@ export const SPRITE_IDS = [
   "arm-handoff",
   "tulip",
   "bunch",
-  "bouquet",
 ] as const;
 
 export type SpriteId = (typeof SPRITE_IDS)[number];
@@ -39,13 +38,13 @@ const PLATE_LIST: readonly Plate[] = [
     id: "belt",
     prompt: `A long empty black rubber conveyor belt segment on a dark steel frame, seen from the side at eye level, running horizontally across the full width of the frame in the lower third, rollers visible at each end. ${STYLE}`,
     pivot: [0.5, 0.56],
-    exposure: 2.0,
+    exposure: 1.2,
   },
   {
     id: "arm-pick",
     prompt: `An industrial six-axis robot arm in dark grey metal, bolted to a round base flange at the bottom centre of the frame, reaching up and to the left with an open two-finger gripper, full arm visible. ${STYLE}`,
     pivot: [0.51, 0.91],
-    exposure: 2.4,
+    exposure: 2.8,
     joints: [
       [0.51, 0.91],
       [0.49, 0.66],
@@ -58,7 +57,7 @@ const PLATE_LIST: readonly Plate[] = [
     id: "arm-wrap",
     prompt: `An industrial six-axis robot arm in dark grey metal, bolted to a round base flange at the bottom centre of the frame, reaching up and to the left with a flat paddle end effector held level, full arm visible. ${STYLE}`,
     pivot: [0.57, 0.91],
-    exposure: 2.4,
+    exposure: 2.8,
     joints: [
       [0.57, 0.91],
       [0.55, 0.63],
@@ -71,7 +70,7 @@ const PLATE_LIST: readonly Plate[] = [
     id: "arm-handoff",
     prompt: `An industrial six-axis robot arm in dark grey metal, bolted to a round base flange at the bottom centre of the frame, reaching up and to the left with a closed two-finger gripper, full arm visible. ${STYLE}`,
     pivot: [0.53, 0.91],
-    exposure: 2.4,
+    exposure: 2.8,
     joints: [
       [0.53, 0.91],
       [0.52, 0.66],
@@ -90,12 +89,6 @@ const PLATE_LIST: readonly Plate[] = [
     id: "bunch",
     prompt: `A small hand-tied bunch of five white tulips wrapped in a kraft paper cone, lying horizontally with the blooms to the left, centred in the frame. ${STYLE}`,
     pivot: [0.5, 0.53],
-    exposure: 1.6,
-  },
-  {
-    id: "bouquet",
-    prompt: `A finished round bouquet of white tulips and eucalyptus wrapped in kraft paper with a dark ribbon, standing upright, centred in the frame. ${STYLE}`,
-    pivot: [0.49, 0.8],
     exposure: 1.6,
   },
 ];

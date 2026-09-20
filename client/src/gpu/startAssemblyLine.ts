@@ -5,11 +5,15 @@ import { loadImageTexture, type ImageTexture } from "./imageTexture.ts";
 import { trackPointer } from "./pointerTrail.ts";
 import { createTrail } from "./trail.ts";
 import { artUrl, type Plate } from "../landing/plates.ts";
-import { SPRITE_COUNT, type SpriteTransform } from "../landing/timeline.ts";
+import {
+  beltTravel,
+  SPRITE_COUNT,
+  type SpriteTransform,
+} from "../landing/timeline.ts";
 
 const REVEAL_SECONDS = 2;
-const PIXEL = 3;
-const CONTRAST = 1.3;
+const PIXEL = 2;
+const CONTRAST = 1.15;
 
 type Vec4 = readonly [number, number, number, number];
 
@@ -111,7 +115,7 @@ export const startAssemblyLine = (
       pixel: PIXEL,
       reveal,
       contrast: CONTRAST,
-      time,
+      travel: beltTravel(time),
       resolution: canvasSurface.size,
     });
 

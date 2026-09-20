@@ -9,7 +9,8 @@ struct Params {
   pixel: f32,
   reveal: f32,
   contrast: f32,
-  time: f32,
+  /** Distance the belt has travelled, in frame uv, so the stripes stop when the belt stops. */
+  travel: f32,
   resolution: vec2f,
 }
 
@@ -23,19 +24,18 @@ struct Sprite {
   cutB: vec4f,
 }
 
-const SPRITE_COUNT = 16u;
+const SPRITE_COUNT = 15u;
 
 @group(0) @binding(0) var<uniform> params: Params;
-@group(0) @binding(1) var<uniform> sprites: array<Sprite, 16>;
+@group(0) @binding(1) var<uniform> sprites: array<Sprite, 15>;
 @group(0) @binding(2) var tex0: texture_2d<f32>;
 @group(0) @binding(3) var tex1: texture_2d<f32>;
 @group(0) @binding(4) var tex2: texture_2d<f32>;
 @group(0) @binding(5) var tex3: texture_2d<f32>;
 @group(0) @binding(6) var tex4: texture_2d<f32>;
 @group(0) @binding(7) var tex5: texture_2d<f32>;
-@group(0) @binding(8) var tex6: texture_2d<f32>;
-@group(0) @binding(9) var samp: sampler;
-@group(0) @binding(10) var trail: texture_2d<f32>;
+@group(0) @binding(8) var samp: sampler;
+@group(0) @binding(9) var trail: texture_2d<f32>;
 
 struct Sample {
   lum: f32,
@@ -58,8 +58,7 @@ fn sampleTex(index: u32, uv: vec2f) -> vec3f {
     case 2u: { return textureSampleLevel(tex2, samp, uv, 0.0).rgb; }
     case 3u: { return textureSampleLevel(tex3, samp, uv, 0.0).rgb; }
     case 4u: { return textureSampleLevel(tex4, samp, uv, 0.0).rgb; }
-    case 5u: { return textureSampleLevel(tex5, samp, uv, 0.0).rgb; }
-    default: { return textureSampleLevel(tex6, samp, uv, 0.0).rgb; }
+    default: { return textureSampleLevel(tex5, samp, uv, 0.0).rgb; }
   }
 }
 
@@ -82,10 +81,10 @@ fn keep(cut: vec4f, uv: vec2f) -> f32 {
   return step(0.0, dot(uv - cut.xy, cut.zw));
 }
 
-// The belt surface carries a moving stripe so the line reads as running.
+// The belt surface carries stripes that move with the belt's travel, so they stop with it.
 fn beltStripes(uv: vec2f) -> f32 {
   let onSurface = step(0.52, uv.y) * step(uv.y, 0.6);
-  let stripe = step(0.5, fract(uv.x * 28.0 - params.time * 0.35));
+  let stripe = step(0.5, fract(uv.x * 28.0 + params.travel * 16.0));
   return 1.0 - onSurface * 0.35 * stripe;
 }
 
