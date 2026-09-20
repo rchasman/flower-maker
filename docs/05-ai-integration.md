@@ -35,12 +35,12 @@ to every model. The pipeline lives in `api/flower/`:
 {
   "prompt": "a bioluminescent orchid with frost aura",
   "template_name": "Orchid",
-  "model": "google/gemini-3.1-flash-lite"
+  "model": "typesafe-ai/jev"
 }
 ```
 
 `template_name` is optional. `model` defaults to `DEFAULT_MODEL`
-(`google/gemini-3.1-flash-lite`) and is a full gateway id.
+(`typesafe-ai/jev`) and is a full gateway id.
 
 ### Stage one
 
@@ -248,7 +248,7 @@ sends:
   "total_count": 5,
   "level": "bunch",
   "parent_adornments": [{ "...arrangement override of a parent": true }],
-  "model": "google/gemini-3.1-flash-lite"
+  "model": "typesafe-ai/jev"
 }
 ```
 

@@ -8,6 +8,9 @@ export interface ModelConfig {
 }
 
 export const MODELS = [
+  // TypeSafe (evaluation model: answers typed questions, does not stream text)
+  { id: "jev", fullName: "typesafe-ai/jev", provider: "typesafe-ai" },
+
   // Anthropic
   {
     id: "claude-haiku-4.5",
@@ -81,9 +84,6 @@ export const MODELS = [
     fullName: "alibaba/qwen3.5-flash",
     provider: "alibaba",
   },
-
-  // TypeSafe (evaluation model: answers typed questions, does not stream text)
-  { id: "jev", fullName: "typesafe-ai/jev", provider: "typesafe-ai" },
 ] as const satisfies readonly ModelConfig[];
 
 export type ModelId = (typeof MODELS)[number]["id"];
@@ -93,6 +93,6 @@ export const MODEL_MAP: Record<string, string> = Object.fromEntries(
   MODELS.map(m => [m.id, m.fullName]),
 );
 
-export const DEFAULT_MODEL = "google/gemini-3.1-flash-lite";
+export const DEFAULT_MODEL = "typesafe-ai/jev";
 
 export const JEV_MODEL = "typesafe-ai/jev";

@@ -53,7 +53,7 @@ describe("handleGenerateWith", () => {
   test("the default model is used when the body names none", async () => {
     const sourceFor = mock((_modelId: string) => stagedSource([], []));
     await handleGenerateWith(sourceFor)(post({ prompt: "anything" }));
-    expect(sourceFor.mock.calls).toEqual([["google/gemini-3.1-flash-lite"]]);
+    expect(sourceFor.mock.calls).toEqual([["typesafe-ai/jev"]]);
   });
 
   test("a failure after the first line is written as an error line", async () => {

@@ -8,6 +8,7 @@ export interface ModelConfig {
 
 // Mirrored from api/config/models.ts — kept client-side to avoid cross-workspace import
 const MODELS: ModelConfig[] = [
+  { id: "jev", fullName: "typesafe-ai/jev", provider: "typesafe-ai" },
   {
     id: "claude-haiku-4.5",
     fullName: "anthropic/claude-haiku-4.5",
@@ -64,10 +65,9 @@ const MODELS: ModelConfig[] = [
     fullName: "alibaba/qwen3.5-flash",
     provider: "alibaba",
   },
-  { id: "jev", fullName: "typesafe-ai/jev", provider: "typesafe-ai" },
 ];
 
-export const DEFAULT_MODEL = "google/gemini-3.1-flash-lite";
+export const DEFAULT_MODEL = "typesafe-ai/jev";
 
 const PROVIDER_COLORS: Record<string, string> = {
   anthropic: "#a78bfa",
