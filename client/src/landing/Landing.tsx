@@ -3,6 +3,8 @@ import { motion } from "motion/react";
 import { useAuth } from "react-oidc-context";
 import { useSession } from "../session/SessionProvider.tsx";
 import { AssemblyLineCanvas } from "./AssemblyLineCanvas.tsx";
+import { SignedInLoader } from "./SignedInLoader.tsx";
+import { signedInLoadStage } from "./loadStage.ts";
 
 interface LandingProps {
   children: ReactNode;
@@ -15,7 +17,7 @@ const MAX_NAME_LENGTH = 32;
  * until then the animated assembly line runs behind a centred invitation to pick a name.
  */
 export function Landing({ children }: LandingProps) {
-  const { state, conn, myUser } = useSession();
+  const { state, conn, myUser, authLoading, claimPending } = useSession();
   const auth = useAuth();
   const [draft, setDraft] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -24,6 +26,12 @@ export function Landing({ children }: LandingProps) {
   if (myUser?.name) return <>{children}</>;
 
   const connected = state === "connected" && conn !== null;
+  const loadStage = signedInLoadStage({
+    authLoading,
+    isAuthenticated: auth.isAuthenticated,
+    state,
+    claimPending,
+  });
 
   const handleSubmit = () => {
     if (!conn) return;
@@ -68,116 +76,133 @@ export function Landing({ children }: LandingProps) {
         <ConnectionLabel state={state} />
       </header>
 
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: "62%",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          textAlign: "center",
-          padding: "3rem 1.5rem 0",
-        }}
-      >
-        <span className="label" style={{ marginBottom: "1.25rem" }}>
-          An experimental multiplayer garden
-        </span>
-
-        <h1
+      {loadStage ? (
+        <SignedInLoader stage={loadStage} greeting={oidcGreeting(auth.user)} />
+      ) : (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
           style={{
-            fontFamily: "var(--font-serif)",
-            fontWeight: 400,
-            fontSize: "clamp(2.5rem, 5.5vw, 4.75rem)",
-            lineHeight: 1.02,
-            letterSpacing: "-0.02em",
-            color: "var(--text-primary)",
-            maxWidth: "22ch",
-            marginBottom: "1.25rem",
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: "62%",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            textAlign: "center",
+            padding: "3rem 1.5rem 0",
           }}
         >
-          Stream flowers into a realtime multiplayer garden.
-        </h1>
+          <span className="label" style={{ marginBottom: "1.25rem" }}>
+            An experimental multiplayer garden
+          </span>
 
-        <p
-          style={{
-            fontFamily: "var(--font-sans)",
-            fontSize: "1.0625rem",
-            lineHeight: 1.6,
-            color: "var(--text-secondary)",
-            maxWidth: "40ch",
-            marginBottom: "1.75rem",
-          }}
-        >
-          Every stem is generated from real botany as you watch, and grows live
-          beside what everyone else is streaming in.
-        </p>
-
-        <form
-          onSubmit={e => {
-            e.preventDefault();
-            handleSubmit();
-          }}
-          style={{ display: "flex", gap: "0.5rem", width: "min(100%, 26rem)" }}
-        >
-          <input
-            type="text"
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            placeholder={connected ? "Your name" : "Connecting"}
-            maxLength={MAX_NAME_LENGTH}
-            autoFocus
-            disabled={!connected || submitting}
-            className="input"
-            style={{ flex: 1 }}
-          />
-          <button
-            type="submit"
-            disabled={!connected || submitting || !draft.trim()}
-            className="btn btn-primary"
+          <h1
+            style={{
+              fontFamily: "var(--font-serif)",
+              fontWeight: 400,
+              fontSize: "clamp(2.5rem, 5.5vw, 4.75rem)",
+              lineHeight: 1.02,
+              letterSpacing: "-0.02em",
+              color: "var(--text-primary)",
+              maxWidth: "22ch",
+              marginBottom: "1.25rem",
+            }}
           >
-            Step in
-          </button>
-        </form>
+            Stream flowers into a realtime multiplayer garden.
+          </h1>
 
-        {error && (
           <p
             style={{
-              marginTop: "0.75rem",
-              fontSize: "var(--font-size-sm)",
-              color: "var(--negative)",
+              fontFamily: "var(--font-sans)",
+              fontSize: "1.0625rem",
+              lineHeight: 1.6,
+              color: "var(--text-secondary)",
+              maxWidth: "40ch",
+              marginBottom: "1.75rem",
             }}
           >
-            {error}
+            Every stem is generated from real botany as you watch, and grows
+            live beside what everyone else is streaming in.
           </p>
-        )}
 
-        {!auth.isAuthenticated && (
-          <button
-            onClick={() => auth.signinRedirect()}
-            className="label"
+          <form
+            onSubmit={e => {
+              e.preventDefault();
+              handleSubmit();
+            }}
             style={{
-              marginTop: "1.5rem",
-              background: "none",
-              border: "none",
-              padding: 0,
-              cursor: "pointer",
-              textDecoration: "underline",
-              textUnderlineOffset: "0.25em",
+              display: "flex",
+              gap: "0.5rem",
+              width: "min(100%, 26rem)",
             }}
           >
-            Sign in with SpacetimeAuth
-          </button>
-        )}
-      </motion.div>
+            <input
+              type="text"
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              placeholder={connected ? "Your name" : "Connecting"}
+              maxLength={MAX_NAME_LENGTH}
+              autoFocus
+              disabled={!connected || submitting}
+              className="input"
+              style={{ flex: 1 }}
+            />
+            <button
+              type="submit"
+              disabled={!connected || submitting || !draft.trim()}
+              className="btn btn-primary"
+            >
+              Step in
+            </button>
+          </form>
+
+          {error && (
+            <p
+              style={{
+                marginTop: "0.75rem",
+                fontSize: "var(--font-size-sm)",
+                color: "var(--negative)",
+              }}
+            >
+              {error}
+            </p>
+          )}
+
+          {!auth.isAuthenticated && (
+            <button
+              onClick={() => auth.signinRedirect()}
+              className="label"
+              style={{
+                marginTop: "1.5rem",
+                background: "none",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                textDecoration: "underline",
+                textUnderlineOffset: "0.25em",
+              }}
+            >
+              Sign in with SpacetimeAuth
+            </button>
+          )}
+        </motion.div>
+      )}
     </div>
   );
+}
+
+function oidcGreeting(
+  user: { profile?: Record<string, unknown> } | null | undefined,
+): string | null {
+  const profile = user?.profile;
+  if (!profile) return null;
+  const name = profile.name ?? profile.preferred_username ?? profile.email;
+  return typeof name === "string" && name.length > 0 ? name : null;
 }
 
 function ConnectionLabel({ state }: { state: string }) {
