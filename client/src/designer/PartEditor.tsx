@@ -96,7 +96,7 @@ const TAXONOMY: TaxonomySection[] = [
   {
     key: "petals",
     label: "PETALS",
-    accent: "var(--tui-purple)",
+    accent: "var(--accent)",
     fields: [
       pick("petals.layers.0.shape", "shape", PETAL_SHAPES),
       pick("petals.layers.0.arrangement", "arrangement", PETAL_ARRANGEMENTS),
@@ -122,7 +122,7 @@ const TAXONOMY: TaxonomySection[] = [
   {
     key: "structure",
     label: "STRUCTURE",
-    accent: "var(--tui-green)",
+    accent: "var(--positive)",
     fields: [
       num("structure.stem.height", "stem height", 0, 3, 0.05),
       num("structure.stem.thickness", "stem width", 0, 1, 0.02),
@@ -147,7 +147,7 @@ const TAXONOMY: TaxonomySection[] = [
   {
     key: "reproductive",
     label: "REPRODUCTIVE",
-    accent: "var(--tui-amber)",
+    accent: "var(--text-tertiary)",
     fields: [
       num("reproductive.stamens.0.height", "stamen height", 0, 2, 0.05),
       num("reproductive.pistil.height", "pistil height", 0, 2, 0.05),
@@ -161,7 +161,7 @@ const TAXONOMY: TaxonomySection[] = [
   {
     key: "foliage",
     label: "FOLIAGE",
-    accent: "var(--tui-green)",
+    accent: "var(--positive)",
     fields: [
       pick("foliage.leaves.0.shape", "leaf shape", LEAF_SHAPES),
       pick("foliage.leaves.0.serration", "serration", SERRATIONS),
@@ -180,7 +180,7 @@ const TAXONOMY: TaxonomySection[] = [
   {
     key: "effects",
     label: "EFFECTS",
-    accent: "var(--tui-cyan)",
+    accent: "var(--accent)",
     fields: [
       pick("aura.kind", "aura", AURA_KINDS),
       unit("aura.opacity", "aura opacity"),
@@ -205,7 +205,7 @@ const TAXONOMY: TaxonomySection[] = [
   {
     key: "symmetry",
     label: "SYMMETRY",
-    accent: "var(--tui-blue)",
+    accent: "var(--accent)",
     fields: [
       pick("petals.symmetry", "type", SYMMETRIES),
       num("petals.symmetry_order", "order", 0, 20, 1),
@@ -215,7 +215,7 @@ const TAXONOMY: TaxonomySection[] = [
   {
     key: "taxonomy",
     label: "TAXONOMY",
-    accent: "var(--tui-blue)",
+    accent: "var(--accent)",
     fields: [pick("taxonomy.family", "family", FLOWER_FAMILIES)],
   },
 ];
@@ -309,11 +309,11 @@ function FieldInput({ field, value, isModified, onChange }: FieldInputProps) {
   const style = {
     flex: 1,
     padding: "0.125rem 0.25ch",
-    background: "var(--tui-bg-0)",
-    border: `1px solid ${isModified ? "var(--tui-amber-dim)" : "var(--tui-border)"}`,
-    color: isModified ? "var(--tui-amber)" : "var(--tui-fg-1)",
-    fontSize: "var(--tui-font-size-xs)",
-    fontFamily: "var(--tui-font)",
+    background: "var(--surface)",
+    border: `1px solid ${isModified ? "var(--accent-dim)" : "var(--border)"}`,
+    color: isModified ? "var(--text-tertiary)" : "var(--text-secondary)",
+    fontSize: "var(--font-size-xs)",
+    fontFamily: "var(--font-mono)",
     minWidth: 0,
   };
 
@@ -411,8 +411,8 @@ export function PartEditor({
       {/* ── Constituents (always visible) ── */}
       {constituents.length > 0 && (
         <div
-          className="tui-panel accent-purple"
-          data-label={`FLOWERS (${constituents.length})`}
+          className="panel"
+          data-label={`Flowers (${constituents.length})`}
           style={{ padding: "0.75rem 1ch 0.5rem", marginBottom: "0.5rem" }}
         >
           {constituents.map(c => {
@@ -429,7 +429,7 @@ export function PartEditor({
                   alignItems: "center",
                   justifyContent: "space-between",
                   padding: "0.25rem 0",
-                  fontSize: "var(--tui-font-size-sm)",
+                  fontSize: "var(--font-size-sm)",
                 }}
               >
                 <div
@@ -441,11 +441,11 @@ export function PartEditor({
                     flex: 1,
                   }}
                 >
-                  <span style={{ color: "var(--tui-fg-1)" }}>
+                  <span style={{ color: "var(--text-secondary)" }}>
                     {name}
                     {c.index === 0 && (
                       <span
-                        className="tui-badge tui-badge-green"
+                        className="badge badge-positive"
                         style={{ marginLeft: "0.5ch", verticalAlign: "middle" }}
                       >
                         hero
@@ -455,8 +455,8 @@ export function PartEditor({
                   {typeof shape === "string" && (
                     <span
                       style={{
-                        color: "var(--tui-fg-4)",
-                        fontSize: "var(--tui-font-size-xs)",
+                        color: "var(--text-quaternary)",
+                        fontSize: "var(--font-size-xs)",
                       }}
                     >
                       {shape}
@@ -471,11 +471,11 @@ export function PartEditor({
                         constituentIndex: c.index,
                       });
                     }}
-                    className="tui-btn"
+                    className="btn"
                     style={{
                       padding: "0.125rem 0.5ch",
-                      fontSize: "var(--tui-font-size-xs)",
-                      color: "var(--tui-cyan)",
+                      fontSize: "var(--font-size-xs)",
+                      color: "var(--accent)",
                       borderColor: "rgba(103, 232, 249, 0.2)",
                     }}
                   >
@@ -488,10 +488,10 @@ export function PartEditor({
                         constituentIndex: c.index,
                       });
                     }}
-                    className="tui-btn"
+                    className="btn"
                     style={{
                       padding: "0.125rem 0.5ch",
-                      fontSize: "var(--tui-font-size-xs)",
+                      fontSize: "var(--font-size-xs)",
                     }}
                   >
                     RM
@@ -508,8 +508,8 @@ export function PartEditor({
         {specName !== null && (
           <div
             style={{
-              color: "var(--tui-fg-0)",
-              fontSize: "var(--tui-font-size-sm)",
+              color: "var(--text-primary)",
+              fontSize: "var(--font-size-sm)",
               fontWeight: 600,
             }}
           >
@@ -519,8 +519,8 @@ export function PartEditor({
         {species !== null && (
           <div
             style={{
-              color: "var(--tui-fg-3)",
-              fontSize: "var(--tui-font-size-xs)",
+              color: "var(--text-tertiary)",
+              fontSize: "var(--font-size-xs)",
               fontStyle: "italic",
             }}
           >
@@ -550,8 +550,8 @@ export function PartEditor({
                 background: "none",
                 border: "none",
                 cursor: "pointer",
-                fontFamily: "var(--tui-font)",
-                fontSize: "var(--tui-font-size-xs)",
+                fontFamily: "var(--font-mono)",
+                fontSize: "var(--font-size-xs)",
                 color: section.accent,
                 letterSpacing: "0.06em",
                 textAlign: "left",
@@ -559,22 +559,20 @@ export function PartEditor({
             >
               <span
                 style={{
-                  color: "var(--tui-fg-4)",
+                  color: "var(--text-quaternary)",
                   width: "1.5ch",
                   textAlign: "center",
                 }}
               >
                 {isCollapsed ? "▸" : "▾"}
               </span>
-              <span style={{ textShadow: `0 0 6px ${section.accent}33` }}>
-                {section.label}
-              </span>
+              <span>{section.label}</span>
               {sectionModified > 0 && (
                 <span
                   style={{
                     marginLeft: "auto",
-                    color: "var(--tui-amber)",
-                    fontSize: "var(--tui-font-size-2xs)",
+                    color: "var(--text-tertiary)",
+                    fontSize: "var(--font-size-2xs)",
                   }}
                 >
                   {sectionModified} modified
@@ -606,14 +604,14 @@ export function PartEditor({
                         display: "flex",
                         alignItems: "center",
                         gap: "0.5ch",
-                        fontSize: "var(--tui-font-size-xs)",
+                        fontSize: "var(--font-size-xs)",
                       }}
                     >
                       <span
                         style={{
                           color: isModified
-                            ? "var(--tui-amber)"
-                            : "var(--tui-fg-3)",
+                            ? "var(--text-tertiary)"
+                            : "var(--text-tertiary)",
                           width: "10ch",
                           flexShrink: 0,
                           overflow: "hidden",
@@ -647,10 +645,10 @@ export function PartEditor({
           <div style={{ marginTop: "0.25rem" }}>
             <div
               style={{
-                fontSize: "var(--tui-font-size-xs)",
-                color: "var(--tui-fg-3)",
+                fontSize: "var(--font-size-xs)",
+                color: "var(--text-tertiary)",
                 padding: "0.25rem 0",
-                borderTop: "1px solid var(--tui-border-dim)",
+                borderTop: "1px solid var(--border)",
               }}
             >
               + {layers.length - 1} more petal layer
@@ -668,8 +666,8 @@ export function PartEditor({
                 <div
                   key={i}
                   style={{
-                    fontSize: "var(--tui-font-size-2xs)",
-                    color: "var(--tui-fg-4)",
+                    fontSize: "var(--font-size-2xs)",
+                    color: "var(--text-quaternary)",
                     paddingLeft: "1.5ch",
                     lineHeight: 1.8,
                   }}
@@ -686,7 +684,7 @@ export function PartEditor({
       {modifiedCount > 0 && (
         <button
           onClick={handleFork}
-          className="tui-btn tui-btn-primary"
+          className="btn btn-primary"
           style={{ width: "100%", padding: "0.375rem", marginTop: "0.5rem" }}
         >
           FORK {modifiedCount} PART{modifiedCount > 1 ? "S" : ""}
@@ -696,8 +694,8 @@ export function PartEditor({
       {modifiedCount === 0 && (
         <p
           style={{
-            color: "var(--tui-fg-4)",
-            fontSize: "var(--tui-font-size-2xs)",
+            color: "var(--text-quaternary)",
+            fontSize: "var(--font-size-2xs)",
             marginTop: "0.375rem",
           }}
         >
@@ -710,7 +708,7 @@ export function PartEditor({
       <div
         style={{
           marginTop: "0.5rem",
-          borderTop: "1px solid var(--tui-border-dim)",
+          borderTop: "1px solid var(--border)",
           paddingTop: "0.5rem",
         }}
       >
@@ -718,7 +716,7 @@ export function PartEditor({
           onClick={() => {
             void conn?.reducers.deleteSession({ sessionId: BigInt(sessionId) });
           }}
-          className="tui-btn tui-btn-danger"
+          className="btn btn-danger"
           style={{ width: "100%", padding: "0.375rem" }}
         >
           DELETE {constituents.length > 1 ? "BUNDLE" : "FLOWER"}

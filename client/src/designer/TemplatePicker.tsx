@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import type { DbConnection } from "../spacetime/types.ts";
-import { templatesByCategory, type TemplateInfo } from "../data/templates.ts";
+import {
+  templatesByCategory,
+  templateArtUrl,
+  type TemplateInfo,
+} from "../data/templates.ts";
 import { generateFlower } from "../ai/generateFlower.ts";
 
 interface TemplatePickerProps {
@@ -73,15 +77,15 @@ export function TemplatePicker({
       <div
         style={{
           padding: "0.375rem 0.5ch",
-          borderBottom: "1px solid var(--tui-border-dim)",
+          borderBottom: "1px solid var(--border)",
         }}
       >
-        <div className="tui-input-wrap">
+        <div className="input-wrap">
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="search templates..."
-            className="tui-input"
+            placeholder="Search templates"
+            className="input"
           />
         </div>
       </div>
@@ -94,12 +98,9 @@ export function TemplatePicker({
           padding: "0.375rem 0.5ch",
         }}
       >
-        <div className="tui-template-grid">
+        <div className="template-grid">
           {filteredGroups.map(group => [
-            <div
-              key={`cat-${group.category}`}
-              className="tui-template-category"
-            >
+            <div key={`cat-${group.category}`} className="template-category">
               {group.label}
             </div>,
             ...group.templates.map(t => (
@@ -120,8 +121,8 @@ export function TemplatePicker({
           <div
             style={{
               padding: "1rem 0",
-              color: "var(--tui-fg-4)",
-              fontSize: "var(--tui-font-size-sm)",
+              color: "var(--text-quaternary)",
+              fontSize: "var(--font-size-sm)",
               textAlign: "center",
             }}
           >
@@ -144,73 +145,31 @@ function TemplateTile({
   generating: boolean;
   onClick: () => void;
 }) {
-  const gradient = buildGradient(t.colors);
-
   return (
     <motion.button
       onClick={onClick}
       disabled={disabled}
-      className="tui-template-tile"
+      className="template-tile"
       data-generating={generating ? "true" : undefined}
       whileHover={{ scale: 1.04 }}
       whileTap={{ scale: 0.97 }}
       transition={{ duration: 0.1 }}
     >
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: gradient,
-          opacity: 0.18,
-          transition: "opacity 0.15s ease",
-          zIndex: 0,
-        }}
-        className="tui-template-tile__bg"
+      <img
+        src={templateArtUrl(t)}
+        alt={`${t.name}, one stem`}
+        loading="lazy"
+        className="template-tile__bg"
       />
-      <span className="tui-template-tile__name">
+      <span className="template-tile__name">
         {generating ? (
-          <span style={{ color: "var(--tui-purple)" }}>
-            <span className="tui-generating" />
+          <span style={{ color: "var(--accent)" }}>
+            <span className="generating" />
           </span>
         ) : (
           t.name
         )}
       </span>
-      <div className="tui-template-tile__colors">
-        {t.colors.slice(0, 5).map(c => (
-          <span
-            key={c}
-            className="tui-template-tile__swatch"
-            style={{ background: colorToHex(c) }}
-          />
-        ))}
-      </div>
     </motion.button>
   );
-}
-
-function buildGradient(colors: string[]): string {
-  const hexes = colors.slice(0, 3).map(colorToHex);
-  if (hexes.length === 1) return hexes[0]!;
-  if (hexes.length === 2)
-    return `linear-gradient(135deg, ${hexes[0]}, ${hexes[1]})`;
-  return `linear-gradient(135deg, ${hexes[0]}, ${hexes[1]}, ${hexes[2]})`;
-}
-
-function colorToHex(name: string): string {
-  const map: Record<string, string> = {
-    Red: "#ef4444",
-    Pink: "#ec4899",
-    White: "#f5f5f5",
-    Yellow: "#eab308",
-    Orange: "#f97316",
-    Purple: "#a855f7",
-    Lavender: "#c4b5fd",
-    Blue: "#3b82f6",
-    Green: "#22c55e",
-    Peach: "#fdba74",
-    Coral: "#fb7185",
-    Brown: "#92400e",
-  };
-  return map[name] ?? "#737373";
 }

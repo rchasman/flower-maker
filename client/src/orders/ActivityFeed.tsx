@@ -52,12 +52,12 @@ function levelLabel(level: number): string {
 
 const actionBtnStyle: React.CSSProperties = {
   padding: "0.1875rem 0.75ch",
-  fontSize: "var(--tui-font-size-2xs)",
-  fontFamily: "var(--tui-font)",
-  background: "var(--tui-bg-2)",
+  fontSize: "var(--font-size-2xs)",
+  fontFamily: "var(--font-mono)",
+  background: "var(--surface-raised)",
   cursor: "pointer",
-  border: "1px solid var(--tui-border-dim)",
-  color: "var(--tui-fg-3)",
+  border: "1px solid var(--border)",
+  color: "var(--text-tertiary)",
   letterSpacing: "0.04em",
   lineHeight: 1.4,
   minWidth: "2ch",
@@ -178,31 +178,24 @@ export function ActivityFeed({
         <div
           style={{
             padding: "0.375rem 1ch",
-            background: "var(--tui-purple-dim)",
-            borderBottom: "1px solid var(--tui-purple)",
-            fontSize: "var(--tui-font-size-xs)",
+            background: "var(--accent-dim)",
+            borderBottom: "1px solid var(--accent)",
+            fontSize: "var(--font-size-xs)",
             display: "flex",
             alignItems: "center",
             gap: "0.5ch",
           }}
         >
-          <span
-            style={{
-              color: "var(--tui-purple)",
-              textShadow: "0 0 4px var(--tui-purple-glow)",
-            }}
-          >
-            MERGE
-          </span>
-          <span style={{ color: "var(--tui-fg-2)", flex: 1 }}>
+          <span style={{ color: "var(--accent)" }}>MERGE</span>
+          <span style={{ color: "var(--text-tertiary)", flex: 1 }}>
             select target for #{mergeSource}
           </span>
           <button
             onClick={cancelMerge}
             style={{
               ...actionBtnStyle,
-              color: "var(--tui-red)",
-              borderColor: "var(--tui-red-dim)",
+              color: "var(--negative)",
+              borderColor: "var(--negative)",
             }}
           >
             ESC
@@ -214,15 +207,13 @@ export function ActivityFeed({
       {activeFlowers.length > 0 && (
         <div>
           <div
+            className="label"
             style={{
-              padding: "0.25rem 1ch",
-              fontSize: "var(--tui-font-size-xs)",
-              color: "var(--tui-green)",
-              textShadow: "0 0 6px var(--tui-green-glow)",
-              borderBottom: "1px solid var(--tui-border-dim)",
+              padding: "0.5rem 1ch",
+              borderBottom: "1px solid var(--border)",
             }}
           >
-            CANVAS ({activeFlowers.length})
+            Flowers ({activeFlowers.length})
           </div>
           {activeFlowers.map(flower => {
             const sid = Number(flower.session.id);
@@ -252,14 +243,12 @@ export function ActivityFeed({
                     display: "flex",
                     alignItems: "flex-start",
                     gap: "0.75ch",
-                    borderBottom: isBundle
-                      ? "none"
-                      : "1px solid var(--tui-border-dim)",
+                    borderBottom: isBundle ? "none" : "1px solid var(--border)",
                     cursor: isMergeTarget ? "pointer" : "default",
                     background: run(() => {
                       if (isMergeSource) return "rgba(196, 181, 253, 0.06)";
                       if (isMergeTarget) return "rgba(196, 181, 253, 0.03)";
-                      if (isSelected) return "var(--tui-bg-3)";
+                      if (isSelected) return "var(--surface-raised)";
                       return "transparent";
                     }),
                     transition: "background 0.15s",
@@ -282,11 +271,11 @@ export function ActivityFeed({
                       height: "4px",
                       borderRadius: "50%",
                       background: isMergeTarget
-                        ? "var(--tui-purple)"
-                        : "var(--tui-green)",
+                        ? "var(--accent)"
+                        : "var(--positive)",
                       boxShadow: isMergeTarget
-                        ? "0 0 4px var(--tui-purple-glow)"
-                        : "0 0 4px var(--tui-green-glow)",
+                        ? "0 0 4px var(--accent-dim)"
+                        : "0 0 4px var(--accent-dim)",
                       flexShrink: 0,
                       marginTop: "0.375rem",
                     }}
@@ -296,10 +285,10 @@ export function ActivityFeed({
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div
                       style={{
-                        fontSize: "var(--tui-font-size-xs)",
+                        fontSize: "var(--font-size-xs)",
                         color: isMergeTarget
-                          ? "var(--tui-purple)"
-                          : "var(--tui-fg-1)",
+                          ? "var(--accent)"
+                          : "var(--text-secondary)",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
@@ -308,7 +297,7 @@ export function ActivityFeed({
                       {isMergeTarget ? `→ merge into ${name}` : name}
                       {isBundle && (
                         <span
-                          className="tui-badge tui-badge-purple"
+                          className="badge badge-accent"
                           style={{
                             marginLeft: "0.5ch",
                             verticalAlign: "middle",
@@ -320,20 +309,20 @@ export function ActivityFeed({
                     </div>
                     <div
                       style={{
-                        fontSize: "var(--tui-font-size-2xs)",
-                        color: "var(--tui-fg-4)",
+                        fontSize: "var(--font-size-2xs)",
+                        color: "var(--text-quaternary)",
                         display: "flex",
                         gap: "0.75ch",
                       }}
                     >
                       {shape && <span>{shape}</span>}
                       {level > 1 && (
-                        <span style={{ color: "var(--tui-purple)" }}>
+                        <span style={{ color: "var(--accent)" }}>
                           {levelLabel(level)}
                         </span>
                       )}
                       {flower.arrangementName && (
-                        <span style={{ color: "var(--tui-fg-3)" }}>
+                        <span style={{ color: "var(--text-tertiary)" }}>
                           {flower.arrangementName}
                         </span>
                       )}
@@ -359,8 +348,8 @@ export function ActivityFeed({
                         }}
                         style={{
                           ...actionBtnStyle,
-                          color: "var(--tui-purple)",
-                          borderColor: "var(--tui-purple-dim)",
+                          color: "var(--accent)",
+                          borderColor: "var(--accent-dim)",
                         }}
                         title="Merge with another flower"
                       >
@@ -375,8 +364,8 @@ export function ActivityFeed({
                         }}
                         style={{
                           ...actionBtnStyle,
-                          color: "var(--tui-red)",
-                          borderColor: "var(--tui-red-dim)",
+                          color: "var(--negative)",
+                          borderColor: "var(--negative)",
                         }}
                         title={
                           isBundle ? "Delete entire bundle" : "Delete flower"
@@ -392,8 +381,8 @@ export function ActivityFeed({
                 {isBundle && (
                   <div
                     style={{
-                      borderBottom: "1px solid var(--tui-border-dim)",
-                      background: "var(--tui-bg-0)",
+                      borderBottom: "1px solid var(--border)",
+                      background: "var(--surface)",
                     }}
                   >
                     {flower.constituents.map((c, ci) => {
@@ -406,13 +395,13 @@ export function ActivityFeed({
                             alignItems: "center",
                             gap: "0.5ch",
                             padding: "0.1875rem 1ch 0.1875rem 2ch",
-                            fontSize: "var(--tui-font-size-2xs)",
+                            fontSize: "var(--font-size-2xs)",
                           }}
                         >
                           {/* Tree connector */}
                           <span
                             style={{
-                              color: "var(--tui-fg-4)",
+                              color: "var(--text-quaternary)",
                               flexShrink: 0,
                               width: "2ch",
                             }}
@@ -423,7 +412,7 @@ export function ActivityFeed({
                           {/* Name + shape */}
                           <span
                             style={{
-                              color: "var(--tui-fg-2)",
+                              color: "var(--text-tertiary)",
                               flex: 1,
                               overflow: "hidden",
                               textOverflow: "ellipsis",
@@ -434,7 +423,7 @@ export function ActivityFeed({
                             {c.index === 0 && (
                               <span
                                 style={{
-                                  color: "var(--tui-green)",
+                                  color: "var(--positive)",
                                   marginLeft: "0.5ch",
                                 }}
                               >
@@ -445,7 +434,7 @@ export function ActivityFeed({
                           {c.shape && (
                             <span
                               style={{
-                                color: "var(--tui-fg-4)",
+                                color: "var(--text-quaternary)",
                                 flexShrink: 0,
                               }}
                             >
@@ -469,7 +458,7 @@ export function ActivityFeed({
                               }
                               style={{
                                 ...actionBtnStyle,
-                                color: "var(--tui-cyan)",
+                                color: "var(--accent)",
                                 borderColor: "rgba(103, 232, 249, 0.15)",
                               }}
                               title="Split out as independent flower"
@@ -502,8 +491,8 @@ export function ActivityFeed({
         <div
           style={{
             padding: "0.5rem 1ch",
-            color: "var(--tui-fg-4)",
-            fontSize: "var(--tui-font-size-xs)",
+            color: "var(--text-quaternary)",
+            fontSize: "var(--font-size-xs)",
           }}
         >
           no flowers on canvas.

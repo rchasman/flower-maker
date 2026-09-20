@@ -107,7 +107,7 @@ export function Chat() {
               initial={{ opacity: 0, x: -3 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.1 }}
-              className="tui-log-entry"
+              className="log-entry"
             >
               <span
                 className="nick"
@@ -127,13 +127,13 @@ export function Chat() {
         {sorted.length === 0 && (
           <div
             style={{
-              color: "var(--tui-fg-4)",
-              fontSize: "var(--tui-font-size-sm)",
+              color: "var(--text-quaternary)",
+              fontSize: "var(--font-size-sm)",
               textAlign: "center",
               padding: "1rem 0",
             }}
           >
-            no messages. type to chat.
+            No messages yet.
           </div>
         )}
       </div>
@@ -141,12 +141,12 @@ export function Chat() {
       <div
         style={{
           padding: "0.25rem 0.5ch",
-          borderTop: "1px solid var(--tui-border-dim)",
+          borderTop: "1px solid var(--border)",
           display: "flex",
           gap: "0.5ch",
         }}
       >
-        <div className="tui-input-wrap" style={{ flex: 1 }}>
+        <div className="input-wrap" style={{ flex: 1 }}>
           <input
             value={input}
             onChange={e => setInput(e.target.value)}
@@ -156,8 +156,8 @@ export function Chat() {
                 sendMessage();
               }
             }}
-            placeholder="say something..."
-            className="tui-input"
+            placeholder="Say something"
+            className="input"
           />
         </div>
       </div>

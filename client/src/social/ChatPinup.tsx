@@ -8,7 +8,7 @@ export function ChatPinup() {
 
   return (
     <PanelPopout
-      label="COMMS"
+      label="Chat"
       open={open}
       onToggle={() => setOpen(o => !o)}
       position="bottom-right"

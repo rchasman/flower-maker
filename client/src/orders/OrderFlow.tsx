@@ -17,11 +17,11 @@ export function OrderFlow({ session, onOrder }: OrderFlowProps) {
     return (
       <div
         style={{
-          color: "var(--tui-fg-4)",
-          fontSize: "var(--tui-font-size-sm)",
+          color: "var(--text-quaternary)",
+          fontSize: "var(--font-size-sm)",
         }}
       >
-        select a flower to place an order.
+        Select a flower to place an order.
       </div>
     );
   }
@@ -55,15 +55,15 @@ export function OrderFlow({ session, onOrder }: OrderFlowProps) {
     <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
       {/* Session info */}
       <div
-        className="tui-panel"
-        data-label="SESSION"
+        className="panel"
+        data-label="Session"
         style={{ padding: "1rem 1ch 0.75rem" }}
       >
         <div
           style={{
-            color: "var(--tui-fg-1)",
+            color: "var(--text-secondary)",
             marginBottom: "0.5rem",
-            fontSize: "var(--tui-font-size-sm)",
+            fontSize: "var(--font-size-sm)",
           }}
         >
           {session.prompt}
@@ -72,8 +72,8 @@ export function OrderFlow({ session, onOrder }: OrderFlowProps) {
           style={{
             display: "flex",
             gap: "1.5ch",
-            fontSize: "var(--tui-font-size-xs)",
-            color: "var(--tui-fg-3)",
+            fontSize: "var(--font-size-xs)",
+            color: "var(--text-tertiary)",
           }}
         >
           <span>lvl: {levelName(Number(session.arrangementLevel))}</span>
@@ -86,13 +86,13 @@ export function OrderFlow({ session, onOrder }: OrderFlowProps) {
       <button
         onClick={handleOrder}
         disabled={isOrdering}
-        className="tui-btn tui-btn-primary"
+        className="btn btn-primary"
         style={{ width: "100%", padding: "0.5rem" }}
       >
         {isOrdering ? (
           <span>
             PLACING ORDER
-            <span className="tui-generating" />
+            <span className="generating" />
           </span>
         ) : (
           "PLACE ORDER →"
@@ -102,17 +102,17 @@ export function OrderFlow({ session, onOrder }: OrderFlowProps) {
       {/* JSON payload preview */}
       {orderPayload && (
         <div
-          className="tui-panel accent-cyan"
-          data-label="ORDER PAYLOAD"
+          className="panel"
+          data-label="Order payload"
           style={{ padding: "1rem 0 0" }}
         >
           <pre
             style={{
               padding: "0.5rem 1ch",
               margin: 0,
-              fontSize: "var(--tui-font-size-xs)",
+              fontSize: "var(--font-size-xs)",
               lineHeight: 1.6,
-              color: "var(--tui-green)",
+              color: "var(--text-secondary)",
               overflow: "auto",
               maxHeight: "300px",
             }}

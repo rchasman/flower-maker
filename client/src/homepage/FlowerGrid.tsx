@@ -124,66 +124,49 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
         flexDirection: "column",
       }}
     >
-      {/* ── TUI Header / Status Bar ── */}
       <header
         style={{
-          padding: "0.375rem 1.5ch",
+          padding: "0.75rem 1.5ch",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          borderBottom: "1px solid var(--tui-border)",
-          background: "var(--tui-bg-0)",
+          borderBottom: "1px solid var(--border)",
+          background: "var(--surface)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "1ch" }}>
-          <span
-            className="tui-glow-green"
-            style={{ color: "var(--tui-green)", fontWeight: 600 }}
-          >
-            FLOWER-MAKER
-          </span>
-          <span style={{ color: "var(--tui-border)" }}>│</span>
-          <span
-            style={{
-              color: "var(--tui-fg-3)",
-              fontSize: "var(--tui-font-size-xs)",
-            }}
-          >
-            collaborative botanical AI
-          </span>
+        <div style={{ display: "flex", alignItems: "baseline", gap: "1.5ch" }}>
+          <span className="wordmark">flower-maker</span>
+          <span className="label">Everyone designing flowers, live.</span>
         </div>
 
         <div
           style={{
             display: "flex",
-            gap: "1.5ch",
+            gap: "2ch",
             alignItems: "center",
-            fontSize: "var(--tui-font-size-xs)",
           }}
         >
-          <span style={{ color: "var(--tui-fg-3)" }}>
-            <span style={{ color: "var(--tui-cyan)" }}>{onlineCount}</span>{" "}
+          <span className="label">
+            <span style={{ color: "var(--text-primary)" }}>{onlineCount}</span>{" "}
             online
           </span>
-          <span style={{ color: "var(--tui-border)" }}>│</span>
-          <span style={{ color: "var(--tui-fg-3)" }}>
-            <span style={{ color: "var(--tui-fg-1)" }}>{zones.length}</span>{" "}
+          <span className="label">
+            <span style={{ color: "var(--text-primary)" }}>{zones.length}</span>{" "}
             zones
           </span>
-          <span style={{ color: "var(--tui-border)" }}>│</span>
           <ConnectionStatus state={state} />
         </div>
       </header>
 
       {/* ── Zone Grid ── */}
       <div
-        className="tui-zone-grid"
+        className="zone-grid"
         style={{
           gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
         }}
       >
         {zones.map(zone => (
-          <div key={String(zone.user.identity)} className="tui-zone-enter">
+          <div key={String(zone.user.identity)} className="zone-enter">
             <MemoZoneCard
               zone={zone}
               specBySessionId={specBySessionId}
@@ -203,12 +186,12 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "var(--tui-fg-4)",
-              fontSize: "var(--tui-font-size-sm)",
+              color: "var(--text-quaternary)",
+              fontSize: "var(--font-size-sm)",
               padding: "3rem",
             }}
           >
-            no zones active. click your zone to begin designing.
+            No one is designing yet. Click your zone to start.
           </div>
         )}
 
@@ -219,21 +202,19 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "var(--tui-fg-4)",
-              fontSize: "var(--tui-font-size-sm)",
+              color: "var(--text-quaternary)",
+              fontSize: "var(--font-size-sm)",
               padding: "3rem",
             }}
           >
             {state === "connecting" ? (
               <span>
-                <span style={{ color: "var(--tui-amber)" }}>[sync]</span>{" "}
-                establishing connection
-                <span className="tui-generating" />
+                Connecting
+                <span className="generating" />
               </span>
             ) : (
-              <span>
-                <span style={{ color: "var(--tui-red)" }}>[err]</span>{" "}
-                spacetimedb offline — restart and refresh
+              <span style={{ color: "var(--negative)" }}>
+                The database is offline. Restart it and refresh.
               </span>
             )}
           </div>
@@ -241,7 +222,7 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
       </div>
 
       {/* ── Bottom status bar ── */}
-      <div className="tui-status-bar">
+      <div className="status-bar">
         <span>flower-maker v0.1</span>
         <span className="sep">│</span>
         <span>
@@ -256,9 +237,9 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
   );
 }
 
-/** Empty zone placeholder — subtle crosshair. */
+/** Empty zone placeholder: a faint crosshair. */
 function EmptyZoneIcon({ isYours }: { isYours: boolean }) {
-  const color = isYours ? "var(--tui-purple-dim)" : "var(--tui-border)";
+  const color = isYours ? "var(--border-hover)" : "var(--border)";
   return (
     <svg
       style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
@@ -273,9 +254,10 @@ function EmptyZoneIcon({ isYours }: { isYours: boolean }) {
           x="20"
           y="36"
           textAnchor="middle"
-          fill="var(--tui-purple-dim)"
-          fontSize="3"
-          fontFamily="var(--tui-font)"
+          fill="var(--text-quaternary)"
+          fontSize="2.5"
+          letterSpacing="0.3"
+          fontFamily="var(--font-mono)"
         >
           YOUR ZONE
         </text>
@@ -309,7 +291,7 @@ const MemoZoneCard = memo(
     return (
       <div
         onClick={onClick}
-        className="tui-zone-card"
+        className="zone-card"
         data-yours={isYours ? "true" : undefined}
         data-offline={!user.online ? "true" : undefined}
       >
@@ -325,12 +307,10 @@ const MemoZoneCard = memo(
         )}
 
         {/* Zone label overlay */}
-        <div className="tui-zone-label">
+        <div className="zone-label">
           <span className="name">
             {isYours && (
-              <span
-                style={{ color: "var(--tui-purple)", marginRight: "0.5ch" }}
-              >
+              <span style={{ color: "var(--accent)", marginRight: "0.5ch" }}>
                 ▸
               </span>
             )}
@@ -338,7 +318,7 @@ const MemoZoneCard = memo(
           </span>
           <span>
             {allSessions.length > 0 && (
-              <span style={{ color: "var(--tui-fg-2)" }}>
+              <span style={{ color: "var(--text-tertiary)" }}>
                 {allSessions.length}{" "}
                 {allSessions.length === 1 ? "flower" : "flowers"}
               </span>
@@ -346,7 +326,7 @@ const MemoZoneCard = memo(
             {user.online && (
               <span
                 style={{
-                  color: "var(--tui-green)",
+                  color: "var(--positive)",
                   marginLeft: "0.5ch",
                   fontSize: "0.5rem",
                 }}
@@ -373,13 +353,13 @@ const MemoZoneCard = memo(
 
 function ConnectionStatus({ state }: { state: string }) {
   const stateConfig: Record<string, { label: string; cls: string }> = {
-    connected: { label: "CONNECTED", cls: "tui-badge-green" },
-    connecting: { label: "SYNCING", cls: "tui-badge-amber" },
+    connected: { label: "Connected", cls: "badge-positive" },
+    connecting: { label: "Connecting", cls: "badge-muted" },
   };
   const config = stateConfig[state] ?? {
-    label: "OFFLINE",
-    cls: "tui-badge-red",
+    label: "Offline",
+    cls: "badge-negative",
   };
 
-  return <span className={`tui-badge ${config.cls}`}>{config.label}</span>;
+  return <span className={`badge ${config.cls}`}>{config.label}</span>;
 }

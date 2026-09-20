@@ -600,3 +600,35 @@ export function templatesByCategory(): {
     templates: TEMPLATES.filter(t => t.category === cat),
   }));
 }
+
+/** File-safe id for a template's generated art: "Baby's Breath" becomes "baby-s-breath". */
+export const templateSlug = (template: TemplateInfo): string =>
+  template.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+
+/** The dithered single-stem plate shown on the template's tile. */
+export const templateArtUrl = (template: TemplateInfo): string =>
+  `/art/templates/${templateSlug(template)}.dither.png`;
+
+const ART_STYLE =
+  "High-contrast studio photograph in rich natural colour on a pure black background. " +
+  "Single hard key light from the upper left, deep shadows, crisp botanical detail, generous negative space. " +
+  "The background must be solid pure black with nothing else in frame. " +
+  "No vase, no text, no letters, no logos, no watermark, no hands, no people.";
+
+/** Image prompt built from the template's taxonomy so the plate matches the flower it stands for. */
+export const templatePrompt = (template: TemplateInfo): string => {
+  const [primary, secondary] = template.colors;
+  const inflorescence = template.inflorescence
+    ? `, a ${template.inflorescence.toLowerCase()} inflorescence`
+    : "";
+  const colour = secondary
+    ? `${primary?.toLowerCase()} with ${secondary.toLowerCase()} tones`
+    : primary?.toLowerCase();
+  return (
+    `One single cut stem of ${template.name} (${template.scientific}, family ${template.family}${inflorescence}), ` +
+    `exactly one stem with its own leaves, blooms in ${colour}, standing upright and centred in the frame. ${ART_STYLE}`
+  );
+};

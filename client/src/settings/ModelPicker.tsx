@@ -109,16 +109,16 @@ export function ModelPicker({ value, onChange }: ModelPickerProps) {
   const current = MODELS.find(m => m.fullName === value);
 
   return (
-    <div className="tui-select">
-      <button onClick={() => setOpen(!open)} className="tui-select-trigger">
+    <div className="select">
+      <button onClick={() => setOpen(!open)} className="select-trigger">
         <span
           style={{
             width: 6,
             height: 6,
             borderRadius: "50%",
             background: current
-              ? (PROVIDER_COLORS[current.provider] ?? "var(--tui-fg-3)")
-              : "var(--tui-fg-3)",
+              ? (PROVIDER_COLORS[current.provider] ?? "var(--text-tertiary)")
+              : "var(--text-tertiary)",
             flexShrink: 0,
             display: "inline-block",
           }}
@@ -133,17 +133,19 @@ export function ModelPicker({ value, onChange }: ModelPickerProps) {
         >
           {current?.id ?? value}
         </span>
-        <span style={{ color: "var(--tui-fg-4)" }}>{open ? "▲" : "▼"}</span>
+        <span style={{ color: "var(--text-quaternary)" }}>
+          {open ? "▲" : "▼"}
+        </span>
       </button>
 
       {open && (
-        <div className="tui-select-menu">
+        <div className="select-menu">
           {groups.map(g => (
             <div key={g.provider}>
               <div
-                className="tui-select-group-label"
+                className="select-group-label"
                 style={{
-                  color: PROVIDER_COLORS[g.provider] ?? "var(--tui-fg-3)",
+                  color: PROVIDER_COLORS[g.provider] ?? "var(--text-tertiary)",
                 }}
               >
                 {g.provider}
@@ -155,7 +157,7 @@ export function ModelPicker({ value, onChange }: ModelPickerProps) {
                     onChange(m.fullName);
                     setOpen(false);
                   }}
-                  className="tui-select-option"
+                  className="select-option"
                   data-selected={m.fullName === value ? "true" : undefined}
                 >
                   {m.id}
