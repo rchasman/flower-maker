@@ -84,8 +84,10 @@ const PICK_UP = pose(-9, 8, 0);
 const PRESS = pose(-10, 28, 6);
 /** Gripper down on the wrapped bunch at station three. */
 const GRAB_DOWN = pose(-28, 50, 0);
-/** Bunch held up. */
+/** Bunch lifted clear of the belt. */
 const GRAB_UP = pose(-11, 4, 0);
+/** Arm extended up and toward the viewer, offering the bunch. */
+const OFFER = pose(-17, -24, -2);
 
 /**
  * The belt moves in four eased runs and stands still while an arm works. Everything on the
@@ -95,7 +97,6 @@ const BELT_RUNS: readonly (readonly [number, number, number])[] = [
   [0, 1.0, 0.3],
   [2.4, 3.6, 0.36],
   [4.7, 5.9, 0.36],
-  [7.6, 8.0, 0.12],
 ];
 
 /** Distance the belt has carried since the loop started. */
@@ -104,8 +105,6 @@ export const beltTravel = (t: number): number =>
     (sum, [from, to, distance]) => sum + distance * seg(t, from, to),
     0,
   );
-
-const LOOP_TRAVEL = BELT_RUNS.reduce((sum, run) => sum + run[2], 0);
 
 const PICK_TRACK: readonly Keyframe[] = [
   [0, REST],
@@ -131,9 +130,9 @@ const HANDOFF_TRACK: readonly Keyframe[] = [
   [0, REST],
   [5.9, REST],
   [6.3, GRAB_DOWN],
-  [6.8, GRAB_UP],
-  [7.1, GRAB_UP],
-  [7.5, GRAB_DOWN],
+  [6.6, GRAB_UP],
+  [7.0, OFFER],
+  [7.5, OFFER],
   [8.0, REST],
 ];
 
@@ -150,12 +149,13 @@ const item = (
   [x, y]: Point,
   scale: number,
   visible: number,
+  angle = 0,
 ): SpriteTransform => ({
   tex: plateIndex(id),
   x,
   y,
   pivot: PLATES[plateIndex(id)]!.pivot,
-  angle: 0,
+  angle,
   scale,
   visible,
   cutA: NO_CUT,
@@ -189,21 +189,28 @@ const tulip = (t: number, pickPose: ArmPose, frameAspect: number) => {
   return item("tulip", position, 0.22, 1 - seg(t, 4.05, 4.25));
 };
 
+/** How far the bunch turns upright while it is offered, so the blooms face the viewer. */
+const OFFER_TURN = deg(-70);
+/** How much the bunch grows as it comes toward the viewer. */
+const OFFER_GROWTH = 1.5;
+
 /**
- * The bunch appears under the paddle where the tulip was, rides to station three, is carried up
- * and set down, then leaves left; the tail of its exit runs into the start of the next loop.
+ * The bunch appears under the paddle where the tulip was and rides to station three. The third
+ * arm lifts it, turns it upright and holds it out to the viewer, who takes it; by then a new
+ * tulip is already on its way in.
  */
 const bunch = (t: number, handoffPose: ArmPose, frameAspect: number) => {
-  const travelSinceWrap =
-    t < 4.05
-      ? LOOP_TRAVEL - beltTravel(4.05) + beltTravel(t)
-      : beltTravel(t) - beltTravel(4.05);
-  const onBelt: Point = [STATION_X[1] - travelSinceWrap, ITEM_Y];
-  const held = t >= 6.3 && t < 7.5;
+  const onBelt: Point = [
+    STATION_X[1] - (beltTravel(t) - beltTravel(4.05)),
+    ITEM_Y,
+  ];
+  const held = t >= 6.3;
   const [gx, gy] = tip(2, handoffPose, frameAspect);
-  const position: Point = held ? [gx, gy + HELD_DROP] : onBelt;
-  const stillLeaving = t < 1.4;
-  return item("bunch", position, 0.26, stillLeaving ? 1 : seg(t, 4.05, 4.25));
+  const offered = seg(t, 6.7, 7.1);
+  const position: Point = held ? [gx, gy + HELD_DROP * (1 + offered)] : onBelt;
+  const scale = 0.26 * lerp(1, OFFER_GROWTH, offered);
+  const visible = seg(t, 4.05, 4.25) - seg(t, 7.5, 7.75);
+  return item("bunch", position, scale, visible, OFFER_TURN * offered);
 };
 
 export const timeline = (
