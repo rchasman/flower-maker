@@ -30,11 +30,13 @@ export interface SpriteTransform {
   readonly visible: number;
 }
 
-const STATION_X = [1 / 6, 1 / 2, 5 / 6] as const;
-const BELT_Y = 0.72;
-const ARM_BASE_Y = 0.92;
-const ARM_BASE_DX = 0.12;
-const ARM_SCALE = 0.62;
+const STATION_X = [0.4, 0.62, 0.84] as const;
+/** Width over height of the frame the transforms are laid out for. */
+export const DEFAULT_FRAME_ASPECT = 16 / 9;
+const BELT_Y = 0.66;
+const ARM_BASE_Y = 0.86;
+const ARM_BASE_DX = 0.06;
+const ARM_SCALE = 0.48;
 const PLATE_ASPECT = 1.5;
 /** Gripper position in the arm plate, relative to its base pivot, in plate uv units. */
 const GRIPPER_OFFSET = [-0.25, -0.75] as const;
@@ -73,13 +75,17 @@ const rotate = ([dx, dy]: Point, angle: number): Point => [
   -dx * Math.sin(angle) + dy * Math.cos(angle),
 ];
 
-const gripperOf = (armX: number, angle: number): Point => {
+/**
+ * Where an arm's gripper lands in frame uv. Sprite sizes are fractions of frame height, so the
+ * horizontal reach is divided by the frame aspect to land in uv x.
+ */
+const gripperOf = (armX: number, angle: number, frameAspect: number): Point => {
   const offset: Point = [
     GRIPPER_OFFSET[0] * ARM_SCALE * PLATE_ASPECT,
     GRIPPER_OFFSET[1] * ARM_SCALE,
   ];
   const [dx, dy] = rotate(offset, angle);
-  return [armX + dx, ARM_BASE_Y + dy];
+  return [armX + dx / frameAspect, ARM_BASE_Y + dy];
 };
 
 const arm = (
@@ -108,16 +114,20 @@ const handoffAngle = (t: number) =>
 
 const belt: SpriteTransform = {
   id: "belt",
-  x: 0.5,
+  x: 0.64,
   y: BELT_Y,
   angle: 0,
-  scale: 0.34,
+  scale: 0.78,
   visible: 1,
 };
 
-const tulip = (t: number, pickA: number): SpriteTransform => {
-  const held = gripperOf(STATION_X[0]! + ARM_BASE_DX, pickA);
-  const dropX = STATION_X[0]! - 0.08;
+const tulip = (
+  t: number,
+  pickA: number,
+  frameAspect: number,
+): SpriteTransform => {
+  const held = gripperOf(STATION_X[0]! + ARM_BASE_DX, pickA, frameAspect);
+  const dropX = STATION_X[0]! - 0.06;
   const lowered = seg(t, 1.5, 1.9);
   const ride = seg(t, 1.9, 3.6);
   const x = lerp(lerp(held[0], dropX, lowered), STATION_X[1]!, ride);
@@ -127,7 +137,7 @@ const tulip = (t: number, pickA: number): SpriteTransform => {
     x,
     y,
     angle: 0,
-    scale: 0.1,
+    scale: 0.2,
     visible: present(t, 0.6, 0.9, 3.6, 3.9),
   };
 };
@@ -135,14 +145,22 @@ const tulip = (t: number, pickA: number): SpriteTransform => {
 const bunch = (t: number): SpriteTransform => ({
   id: "bunch",
   x: lerp(STATION_X[1]!, STATION_X[2]! - 0.1, seg(t, 3.9, 5.4)),
-  y: BELT_Y - 0.06,
+  y: BELT_Y - 0.05,
   angle: 0,
-  scale: 0.16,
+  scale: 0.2,
   visible: present(t, 3.6, 3.9, 5.4, 5.7),
 });
 
-const bouquet = (t: number, handoffA: number): SpriteTransform => {
-  const [gx, gy] = gripperOf(STATION_X[2]! + ARM_BASE_DX, handoffA);
+const bouquet = (
+  t: number,
+  handoffA: number,
+  frameAspect: number,
+): SpriteTransform => {
+  const [gx, gy] = gripperOf(
+    STATION_X[2]! + ARM_BASE_DX,
+    handoffA,
+    frameAspect,
+  );
   return {
     id: "bouquet",
     x: gx,
@@ -153,7 +171,10 @@ const bouquet = (t: number, handoffA: number): SpriteTransform => {
   };
 };
 
-export const timeline = (time: number): readonly SpriteTransform[] => {
+export const timeline = (
+  time: number,
+  frameAspect: number = DEFAULT_FRAME_ASPECT,
+): readonly SpriteTransform[] => {
   const t = wrap(time);
   const pickA = pickAngle(t);
   const handoffA = handoffAngle(t);
@@ -162,8 +183,8 @@ export const timeline = (time: number): readonly SpriteTransform[] => {
     arm("arm-pick", 0, pickA),
     arm("arm-wrap", 1, wrapAngle(t)),
     arm("arm-handoff", 2, handoffA),
-    tulip(t, pickA),
+    tulip(t, pickA, frameAspect),
     bunch(t),
-    bouquet(t, handoffA),
+    bouquet(t, handoffA, frameAspect),
   ];
 };

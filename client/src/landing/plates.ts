@@ -20,7 +20,7 @@ const PLATE_LIST: readonly Plate[] = [
     id: "belt",
     prompt: `A long empty black rubber conveyor belt segment on a dark steel frame, seen from the side at eye level, running horizontally across the full width of the frame in the lower third, rollers visible at each end. ${STYLE}`,
     pivot: [0.5, 0.56],
-    exposure: 2.2,
+    exposure: 2.0,
   },
   {
     id: "arm-pick",
@@ -30,8 +30,8 @@ const PLATE_LIST: readonly Plate[] = [
   },
   {
     id: "arm-wrap",
-    prompt: `An industrial six-axis robot arm in dark grey metal, bolted to a round base flange at the bottom centre of the frame, reaching straight up and forward with a flat paddle end effector, full arm visible. ${STYLE}`,
-    pivot: [0.43, 0.92],
+    prompt: `An industrial six-axis robot arm in dark grey metal, bolted to a round base flange at the bottom centre of the frame, reaching up and to the left with a flat paddle end effector held level, full arm visible. ${STYLE}`,
+    pivot: [0.57, 0.91],
     exposure: 2.4,
   },
   {
