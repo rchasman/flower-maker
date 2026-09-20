@@ -98,11 +98,11 @@ export function Landing({ children }: LandingProps) {
             lineHeight: 1.02,
             letterSpacing: "-0.02em",
             color: "var(--text-primary)",
-            maxWidth: "20ch",
+            maxWidth: "22ch",
             marginBottom: "1.25rem",
           }}
         >
-          Stream a generated flower into the garden.
+          Stream flowers into a realtime multiplayer garden.
         </h1>
 
         <p
