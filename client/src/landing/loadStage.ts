@@ -3,7 +3,7 @@ import type { ConnectionState } from "../spacetime/connection.ts";
 export type LoadStage = "session" | "connecting" | "claiming" | "error";
 
 interface LoadStageInput {
-  authLoading: boolean;
+  authRestoring: boolean;
   isAuthenticated: boolean;
   state: ConnectionState;
   claimPending: boolean;
@@ -16,12 +16,12 @@ interface LoadStageInput {
  * returning visitor sees the name gate flash on every load.
  */
 export function signedInLoadStage({
-  authLoading,
+  authRestoring,
   isAuthenticated,
   state,
   claimPending,
 }: LoadStageInput): LoadStage | null {
-  if (authLoading) return "session";
+  if (authRestoring) return "session";
   if (!isAuthenticated) return null;
   if (state === "error") return "error";
   if (state !== "connected") return "connecting";

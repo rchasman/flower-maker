@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { signedInLoadStage } from "./loadStage.ts";
 
 const base = {
-  authLoading: false,
+  authRestoring: false,
   isAuthenticated: true,
   state: "connected" as const,
   claimPending: false,
@@ -13,7 +13,7 @@ describe("signedInLoadStage", () => {
     expect(
       signedInLoadStage({
         ...base,
-        authLoading: true,
+        authRestoring: true,
         isAuthenticated: false,
         state: "disconnected",
       }),

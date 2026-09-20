@@ -17,21 +17,24 @@ const MAX_NAME_LENGTH = 32;
  * until then the animated assembly line runs behind a centred invitation to pick a name.
  */
 export function Landing({ children }: LandingProps) {
-  const { state, conn, myUser, authLoading, claimPending } = useSession();
+  const { state, conn, myUser, authRestoring, claimPending } = useSession();
   const auth = useAuth();
   const [draft, setDraft] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (myUser?.name) return <>{children}</>;
-
-  const connected = state === "connected" && conn !== null;
   const loadStage = signedInLoadStage({
-    authLoading,
+    authRestoring,
     isAuthenticated: auth.isAuthenticated,
     state,
     claimPending,
   });
+
+  // A named visitor only passes the gate once nothing is still settling, or the
+  // app appears between the anonymous connection and the signed-in one.
+  if (!loadStage && myUser?.name) return <>{children}</>;
+
+  const connected = state === "connected" && conn !== null;
 
   const handleSubmit = () => {
     if (!conn) return;
