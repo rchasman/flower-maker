@@ -130,8 +130,6 @@ const HANDOFF_TRACK: readonly Keyframe[] = [
   [LOOP_SECONDS, GRAB],
 ];
 
-const TRACKS = [PICK_TRACK, WRAP_TRACK, HANDOFF_TRACK] as const;
-
 /** Joint angles of the three arms at time `t` (already wrapped into the loop). */
 export const armPoses = (
   time: number,
