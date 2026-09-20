@@ -41,9 +41,6 @@ export function App() {
             )}
           </AnimatePresence>
 
-          {/* Atmosphere — single compositing layer for dot grid, vignette, scanlines */}
-          <div className="tui-atmosphere" />
-
           <ChatPinup />
         </div>
       </NameGate>
