@@ -107,7 +107,7 @@ describe("petalPassesFor", () => {
     );
     const count = (r: number): number => {
       const g = new Graphics();
-      drawFlowerFromPlan(g, plan, r, 1);
+      drawFlowerFromPlan(g, plan, r);
       return g.context.instructions.length;
     };
     expect(count(DETAIL_RADIUS - 1)).toBeLessThan(count(DETAIL_RADIUS));

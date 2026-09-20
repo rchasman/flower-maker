@@ -256,7 +256,7 @@ export function createFlowerScene(plan: FlowerPlan): FlowerScene {
     flower: plant,
     draw: r => {
       front.graphics.clear();
-      drawFlowerFromPlan(front.graphics, plan, r, 1, {
+      drawFlowerFromPlan(front.graphics, plan, r, {
         particles: false,
         layer: frontLayer,
       });
@@ -264,7 +264,7 @@ export function createFlowerScene(plan: FlowerPlan): FlowerScene {
       front.picture.invalidate();
       if (back) {
         back.graphics.clear();
-        drawFlowerFromPlan(back.graphics, plan, r, 1, {
+        drawFlowerFromPlan(back.graphics, plan, r, {
           particles: false,
           layer: "back",
         });
@@ -282,13 +282,13 @@ export function createFlowerScene(plan: FlowerPlan): FlowerScene {
       const now = performance.now();
       if (aura) {
         aura.core.clear();
-        drawAura(aura.core, plan, r, 1);
+        drawAura(aura.core, plan, r);
       }
       if (bio && bioGlow) bioGlow.setLevel(bioWaveAt(bio.pattern, now));
       if (pulse && pulseGlow) pulseGlow.setLevel(nectaryPulseLevel(pulse, now));
       if (particles) {
         particles.clear();
-        drawParticles(particles, plan, r, 1);
+        drawParticles(particles, plan, r);
       }
     },
     destroy: () => {
@@ -313,7 +313,7 @@ export function createArrangementScene(plan: ArrangementPlan): FlowerScene {
     flower: plant,
     draw: r => {
       graphics.clear();
-      drawArrangementFromPlan(graphics, plan, r, 1);
+      drawArrangementFromPlan(graphics, plan, r);
       light.setHeads(arrangementHeadLights(plan, r));
       picture.invalidate();
     },

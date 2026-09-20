@@ -138,7 +138,6 @@ export function petalPassesFor(r: number): PetalPasses {
 /** Per-draw placement shared by every petal pass of one head. */
 type PetalPass = {
   scale: number;
-  alpha: number;
   opacity: number;
   lightOffsetX: number;
   lightOffsetY: number;
@@ -153,7 +152,7 @@ function drawPetalTexture(
   petal: PetalPlan,
   pass: PetalPass,
 ): void {
-  const { scale, alpha, lightOffsetX, lightOffsetY } = pass;
+  const { scale, lightOffsetX, lightOffsetY } = pass;
   switch (petal.texture) {
     case "Velvet": {
       // Edge darkening — thick inner stroke for soft absorbed-light look
@@ -163,7 +162,7 @@ function drawPetalTexture(
         {
           color: petal.textureEdge,
           width: Math.max(1.5, scale * 0.025),
-          alpha: alpha * 0.2,
+          alpha: 0.2,
         },
         scale,
       );
@@ -174,7 +173,7 @@ function drawPetalTexture(
       fillCmds(
         g,
         petal.cmds,
-        { color: petal.textureHighlight, alpha: alpha * 0.12 },
+        { color: petal.textureHighlight, alpha: 0.12 },
         scale,
         lightOffsetX * 2,
         lightOffsetY * 2,
@@ -186,7 +185,7 @@ function drawPetalTexture(
       fillCmds(
         g,
         petal.cmds,
-        { color: petal.textureHighlight, alpha: alpha * 0.15 },
+        { color: petal.textureHighlight, alpha: 0.15 },
         scale,
         lightOffsetX * 1.5,
         lightOffsetY * 1.5,
@@ -198,7 +197,7 @@ function drawPetalTexture(
       fillCmds(
         g,
         petal.cmds,
-        { color: petal.textureHighlight, alpha: alpha * 0.2 },
+        { color: petal.textureHighlight, alpha: 0.2 },
         scale,
         lightOffsetX,
         lightOffsetY,
@@ -206,7 +205,7 @@ function drawPetalTexture(
       fillCmds(
         g,
         petal.cmds,
-        { color: petal.textureEdge, alpha: alpha * 0.12 },
+        { color: petal.textureEdge, alpha: 0.12 },
         scale,
         -lightOffsetX,
         -lightOffsetY,
@@ -218,7 +217,7 @@ function drawPetalTexture(
       fillCmds(
         g,
         petal.cmds,
-        { color: petal.textureHighlight, alpha: alpha * 0.08 },
+        { color: petal.textureHighlight, alpha: 0.08 },
         scale,
       );
       break;
@@ -229,7 +228,7 @@ function drawPetalTexture(
       fillCmds(
         g,
         petal.cmds,
-        { color: 0xffffff, alpha: alpha * 0.18 },
+        { color: 0xffffff, alpha: 0.18 },
         scale,
         lightOffsetX * 2.5,
         lightOffsetY * 2.5,
@@ -241,7 +240,7 @@ function drawPetalTexture(
       fillCmds(
         g,
         petal.cmds,
-        { color: petal.textureHighlight, alpha: alpha * 0.1 },
+        { color: petal.textureHighlight, alpha: 0.1 },
         scale,
         lightOffsetX * 0.8,
         lightOffsetY * 0.8,
@@ -249,7 +248,7 @@ function drawPetalTexture(
       fillCmds(
         g,
         petal.cmds,
-        { color: petal.textureEdge, alpha: alpha * 0.08 },
+        { color: petal.textureEdge, alpha: 0.08 },
         scale,
         -lightOffsetX * 0.5,
         -lightOffsetY * 0.5,
@@ -264,7 +263,7 @@ function drawPetalTexture(
         {
           color: 0xffffff,
           width: Math.max(1, scale * 0.02),
-          alpha: alpha * 0.15,
+          alpha: 0.15,
         },
         scale,
       );
@@ -291,30 +290,25 @@ function drawPetal(
   petalIdx: number,
   pass: PetalPass,
 ): void {
-  const { scale, alpha, opacity, lightOffsetX, lightOffsetY, passes } = pass;
+  const { scale, opacity, lightOffsetX, lightOffsetY, passes } = pass;
 
   // Intra-layer depth: each petal casts a subtle shadow on the one behind it
   if (petalIdx > 0 && passes.depthShadow) {
     fillCmds(
       g,
       petal.cmds,
-      { color: 0x000000, alpha: alpha * 0.04 },
+      { color: 0x000000, alpha: 0.04 },
       scale * 1.01,
       pass.shadowOffX * 0.5,
       pass.shadowOffY * 0.5,
     );
   }
 
-  fillCmds(
-    g,
-    petal.cmds,
-    { color: petal.color, alpha: alpha * opacity },
-    scale,
-  );
+  fillCmds(g, petal.cmds, { color: petal.color, alpha: opacity }, scale);
 
   const gradientStops = passes.gradient ? petal.gradientStops.slice(1) : [];
   for (const [si, stop] of gradientStops.entries()) {
-    const stopAlpha = alpha * opacity * (0.65 - si * 0.1);
+    const stopAlpha = opacity * (0.65 - si * 0.1);
     fillCmds(
       g,
       stop.cmds,
@@ -326,7 +320,7 @@ function drawPetal(
   fillCmds(
     g,
     petal.cmds,
-    { color: petal.lightColor, alpha: alpha * opacity * 0.18 },
+    { color: petal.lightColor, alpha: opacity * 0.18 },
     scale,
     lightOffsetX,
     lightOffsetY,
@@ -335,18 +329,13 @@ function drawPetal(
   fillCmds(
     g,
     petal.cmds,
-    { color: petal.shadowColor, alpha: alpha * opacity * 0.1 },
+    { color: petal.shadowColor, alpha: opacity * 0.1 },
     scale,
     -lightOffsetX * 0.7,
     -lightOffsetY * 0.7,
   );
 
-  fillCmds(
-    g,
-    petal.cmds,
-    { color: petal.highlightColor, alpha: alpha * 0.15 },
-    scale,
-  );
+  fillCmds(g, petal.cmds, { color: petal.highlightColor, alpha: 0.15 }, scale);
 
   if (passes.texture) drawPetalTexture(g, petal, pass);
 
@@ -356,7 +345,7 @@ function drawPetal(
     fillCmds(
       g,
       petal.cmds,
-      { color, alpha: alpha * intensity * 0.25 },
+      { color, alpha: intensity * 0.25 },
       scale,
       lightOffsetX * 0.8,
       lightOffsetY * 0.8,
@@ -364,7 +353,7 @@ function drawPetal(
     fillCmds(
       g,
       petal.cmds,
-      { color: complement, alpha: alpha * intensity * 0.12 },
+      { color: complement, alpha: intensity * 0.12 },
       scale,
       -lightOffsetX * 0.5,
       -lightOffsetY * 0.5,
@@ -376,7 +365,7 @@ function drawPetal(
     fillCmds(
       g,
       mark.cmds,
-      { color: mark.color, alpha: alpha * opacity * mark.alpha },
+      { color: mark.color, alpha: opacity * mark.alpha },
       scale,
     );
   }
@@ -388,7 +377,7 @@ function drawPetal(
       {
         color: petal.midribGlowColor,
         width: Math.max(0.8, scale * 0.018),
-        alpha: alpha * 0.12,
+        alpha: 0.12,
       },
       scale,
     );
@@ -398,7 +387,7 @@ function drawPetal(
       {
         color: petal.veinColor,
         width: Math.max(0.3, scale * 0.008),
-        alpha: alpha * 0.25,
+        alpha: 0.25,
       },
       scale,
     );
@@ -410,7 +399,7 @@ function drawPetal(
     {
       color: petal.outlineColor,
       width: Math.max(0.3, scale * 0.006),
-      alpha: alpha * opacity * 0.4,
+      alpha: opacity * 0.4,
     },
     scale,
   );
@@ -449,17 +438,12 @@ function drawCorollaBody(
   corolla: CorollaPlan,
   pass: PetalPass,
 ): void {
-  const { scale, alpha, opacity } = pass;
+  const { scale, opacity } = pass;
+  fillCmds(g, corolla.body, { color: corolla.color, alpha: opacity }, scale);
   fillCmds(
     g,
     corolla.body,
-    { color: corolla.color, alpha: alpha * opacity },
-    scale,
-  );
-  fillCmds(
-    g,
-    corolla.body,
-    { fill: corollaGradient(corolla), alpha: alpha * opacity * 0.9 },
+    { fill: corollaGradient(corolla), alpha: opacity * 0.9 },
     scale,
   );
   strokeCmds(
@@ -468,16 +452,16 @@ function drawCorollaBody(
     {
       color: darkenColor(corolla.color, 0.55),
       width: Math.max(0.3, scale * 0.006),
-      alpha: alpha * opacity * 0.4,
+      alpha: opacity * 0.4,
     },
     scale,
   );
 }
 
 function drawThroat(g: Graphics, corolla: CorollaPlan, pass: PetalPass): void {
-  const { scale, alpha, opacity } = pass;
+  const { scale, opacity } = pass;
   g.circle(0, 0, corolla.throat.radius * scale);
-  g.fill({ color: corolla.throat.innerColor, alpha: alpha * opacity * 0.9 });
+  g.fill({ color: corolla.throat.innerColor, alpha: opacity * 0.9 });
 }
 
 /** Every outline a layer draws, for the depth shadow it casts on the layer below. */
@@ -492,7 +476,6 @@ function drawPetals(
   g: Graphics,
   layers: readonly LayerPlan[],
   scale: number,
-  alpha: number,
   passes: PetalPasses,
   firstLayerIdx = 0,
 ) {
@@ -504,7 +487,6 @@ function drawPetals(
   for (const [layerIdx, layer] of layers.entries()) {
     const pass: PetalPass = {
       scale,
-      alpha,
       opacity: layer.opacity,
       lightOffsetX,
       lightOffsetY,
@@ -519,7 +501,7 @@ function drawPetals(
         fillCmds(
           g,
           cmds,
-          { color: 0x000000, alpha: alpha * 0.06 },
+          { color: 0x000000, alpha: 0.06 },
           scale * 1.02,
           shadowOffX,
           shadowOffY,
@@ -546,7 +528,6 @@ function drawStamens(
   g: Graphics,
   stamens: HeadPlan["center"]["stamens"],
   scale: number,
-  alpha: number,
 ) {
   for (const [i, s] of stamens.entries()) {
     const sx = Math.cos(s.angle) * s.length * scale;
@@ -569,35 +550,30 @@ function drawStamens(
     g.stroke({
       color: s.filamentColor,
       width: Math.max(0.4, scale * 0.022),
-      alpha: alpha * 0.75,
+      alpha: 0.75,
     });
 
     const ar = s.antherRadius * scale;
     g.circle(sx, sy, ar);
-    g.fill({ color: s.antherColor, alpha });
+    g.fill({ color: s.antherColor });
     g.circle(sx, sy, ar);
     g.stroke({
       color: darkenColor(s.antherColor, 0.5),
       width: Math.max(0.2, scale * 0.004),
-      alpha: alpha * 0.4,
+      alpha: 0.4,
     });
     g.circle(sx - ar * 0.25, sy - ar * 0.25, ar * 0.35);
-    g.fill({ color: 0xffffff, alpha: alpha * 0.25 });
+    g.fill({ color: 0xffffff, alpha: 0.25 });
   }
 }
 
 /** The nectary's static glow and marks, under the pistil. */
-function drawNectary(
-  g: Graphics,
-  nectary: NectaryPlan,
-  scale: number,
-  alpha: number,
-): void {
+function drawNectary(g: Graphics, nectary: NectaryPlan, scale: number): void {
   const intensity = nectary.glow?.intensity ?? 0.5;
   fillCmds(
     g,
     nectary.fills,
-    { color: nectary.color, alpha: alpha * (0.2 + intensity * 0.3) },
+    { color: nectary.color, alpha: 0.2 + intensity * 0.3 },
     scale,
   );
   strokeCmds(
@@ -606,7 +582,7 @@ function drawNectary(
     {
       color: nectary.color,
       width: Math.max(0.5, nectary.strokeWidth * scale),
-      alpha: alpha * (0.3 + intensity * 0.4),
+      alpha: 0.3 + intensity * 0.4,
     },
     scale,
   );
@@ -617,12 +593,11 @@ function drawSeedHead(
   g: Graphics,
   seedHead: SeedHeadPlan,
   scale: number,
-  alpha: number,
 ): void {
   fillCmds(
     g,
     seedHead.stipple,
-    { color: seedHead.stippleColor, alpha: alpha * 0.7 },
+    { color: seedHead.stippleColor, alpha: 0.7 },
     scale,
   );
   strokeCmds(
@@ -631,16 +606,11 @@ function drawSeedHead(
     {
       color: seedHead.strokeColor,
       width: Math.max(0.4, seedHead.strokeWidth * scale),
-      alpha: alpha * 0.8,
+      alpha: 0.8,
     },
     scale,
   );
-  fillCmds(
-    g,
-    seedHead.fills,
-    { color: seedHead.fillColor, alpha: alpha * 0.9 },
-    scale,
-  );
+  fillCmds(g, seedHead.fills, { color: seedHead.fillColor, alpha: 0.9 }, scale);
 }
 
 /** Draw center disc with outline, radial depth, stippling, seed head and pistil highlight. */
@@ -648,27 +618,26 @@ function drawCenterDisc(
   g: Graphics,
   center: HeadPlan["center"],
   scale: number,
-  alpha: number,
 ) {
   const discR = center.discRadius * scale;
   const discColor = center.discColor;
 
-  if (center.nectary) drawNectary(g, center.nectary, scale, alpha);
+  if (center.nectary) drawNectary(g, center.nectary, scale);
   if (discR <= 0) return;
 
   g.circle(0, 0, discR);
-  g.fill({ color: discColor, alpha });
+  g.fill({ color: discColor });
   g.circle(0, 0, discR);
   g.stroke({
     color: darkenColor(discColor, 0.45),
     width: Math.max(0.3, scale * 0.006),
-    alpha: alpha * 0.4,
+    alpha: 0.4,
   });
 
   g.circle(0, 0, discR * 0.75);
-  g.fill({ color: lightenColor(discColor, 0.08), alpha: alpha * 0.3 });
+  g.fill({ color: lightenColor(discColor, 0.08), alpha: 0.3 });
   g.circle(0, 0, discR * 0.5);
-  g.fill({ color: lightenColor(discColor, 0.15), alpha: alpha * 0.25 });
+  g.fill({ color: lightenColor(discColor, 0.15), alpha: 0.25 });
 
   const stippleCount = Math.max(5, Math.min(16, Math.round(discR * 4)));
   for (let i = 0; i < stippleCount; i++) {
@@ -681,31 +650,26 @@ function drawCenterDisc(
     const dotColor =
       i % 2 === 0 ? darkenColor(discColor, 0.6) : lightenColor(discColor, 0.1);
     g.circle(dotX, dotY, dotR);
-    g.fill({ color: dotColor, alpha: alpha * (0.35 + t * 0.2) });
+    g.fill({ color: dotColor, alpha: 0.35 + t * 0.2 });
   }
 
-  if (center.seedHead) drawSeedHead(g, center.seedHead, scale, alpha);
+  if (center.seedHead) drawSeedHead(g, center.seedHead, scale);
 
   const hlR = center.highlightRadius * scale;
   if (hlR > 0) {
     g.circle(discR * 0.08, -discR * 0.12, hlR);
-    g.fill({ color: center.highlightColor, alpha: alpha * 0.55 });
+    g.fill({ color: center.highlightColor, alpha: 0.55 });
   }
 }
 
 /** Draw aura on a SEPARATE Graphics to avoid rectangular bounding-box artifacts. */
-export function drawAura(
-  g: Graphics,
-  plan: FlowerPlan,
-  r: number,
-  alpha: number,
-) {
+export function drawAura(g: Graphics, plan: FlowerPlan, r: number) {
   if (!plan.aura) return;
   const scale = r * anchorFloret(plan).scale;
   const now = performance.now();
   const auraR = plan.aura.radius * scale * 2.5;
   const pulse = 0.85 + 0.15 * Math.sin(now / 800);
-  const auraAlpha = alpha * plan.aura.opacity * pulse;
+  const auraAlpha = plan.aura.opacity * pulse;
 
   switch (plan.aura.kind) {
     case "Prismatic":
@@ -793,16 +757,15 @@ function drawStalk(
   cmds: readonly DrawCmd[],
   color: number,
   scale: number,
-  alpha: number,
 ): void {
-  fillCmds(g, cmds, { color, alpha: alpha * 0.9 }, scale);
+  fillCmds(g, cmds, { color, alpha: 0.9 }, scale);
   strokeCmds(
     g,
     cmds,
     {
       color: darkenColor(color, 0.5),
       width: Math.max(0.4, scale * 0.008),
-      alpha: alpha * 0.45,
+      alpha: 0.45,
     },
     scale,
   );
@@ -814,19 +777,18 @@ function drawStalkShading(
   shading: StalkShading,
   color: number,
   scale: number,
-  alpha: number,
 ): void {
   const width = Math.max(0.5, shading.width * scale);
   strokeCmds(
     g,
     shading.shade,
-    { color: darkenColor(color, 0.35), width, alpha: alpha * 0.35 },
+    { color: darkenColor(color, 0.35), width, alpha: 0.35 },
     scale,
   );
   strokeCmds(
     g,
     shading.shine,
-    { color: lightenColor(color, 0.35), width, alpha: alpha * 0.4 },
+    { color: lightenColor(color, 0.35), width, alpha: 0.4 },
     scale,
   );
 }
@@ -837,17 +799,16 @@ function drawBranch(
   stalk: StalkPlan,
   color: number,
   scale: number,
-  alpha: number,
 ): void {
-  fillCmds(g, stalk.fill, { color, alpha: alpha * 0.9 }, scale);
-  drawStalkShading(g, stalk.shading, color, scale, alpha);
+  fillCmds(g, stalk.fill, { color, alpha: 0.9 }, scale);
+  drawStalkShading(g, stalk.shading, color, scale);
   strokeCmds(
     g,
     stalk.edges,
     {
       color: darkenColor(color, 0.5),
       width: Math.max(0.4, scale * 0.008),
-      alpha: alpha * 0.45,
+      alpha: 0.45,
     },
     scale,
   );
@@ -858,33 +819,30 @@ function drawBlades(
   g: Graphics,
   blades: ReadonlyArray<{ cmds: DrawCmd[]; color: number }>,
   scale: number,
-  alpha: number,
 ): void {
   for (const blade of blades) {
-    fillCmds(g, blade.cmds, { color: blade.color, alpha: alpha * 0.85 }, scale);
+    fillCmds(g, blade.cmds, { color: blade.color, alpha: 0.85 }, scale);
     strokeCmds(
       g,
       blade.cmds,
       {
         color: darkenColor(blade.color, 0.5),
         width: Math.max(0.3, scale * 0.005),
-        alpha: alpha * 0.35,
+        alpha: 0.35,
       },
       scale,
     );
   }
 }
 
-function drawLeaf(g: Graphics, leaf: LeafPlan, scale: number, alpha: number) {
-  const leafAlpha = alpha * leaf.alpha;
-  if (leaf.petiole)
-    drawBranch(g, leaf.petiole, leaf.petioleColor, scale, alpha);
-  fillCmds(g, leaf.cmds, { color: leaf.color, alpha: leafAlpha * 0.9 }, scale);
+function drawLeaf(g: Graphics, leaf: LeafPlan, scale: number) {
+  if (leaf.petiole) drawBranch(g, leaf.petiole, leaf.petioleColor, scale);
+  fillCmds(g, leaf.cmds, { color: leaf.color, alpha: leaf.alpha * 0.9 }, scale);
   if (leaf.variegation) {
     fillCmds(
       g,
       leaf.variegation.cmds,
-      { color: leaf.variegation.color, alpha: leafAlpha * 0.8 },
+      { color: leaf.variegation.color, alpha: leaf.alpha * 0.8 },
       scale,
     );
   }
@@ -894,7 +852,7 @@ function drawLeaf(g: Graphics, leaf: LeafPlan, scale: number, alpha: number) {
     {
       color: darkenColor(leaf.color, 0.45),
       width: Math.max(0.3, scale * 0.006),
-      alpha: leafAlpha * 0.4,
+      alpha: leaf.alpha * 0.4,
     },
     scale,
   );
@@ -904,23 +862,23 @@ function drawLeaf(g: Graphics, leaf: LeafPlan, scale: number, alpha: number) {
     {
       color: leaf.veinColor,
       width: Math.max(0.4, scale * 0.012),
-      alpha: leafAlpha * 0.65,
+      alpha: leaf.alpha * 0.65,
     },
     scale,
   );
 }
 
 /** A side bud: its pedicel, the sepal shell with two seams, and any petal showing at the tip. */
-function drawBud(g: Graphics, bud: BudPlan, scale: number, alpha: number) {
-  drawStalk(g, bud.pedicel, bud.pedicelColor, scale, alpha);
-  fillCmds(g, bud.shell, { color: bud.shellColor, alpha: alpha * 0.95 }, scale);
+function drawBud(g: Graphics, bud: BudPlan, scale: number) {
+  drawStalk(g, bud.pedicel, bud.pedicelColor, scale);
+  fillCmds(g, bud.shell, { color: bud.shellColor, alpha: 0.95 }, scale);
   strokeCmds(
     g,
     bud.shell,
     {
       color: darkenColor(bud.shellColor, 0.5),
       width: Math.max(0.3, scale * 0.005),
-      alpha: alpha * 0.45,
+      alpha: 0.45,
     },
     scale,
   );
@@ -930,17 +888,17 @@ function drawBud(g: Graphics, bud: BudPlan, scale: number, alpha: number) {
     {
       color: darkenColor(bud.shellColor, 0.6),
       width: Math.max(0.3, scale * 0.004),
-      alpha: alpha * 0.4,
+      alpha: 0.4,
     },
     scale,
   );
-  fillCmds(g, bud.petal, { color: bud.petalColor, alpha: alpha * 0.9 }, scale);
+  fillCmds(g, bud.petal, { color: bud.petalColor, alpha: 0.9 }, scale);
 }
 
 /** The stem fill and edge, its cylinder shading, then its surface detail and thorns. */
-function drawStem(g: Graphics, stem: StemPlan, scale: number, alpha: number) {
-  drawStalk(g, stem.cmds, stem.color, scale, alpha);
-  drawStalkShading(g, stem.shading, stem.color, scale, alpha);
+function drawStem(g: Graphics, stem: StemPlan, scale: number) {
+  drawStalk(g, stem.cmds, stem.color, scale);
+  drawStalkShading(g, stem.shading, stem.color, scale);
   for (const layer of stem.surface) {
     strokeCmds(
       g,
@@ -948,26 +906,21 @@ function drawStem(g: Graphics, stem: StemPlan, scale: number, alpha: number) {
       {
         color: layer.color,
         width: Math.max(0.4, scale * 0.007),
-        alpha: alpha * 0.55,
+        alpha: 0.55,
       },
       scale,
     );
-    fillCmds(
-      g,
-      layer.fills,
-      { color: layer.color, alpha: alpha * 0.55 },
-      scale,
-    );
+    fillCmds(g, layer.fills, { color: layer.color, alpha: 0.55 }, scale);
   }
   for (const thorn of stem.thorns) {
-    fillCmds(g, thorn.cmds, { color: thorn.color, alpha: alpha * 0.85 }, scale);
+    fillCmds(g, thorn.cmds, { color: thorn.color, alpha: 0.85 }, scale);
     strokeCmds(
       g,
       thorn.cmds,
       {
         color: darkenColor(thorn.color, 0.4),
         width: Math.max(0.3, scale * 0.005),
-        alpha: alpha * 0.5,
+        alpha: 0.5,
       },
       scale,
     );
@@ -983,25 +936,17 @@ function drawHead(
   g: Graphics,
   head: HeadPlan,
   scale: number,
-  alpha: number,
   passes: PetalPasses,
 ): void {
-  drawBlades(g, head.bracts, scale, alpha);
-  drawBlades(g, head.sepals, scale, alpha);
+  drawBlades(g, head.bracts, scale);
+  drawBlades(g, head.sepals, scale);
   if (head.closedCentre) {
-    drawPetals(g, head.layers.slice(0, -1), scale, alpha, passes);
-    drawStamens(g, head.center.stamens, scale, alpha);
-    drawCenterDisc(g, head.center, scale, alpha);
-    drawPetals(
-      g,
-      head.layers.slice(-1),
-      scale,
-      alpha,
-      passes,
-      head.layers.length - 1,
-    );
+    drawPetals(g, head.layers.slice(0, -1), scale, passes);
+    drawStamens(g, head.center.stamens, scale);
+    drawCenterDisc(g, head.center, scale);
+    drawPetals(g, head.layers.slice(-1), scale, passes, head.layers.length - 1);
   } else {
-    drawPetals(g, head.layers, scale, alpha, passes);
+    drawPetals(g, head.layers, scale, passes);
   }
 
   for (const dd of head.dewdrops) {
@@ -1009,14 +954,14 @@ function drawHead(
     const dy = dd.y * scale;
     const dr = dd.radius * scale;
     g.circle(dx, dy, dr);
-    g.fill({ color: 0xffffff, alpha: alpha * 0.45 });
+    g.fill({ color: 0xffffff, alpha: 0.45 });
     g.circle(dx - dr * 0.3, dy - dr * 0.3, dr * 0.4);
-    g.fill({ color: 0xffffff, alpha: alpha * 0.7 });
+    g.fill({ color: 0xffffff, alpha: 0.7 });
   }
 
   if (!head.closedCentre) {
-    drawStamens(g, head.center.stamens, scale, alpha);
-    drawCenterDisc(g, head.center, scale, alpha);
+    drawStamens(g, head.center.stamens, scale);
+    drawCenterDisc(g, head.center, scale);
   }
 }
 
@@ -1028,7 +973,6 @@ function drawHeadAt(
   y: number,
   angle: number,
   scale: number,
-  alpha: number,
   passes: PetalPasses,
 ): void {
   // Pixi's rotateTransform turns the accumulated matrix about the graphics
@@ -1036,7 +980,7 @@ function drawHeadAt(
   g.save();
   g.rotateTransform(angle);
   g.translateTransform(x, y);
-  drawHead(g, head, scale, alpha, passes);
+  drawHead(g, head, scale, passes);
   g.restore();
 }
 
@@ -1078,7 +1022,6 @@ export function drawFlowerFromPlan(
   g: Graphics,
   plan: FlowerPlan,
   r: number,
-  alpha: number,
   options: DrawFlowerOptions = { particles: true, layer: "all" },
 ) {
   const scale = r;
@@ -1091,17 +1034,17 @@ export function drawFlowerFromPlan(
   if (plan.stem) {
     const stemColor = plan.stem.color;
     if (plant) {
-      drawStem(g, plan.stem, scale, alpha);
-      for (const b of plan.branches) drawBranch(g, b, stemColor, scale, alpha);
+      drawStem(g, plan.stem, scale);
+      for (const b of plan.branches) drawBranch(g, b, stemColor, scale);
     }
     for (const floret of ordered) {
-      if (floret.stalk) drawBranch(g, floret.stalk, stemColor, scale, alpha);
+      if (floret.stalk) drawBranch(g, floret.stalk, stemColor, scale);
     }
   }
 
   if (plant) {
-    for (const leaf of plan.leaves) drawLeaf(g, leaf, scale, alpha);
-    for (const bud of plan.buds) drawBud(g, bud, scale, alpha);
+    for (const leaf of plan.leaves) drawLeaf(g, leaf, scale);
+    for (const bud of plan.buds) drawBud(g, bud, scale);
   }
 
   for (const floret of ordered) {
@@ -1112,21 +1055,15 @@ export function drawFlowerFromPlan(
       floret.offsetY * scale,
       floret.angle,
       scale * floret.scale,
-      alpha,
       passes,
     );
   }
 
-  if (options.particles && plant) drawParticles(g, plan, r, alpha);
+  if (options.particles && plant) drawParticles(g, plan, r);
 }
 
 /** The plan's particles at this moment, in front of the flower. */
-export function drawParticles(
-  g: Graphics,
-  plan: FlowerPlan,
-  r: number,
-  alpha: number,
-): void {
+export function drawParticles(g: Graphics, plan: FlowerPlan, r: number): void {
   const anchor = anchorFloret(plan);
   const scale = r * anchor.scale;
   const t = performance.now() / 1000;
@@ -1135,15 +1072,13 @@ export function drawParticles(
     const at = particlePosition(p, t, scale);
     const px = at.px + anchor.offsetX * r;
     const py = at.py + anchor.offsetY * r;
-    const fade = at.fade;
     const pr = p.size * scale;
-    const alphaNow = alpha * fade;
 
     if (p.luminosity > 0) {
       g.circle(px, py, pr * 3);
-      g.fill({ color: p.color, alpha: alphaNow * p.luminosity * 0.2 });
+      g.fill({ color: p.color, alpha: at.fade * p.luminosity * 0.2 });
       g.circle(px, py, pr * 1.8);
-      g.fill({ color: p.color, alpha: alphaNow * p.luminosity * 0.3 });
+      g.fill({ color: p.color, alpha: at.fade * p.luminosity * 0.3 });
     }
 
     switch (p.kind) {
@@ -1152,9 +1087,9 @@ export function drawParticles(
       case "Lightning": {
         const twinkle = 0.3 + 0.7 * Math.abs(Math.sin(t * 4 + p.x * 20));
         g.circle(px, py, pr * 1.5);
-        g.fill({ color: p.color, alpha: alphaNow * twinkle * 0.8 });
+        g.fill({ color: p.color, alpha: at.fade * twinkle * 0.8 });
         g.circle(px, py, pr * 0.6);
-        g.fill({ color: 0xffffff, alpha: alphaNow * twinkle * 0.5 });
+        g.fill({ color: 0xffffff, alpha: at.fade * twinkle * 0.5 });
         break;
       }
       case "Butterflies": {
@@ -1170,13 +1105,13 @@ export function drawParticles(
           px + wingSpread * Math.cos(flapAngle),
           py - wingSpread * Math.sin(flapAngle),
         );
-        g.fill({ color: p.color, alpha: alphaNow * 0.6 });
+        g.fill({ color: p.color, alpha: at.fade * 0.6 });
         break;
       }
       case "Snowflakes": {
         const fallY = py + ((t * 0.02 * scale) % (scale * 0.5));
         g.circle(px, fallY, pr);
-        g.fill({ color: 0xffffff, alpha: alphaNow * 0.5 });
+        g.fill({ color: 0xffffff, alpha: at.fade * 0.5 });
         break;
       }
       case "Pollen":
@@ -1189,7 +1124,7 @@ export function drawParticles(
       case "Bubbles":
       case "Raindrops": {
         g.circle(px, py, pr);
-        g.fill({ color: p.color, alpha: alphaNow * 0.5 });
+        g.fill({ color: p.color, alpha: at.fade * 0.5 });
         break;
       }
       default:
@@ -1326,23 +1261,22 @@ export function drawArrangementFromPlan(
   g: Graphics,
   plan: ArrangementPlan,
   r: number,
-  alpha: number,
 ) {
   const scale = r;
   const passes = petalPassesFor(r);
 
   // Pass 1: All stems
-  for (const member of plan.members) drawStem(g, member.stem, scale, alpha);
+  for (const member of plan.members) drawStem(g, member.stem, scale);
 
   // Pass 2: Adornment
   if (plan.adornment) {
     const ad = plan.adornment;
-    fillCmds(g, ad.cmds, { color: ad.color, alpha: alpha * ad.opacity }, scale);
+    fillCmds(g, ad.cmds, { color: ad.color, alpha: ad.opacity }, scale);
     if (ad.accent) {
       fillCmds(
         g,
         ad.accent.cmds,
-        { color: ad.accent.color, alpha: alpha * ad.accent.opacity },
+        { color: ad.accent.color, alpha: ad.accent.opacity },
         scale,
       );
     }
@@ -1350,7 +1284,7 @@ export function drawArrangementFromPlan(
       fillCmds(
         g,
         ad.detail.cmds,
-        { color: ad.detail.color, alpha: alpha * ad.detail.opacity },
+        { color: ad.detail.color, alpha: ad.detail.opacity },
         scale,
       );
     }
@@ -1358,7 +1292,7 @@ export function drawArrangementFromPlan(
 
   // Pass 3: All leaves
   for (const member of plan.members) {
-    for (const leaf of member.leaves) drawLeaf(g, leaf, scale, alpha);
+    for (const leaf of member.leaves) drawLeaf(g, leaf, scale);
   }
 
   // Pass 4: Flower heads (back to front — hero last so it's on top)
@@ -1370,7 +1304,6 @@ export function drawArrangementFromPlan(
       member.offsetY * scale,
       0,
       scale * member.scale,
-      alpha,
       passes,
     );
   }
