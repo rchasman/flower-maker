@@ -92,6 +92,21 @@ type CachedPlan =
   | { kind: "flower"; plan: FlowerPlan }
   | { kind: "arrangement"; plan: ArrangementPlan };
 
+/** A scene on the stage and the plan it was drawn from; a new plan object means a new scene. */
+type PlacedScene = { scene: FlowerScene; plan: CachedPlan };
+
+/** The merge bloom's extra scale for a flower, 1 outside the pulse; a finished pulse is forgotten. */
+function mergeBloomScale(blooms: Map<number, number>, sid: number): number {
+  const bloomStart = blooms.get(sid);
+  if (bloomStart === undefined) return 1;
+  const progress = (performance.now() - bloomStart) / BLOOM_DURATION;
+  if (progress >= 1) {
+    blooms.delete(sid);
+    return 1;
+  }
+  return 1 + 0.15 * Math.sin(progress * Math.PI) * (1 - progress * 0.5);
+}
+
 /** The scene a plan draws into, or the plain arrangement scene. */
 function sceneFor(cached: CachedPlan): FlowerScene {
   return cached.kind === "flower"
@@ -150,7 +165,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
     const appRef = useRef<Application | null>(null);
-    const scenesRef = useRef<Map<number, FlowerScene>>(new Map());
+    const scenesRef = useRef<Map<number, PlacedScene>>(new Map());
     const selectionRingRef = useRef<Graphics | null>(null);
     const stageContainerRef = useRef<Container | null>(null);
     const selectedIdRef = useRef(selectedId);
@@ -191,11 +206,6 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     );
     const planCacheRef = useRef<Map<number, CachedPlan>>(new Map());
 
-    // Dirty-flag tracking: skip expensive g.clear() + redraw when nothing visual changed.
-    const drawnStateRef = useRef<Map<number, { scale: number; alpha: number }>>(
-      new Map(),
-    );
-
     // Keep refs in sync without re-running effects
     selectedIdRef.current = selectedId;
     onFlowerClickRef.current = onFlowerClick;
@@ -233,14 +243,12 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const setSpecMap = useCallback((specs: Map<number, string>) => {
       specMapRef.current = specs;
       planCacheRef.current.clear();
-      drawnStateRef.current.clear();
     }, []);
 
     const setConstituentMap = useCallback(
       (constituents: Map<number, ConstituentEntry[]>) => {
         constituentMapRef.current = constituents;
         planCacheRef.current.clear();
-        drawnStateRef.current.clear();
       },
       [],
     );
@@ -249,7 +257,47 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
       (meta: Map<number, ArrangementMeta>) => {
         arrangementMetaMapRef.current = meta;
         planCacheRef.current.clear();
-        drawnStateRef.current.clear();
+      },
+      [],
+    );
+
+    /** The scene showing `cached` for `sid`: reused while the plan is the same object, rebuilt and drawn once when it changes. */
+    const placeScene = useCallback(
+      (
+        app: Application,
+        stage: Container,
+        sid: number,
+        cached: CachedPlan,
+      ): PlacedScene => {
+        const scenes = scenesRef.current;
+        const existing = scenes.get(sid);
+        if (existing && existing.plan === cached) return existing;
+        if (existing) {
+          stage.removeChild(existing.scene.root);
+          existing.scene.destroy();
+        }
+        const scene = sceneFor(cached);
+        const g = scene.flower;
+        g.eventMode = "static";
+        g.cursor = "grab";
+        g.hitArea = footprintFor(cached, FLOWER_BASE_RADIUS).hitArea;
+        g.on("pointerdown", e => {
+          dragRef.current = {
+            sid,
+            started: false,
+            originX: e.global.x,
+            originY: e.global.y,
+          };
+          e.stopPropagation();
+        });
+        g.on("pointerup", () => {
+          g.cursor = "grab";
+        });
+        scene.draw(FLOWER_BASE_RADIUS);
+        scene.refresh(app.renderer);
+        const placed = { scene, plan: cached };
+        scenes.set(sid, placed);
+        return placed;
       },
       [],
     );
@@ -257,20 +305,19 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const updateFlowers = useCallback(
       (pool: FlowerRenderData[], count: number) => {
         const stage = stageContainerRef.current;
-        if (!stage) return;
+        const app = appRef.current;
+        if (!stage || !app) return;
         const scenes = scenesRef.current;
 
         _activeSids.clear();
         for (let i = 0; i < count; i++) _activeSids.add(pool[i]!.sid);
 
-        const drawnState = drawnStateRef.current;
-        scenes.forEach((scene, sid) => {
+        scenes.forEach(({ scene }, sid) => {
           if (_activeSids.has(sid)) return;
           stage.removeChild(scene.root);
           scene.destroy();
           scenes.delete(sid);
           planCacheRef.current.delete(sid);
-          drawnState.delete(sid);
         });
 
         if (!selectionRingRef.current) {
@@ -283,28 +330,12 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         for (let fi = 0; fi < count; fi++) {
           const flower = pool[fi]!;
           const cached = getPlan(flower.sid);
-          let scene = scenes.get(flower.sid);
-          if (!scene) {
-            scene = sceneFor(cached);
-            const g = scene.flower;
-            g.eventMode = "static";
-            g.cursor = "grab";
-            const sid = flower.sid;
-            g.on("pointerdown", e => {
-              dragRef.current = {
-                sid,
-                started: false,
-                originX: e.global.x,
-                originY: e.global.y,
-              };
-              e.stopPropagation();
-            });
-            g.on("pointerup", () => {
-              g.cursor = "grab";
-            });
-            scenes.set(flower.sid, scene);
+          const isNew = !scenes.has(flower.sid);
+          const { scene } = placeScene(app, stage, flower.sid, cached);
+          if (!scene.root.parent) {
             stage.addChildAt(scene.root, stage.getChildIndex(selectionRing));
-
+          }
+          if (isNew) {
             const bloomSentinel = mergeBloomRef.current.get(-1);
             if (
               bloomSentinel &&
@@ -315,47 +346,22 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             }
           }
 
-          const r = FLOWER_BASE_RADIUS * flower.scale;
-          const alpha = flower.alpha;
-
-          const prev = drawnState.get(flower.sid);
-          const needsRedraw =
-            !prev || prev.scale !== flower.scale || prev.alpha !== flower.alpha;
-
-          if (needsRedraw) {
-            scene.flower.hitArea = footprintFor(cached, r).hitArea;
-            scene.draw(r, alpha);
-            drawnState.set(flower.sid, {
-              scale: flower.scale,
-              alpha: flower.alpha,
-            });
-          }
-
-          // Aura, glow and particles move every frame
-          scene.tick(r, alpha);
-
+          // The plant is drawn once at the base radius; the simulation's
+          // bloom-in and wilt-out scale and alpha are transforms on the root.
+          scene.tick(FLOWER_BASE_RADIUS);
           scene.root.position.set(flower.x, flower.y);
           scene.root.rotation = flower.rotation;
+          scene.root.alpha = flower.alpha;
+          scene.root.scale.set(
+            flower.scale * mergeBloomScale(mergeBloomRef.current, flower.sid),
+          );
 
           if (selectedIdRef.current === flower.sid) {
+            const r = FLOWER_BASE_RADIUS * flower.scale;
             selectionRing.position.set(flower.x, flower.y);
             selectionRing.rotation = flower.rotation;
             footprintFor(cached, r).drawRing(selectionRing);
             selectionRing.stroke({ color: 0xffffff, width: 2, alpha: 0.7 });
-          }
-
-          const bloomStart = mergeBloomRef.current.get(flower.sid);
-          if (bloomStart) {
-            const elapsed = performance.now() - bloomStart;
-            if (elapsed < BLOOM_DURATION) {
-              const progress = elapsed / BLOOM_DURATION;
-              const bloomScale =
-                1 + 0.15 * Math.sin(progress * Math.PI) * (1 - progress * 0.5);
-              scene.root.scale.set(bloomScale);
-            } else {
-              scene.root.scale.set(1);
-              mergeBloomRef.current.delete(flower.sid);
-            }
           }
         }
 
@@ -396,7 +402,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
                 }
               : null;
 
-          const g = scenesRef.current.get(drag.sid)?.flower;
+          const g = scenesRef.current.get(drag.sid)?.scene.flower;
           if (g) g.cursor = mergeTargetRef.current ? "cell" : "grabbing";
         } else {
           mergeTargetRef.current = null;
@@ -470,9 +476,9 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           const elapsed = now - startTime;
           if (elapsed >= MERGE_GLOW_DURATION) {
             // Remove expired glow filter
-            const g = scenes.get(sid)?.flower;
-            if (g) {
-              g.filters = filterList(g.filters).filter(f => f !== filter);
+            const root = scenes.get(sid)?.scene.root;
+            if (root) {
+              root.filters = filterList(root.filters).filter(f => f !== filter);
             }
             mergeGlowFiltersRef.current.delete(sid);
           } else {
@@ -509,7 +515,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           effects.length = writeIdx;
         }
       },
-      [getPlan],
+      [getPlan, placeScene],
     );
 
     useImperativeHandle(
@@ -585,7 +591,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
               const dy = pos.y - drag.originY;
               if (dx * dx + dy * dy < DRAG_THRESHOLD * DRAG_THRESHOLD) return;
               drag.started = true;
-              const g = scenesRef.current.get(drag.sid)?.flower;
+              const g = scenesRef.current.get(drag.sid)?.scene.flower;
               if (g) g.cursor = "grabbing";
             }
 
@@ -595,7 +601,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           const handlePointerUp = () => {
             const drag = dragRef.current;
             if (drag) {
-              const scene = scenesRef.current.get(drag.sid);
+              const scene = scenesRef.current.get(drag.sid)?.scene;
               if (scene) scene.flower.cursor = "grab";
 
               // Click (no drag) — select the flower, don't merge
@@ -608,12 +614,13 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
 
               const mt = mergeTargetRef.current;
               if (mt && mt.dragSid === drag.sid) {
-                // Trigger merge glow on target flower
-                const target = scenesRef.current.get(mt.targetSid);
+                // Trigger merge glow on the target flower's whole scene: the
+                // lit plant inside is a cached texture and does not refilter.
+                const target = scenesRef.current.get(mt.targetSid)?.scene;
                 if (target) {
                   const glowFilter = createMergeGlowFilter();
-                  target.flower.filters = [
-                    ...filterList(target.flower.filters),
+                  target.root.filters = [
+                    ...filterList(target.root.filters),
                     glowFilter,
                   ];
                   mergeGlowFiltersRef.current.set(mt.targetSid, {
@@ -677,11 +684,10 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         resizeObsRef.current?.disconnect();
         resizeObsRef.current = null;
         stageContainerRef.current = null;
-        scenesRef.current.forEach(scene => scene.destroy());
+        scenesRef.current.forEach(({ scene }) => scene.destroy());
         scenesRef.current.clear();
         selectionRingRef.current = null;
         planCacheRef.current.clear();
-        drawnStateRef.current.clear();
         mergeOverlayRef.current = null;
         mergeBloomRef.current.clear();
         mergeParticleGfxRef.current = null;

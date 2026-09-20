@@ -190,17 +190,17 @@ runs on WebGL and WebGPU alike.
 
 | Effect             | Where                                              | How                                                                                                                                                                                                                                                                                                                        |
 | ------------------ | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Bloom              | the aura and glow layers                           | two `Graphics` share one `GraphicsContext`: the crisp core and, under it, a copy with a `BlurFilter` (quality 3, strength from `glowBloomStrength` and `auraBloomStrength`, which scale with the radius) at lower alpha. The glow pair is additive. The blur never touches the flower `Graphics`.                          |
+| Bloom              | the aura and glow layers                           | two `Graphics` share one `GraphicsContext`: the crisp core and, under it, a copy with a `BlurFilter` (quality 3, strength from `glowBloomStrength` and `auraBloomStrength`, which scale with the radius) at lower alpha. The glow pair is additive and rendered once into a picture. The blur never touches the plant.     |
 | Head volume        | `PlantLightFilter` on the flower `Graphics`        | each head is a uniform (`headLights`: centre and radius in local pixels, strength by stage from `volumeStrength`, 0.35 for a bloom, less for a bud). The fragment finds its nearest head and shades it as a shallow cup: brighter toward `LIGHT_DIRECTION` and the rim, darker toward the shadow side and the centre well. |
 | Petal translucency | the same filter                                    | `translucencyOf(head)`: the outer layer's texture (Papery, Silk, Glassy high; Waxy, Leathery, Metallic low) opened up by the thinnest layer's opacity class. The fragment lifts thin fills (low alpha), luminance edges and pale fills toward a warm white.                                                                |
-| Depth              | a second `Graphics` behind the plant               | florets with `depth > 0.5` (`isBackFloret`) draw there with their pedicels, under their own `PlantLightFilter`. The plan tints them slightly darker (`BACK_SHADE`); they are never blurred, a blur read as a smear rather than depth.                                                                                      |
+| Depth              | a second picture behind the plant                  | florets with `depth > 0.5` (`isBackFloret`) draw there with their pedicels, under their own `PlantLightFilter`. The plan tints them slightly darker (`BACK_SHADE`); they are never blurred, a blur read as a smear rather than depth.                                                                                      |
 | Stem cylinders     | `StalkShading` on `StemPlan` and every `StalkPlan` | `stemShading` and `stalkPlan` add a highlight line offset toward the light and a shade line away from it, each stroked half the mid half width, in a lighter and a darker tint of the stalk color.                                                                                                                         |
 
 The filter texture's origin follows the flower's bounds, so `PlantLightFilter`
 maps texture space back to the flower's local pixels through a hidden one
 pixel `Sprite` at the origin and `filterManager.calculateSpriteMatrix`, the way
-pixi's `DisplacementFilter` does. The head uniforms are therefore set once per
-`draw`, not per frame, and the flower may move, rotate and scale freely.
+pixi's `DisplacementFilter` does. The head uniforms are set once per `draw`,
+and the filter runs once per `refresh`, into the picture.
 
 ## Drawing order and per frame work
 
@@ -208,24 +208,47 @@ pixi's `DisplacementFilter` does. The head uniforms are therefore set once per
 the buds, then every head back to front (`drawHead`: bracts, sepals, petal
 layers, dewdrops, stamens, center disc), then the particles. Its `layer`
 option draws only the front florets with the plant, or only the back florets
-with their pedicels, for the two `Graphics` a scene keeps. Petals are drawn
+with their pedicels, for the two pictures a scene keeps. Petals are drawn
 with several passes each: the depth shadow of inner layers, the fill, the
 gradient stop sub-paths, the light, shadow and highlight offsets, the texture
 pass, the iridescence sheen, the marks, the veins and the outline.
 
-Most of a flower is static. Three things read `performance.now()` and are
-redrawn every frame by `scene.tick`:
+`petalPassesFor(r)` picks the optional passes by the drawn radius, the plan
+unchanged: below `DETAIL_RADIUS` (40 px, the zone snapshots) the texture pass,
+the vein strokes and the marks are skipped, and below `SHADING_RADIUS` (24 px)
+the gradient partials and the depth shadows go too. Tessellation is the cost of
+a draw (earcut on every fill, `buildLine` on every stroke; 0.5 to 13 ms per
+flower at r 70), so a small flower draws a fraction of the passes.
 
-| What                                  | Where                                        | Why a separate Graphics                                                                            |
-| ------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Aura                                  | `drawAura`, its bloom pair behind the flower | it pulses and shifts every frame, and its circles would give the flower a rectangular bounding box |
-| Bioluminescence and a pulsing nectary | `drawGlow`, its additive bloom pair in front | additive glow behind the petals would not show through their fills                                 |
-| Particles                             | `drawParticles`, its own `Graphics` in front | they wobble, drift and fall, and the flower keeps its tessellation                                 |
+Most of a flower is static, and the static layers are **pictures**: each is
+drawn into a detached `Graphics`, filtered, rendered once into its own
+`RenderTexture` by `scene.refresh(renderer)`, and shown as a `Sprite`. Per
+frame the stage composites sprites; no filter pass and no tessellation runs
+for anything static. `scene.draw(r)` records the geometry and marks the
+pictures dirty; `refresh` renders the dirty ones, sized to their bounds at the
+renderer's resolution, so a picture is as sharp as the canvas. Pixi's own
+`cacheAsTexture` is not used: in 8.21 a filter inside a cached container
+renders nothing when an ancestor (the canvas dither) is filtered too.
 
-`FlowerCanvas` keeps a dirty flag per flower. `scene.draw` clears and redraws
-the flower `Graphics` only when scale or alpha changed; the selection ring is
-its own `Graphics` on the stage. The scene's root `Container` carries the
-flower's position, rotation and merge bloom scale, so every layer tracks it.
+| Layer                                 | Where                                                            | Per frame                                                                                                                                          |
+| ------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The plant and the back florets        | two lit pictures inside `scene.flower`, the pointer target       | one sprite each                                                                                                                                    |
+| Bioluminescence and a pulsing nectary | `drawBioGlow` and `drawNectaryPulse`, additive pictures in front | drawn once at full level; `bioWaveAt` and `nectaryPulseLevel` set the sprite alpha, since every alpha in the geometry is proportional to the level |
+| Aura                                  | `drawAura`, its bloom pair behind the plant                      | redrawn: it pulses, shifts and flickers in shape, and its circles would give the plant a rectangular box                                           |
+| Particles                             | `drawParticles`, its own `Graphics` in front                     | redrawn: they wobble, drift and fall                                                                                                               |
+
+The effect layers have `eventMode` none, so a glow or a particle over the
+plant never swallows a pointer hit.
+
+`FlowerCanvas` draws each scene once, at the base radius, when its plan
+object changes (a new plan is a new scene, so a spec edit or a streaming
+partial replaces the picture). The simulation's bloom-in and wilt-out are
+transforms on the scene's root: `scale` and `alpha` from the WASM loop, times
+the merge bloom pulse. Nothing is re-tessellated during an animation. The hit
+area is set once from the plan bounds at the base radius and follows the root
+transform; the selection ring is its own `Graphics` on the stage, drawn at the
+visible radius. The merge glow filter goes on the scene root, since the lit
+plant inside is a finished picture.
 
 ## Arrangements
 
@@ -246,15 +269,16 @@ vase on a pedestal above that), colored from `sprite_hints`.
 frame and writes position, rotation, scale and alpha per flower into a
 `Float32Array` (a `SharedArrayBuffer` when the page has COOP/COEP headers, a
 plain buffer otherwise). `FlowerCanvas.updateFlowers` reads the pool, gets or
-builds the plan for each session id, and draws as described above. Dragging a
+builds the plan for each session id, places its scene, and moves it as
+described above. Dragging a
 flower calls `set_body_position` on the simulation.
 
 **Homepage** (`client/src/homepage/PixiMiniCanvas.tsx`). Zone cards do not each
 own a WebGL context. One shared offscreen `Application` renders each zone's
 flowers into a `RenderTexture`, the texture is extracted to a data URL, and the
 card shows an `<img>`. The snapshot builds the same scene as the designer,
-draws it once and ticks it once, so one frame of the aura, glow and particles
-is in the picture, with every filter applied inside the render texture.
+draws it once, refreshes its pictures and ticks it once, so one frame of the
+aura, glow and particles is in the snapshot.
 
 ## Determinism
 

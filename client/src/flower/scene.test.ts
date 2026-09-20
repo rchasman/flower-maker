@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { BlurFilter, Filter } from "pixi.js";
+import { BlurFilter, Filter, Graphics, Sprite } from "pixi.js";
+import { bioWaveAt } from "./pixi-draw.ts";
 import { createFlowerPlan } from "./render.ts";
 import { createArrangementScene, createFlowerScene } from "./scene.ts";
-import { PlantLightFilter, packHeadLights } from "./shaders/plantLight.ts";
+import { packHeadLights } from "./shaders/plantLight.ts";
 import { MAX_LIT_HEADS } from "./lighting.ts";
 
 const rgb = (r: number, g: number, b: number) => ({ r, g, b, a: 1 });
@@ -41,36 +42,33 @@ const filtersOf = (filters: unknown): readonly Filter[] => {
 };
 
 describe("flower scene", () => {
-  test("a solitary flower is one lit Graphics with no extra layers", () => {
+  test("a solitary flower is one plant holding one picture, with no extra layers", () => {
     const scene = createFlowerScene(createFlowerPlan(spec(), 7));
-    expect(scene.root.children).toHaveLength(2);
-    expect(scene.root.children[1]).toBe(scene.flower);
-    const [light] = filtersOf(scene.flower.filters);
-    expect(light).toBeInstanceOf(PlantLightFilter);
-    scene.draw(70, 1);
-    expect(scene.flower.context.instructions.length).toBeGreaterThan(0);
+    expect(scene.root.children).toEqual([scene.flower]);
+    expect(scene.flower.children).toHaveLength(1);
+    const [picture] = scene.flower.children;
+    expect(picture).toBeInstanceOf(Sprite);
+    expect(picture!.visible).toBe(false);
+    scene.draw(70);
     scene.destroy();
   });
 
-  test("a spike adds a back layer behind the plant, lit by its own filter and never blurred", () => {
+  test("a spike adds a back picture behind the plant's, inside the same pointer target", () => {
     const scene = createFlowerScene(
       createFlowerPlan(
         spec({ inflorescence: { kind: "Spike", head_count: 12 } }),
         7,
       ),
     );
-    const flowerIdx = scene.root.getChildIndex(scene.flower);
-    const back = scene.root.children[flowerIdx - 1]!;
-    expect(back).not.toBe(scene.root.children[0]);
-    const backFilters = filtersOf(back.filters);
-    expect(backFilters).toHaveLength(1);
-    expect(backFilters[0]).toBeInstanceOf(PlantLightFilter);
-    expect(backFilters.some(f => f instanceof BlurFilter)).toBe(false);
-    scene.draw(70, 1);
+    expect(scene.root.children).toEqual([scene.flower]);
+    expect(scene.flower.children).toHaveLength(2);
+    expect(scene.flower.children[0]).toBeInstanceOf(Sprite);
+    expect(scene.flower.children[1]).toBeInstanceOf(Sprite);
+    scene.draw(70);
     scene.destroy();
   });
 
-  test("an aura and a glow each get a soft copy under a crisp core, the glow additive", () => {
+  test("an aura is a blurred pair redrawn per frame; the glow is an additive picture that pulses through its alpha", () => {
     const scene = createFlowerScene(
       createFlowerPlan(
         spec({
@@ -87,26 +85,33 @@ describe("flower scene", () => {
       ),
     );
     const children = scene.root.children;
-    const flowerIdx = children.indexOf(scene.flower);
-    const [auraBloom, auraCore] = children.slice(flowerIdx - 2, flowerIdx);
-    const [glowBloom, glowCore] = children.slice(flowerIdx + 1, flowerIdx + 3);
+    const plantIdx = children.indexOf(scene.flower);
+    const aura = children[plantIdx - 1]!;
+    const glow = children[plantIdx + 1]!;
+    const [auraBloom, auraCore] = aura.children;
     expect(filtersOf(auraBloom!.filters)[0]).toBeInstanceOf(BlurFilter);
     expect(filtersOf(auraCore!.filters)).toHaveLength(0);
-    expect(filtersOf(glowBloom!.filters)[0]).toBeInstanceOf(BlurFilter);
-    expect(glowBloom!.blendMode).toBe("add");
-    expect(glowCore!.blendMode).toBe("add");
-    expect(glowBloom!.alpha).toBeLessThan(1);
-    scene.draw(70, 1);
-    scene.tick(70, 1);
+    expect(glow).toBeInstanceOf(Sprite);
+    expect(glow.blendMode).toBe("add");
+    expect(glow.eventMode).toBe("none");
+    expect(aura.eventMode).toBe("none");
+    scene.draw(70);
+    scene.tick(70);
+    expect(glow.alpha).toBeCloseTo(bioWaveAt("Edges", performance.now()), 2);
+    if (!(auraCore instanceof Graphics))
+      throw new Error("aura core is not a Graphics");
+    expect(auraCore.context.instructions.length).toBeGreaterThan(0);
     scene.destroy();
   });
 
-  test("an arrangement is one lit Graphics", () => {
+  test("an arrangement is one plant holding one picture", () => {
     const scene = createArrangementScene({
       members: [],
       adornment: null,
     });
-    expect(filtersOf(scene.flower.filters)[0]).toBeInstanceOf(PlantLightFilter);
+    expect(scene.root.children).toEqual([scene.flower]);
+    expect(scene.flower.children).toHaveLength(1);
+    expect(scene.flower.children[0]).toBeInstanceOf(Sprite);
     scene.destroy();
   });
 });

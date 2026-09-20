@@ -13,7 +13,12 @@ import {
 } from "pixi.js";
 import type { BioPattern } from "../data/flower-enums.ts";
 import { darkenColor, lightenColor } from "./color.ts";
-import type { NectaryPlan, ParticleSeed } from "./effects.ts";
+import type {
+  BioPlan,
+  NectaryGlowPlan,
+  NectaryPlan,
+  ParticleSeed,
+} from "./effects.ts";
 import type { DrawCmd } from "./geometry.ts";
 import type { BudPlan, SeedHeadPlan } from "./lifeStage.ts";
 import { inLayer, type FloretLayer } from "./lighting.ts";
@@ -103,6 +108,33 @@ export function strokeCmds(
 const LIGHT_COS = Math.cos(LIGHT_ANGLE);
 const LIGHT_SIN = Math.sin(LIGHT_ANGLE);
 
+/** Below this drawn radius the texture pass, the vein strokes and the marks are too small to read. */
+export const DETAIL_RADIUS = 40;
+/** Below this drawn radius the gradient partials and the depth shadows go too. */
+export const SHADING_RADIUS = 24;
+
+/** The optional petal passes; the plan is the same at every radius, only these are drawn or not. */
+export type PetalPasses = {
+  texture: boolean;
+  veins: boolean;
+  marks: boolean;
+  gradient: boolean;
+  depthShadow: boolean;
+};
+
+/** Which petal passes a flower drawn at radius r gets. */
+export function petalPassesFor(r: number): PetalPasses {
+  const detail = r >= DETAIL_RADIUS;
+  const shading = r >= SHADING_RADIUS;
+  return {
+    texture: detail,
+    veins: detail,
+    marks: detail,
+    gradient: shading,
+    depthShadow: shading,
+  };
+}
+
 /** Per-draw placement shared by every petal pass of one head. */
 type PetalPass = {
   scale: number;
@@ -112,6 +144,7 @@ type PetalPass = {
   lightOffsetY: number;
   shadowOffX: number;
   shadowOffY: number;
+  passes: PetalPasses;
 };
 
 /** The material's extra pass over the petal fill, or nothing for a matte texture. */
@@ -258,10 +291,10 @@ function drawPetal(
   petalIdx: number,
   pass: PetalPass,
 ): void {
-  const { scale, alpha, opacity, lightOffsetX, lightOffsetY } = pass;
+  const { scale, alpha, opacity, lightOffsetX, lightOffsetY, passes } = pass;
 
   // Intra-layer depth: each petal casts a subtle shadow on the one behind it
-  if (petalIdx > 0) {
+  if (petalIdx > 0 && passes.depthShadow) {
     fillCmds(
       g,
       petal.cmds,
@@ -279,7 +312,8 @@ function drawPetal(
     scale,
   );
 
-  for (const [si, stop] of petal.gradientStops.slice(1).entries()) {
+  const gradientStops = passes.gradient ? petal.gradientStops.slice(1) : [];
+  for (const [si, stop] of gradientStops.entries()) {
     const stopAlpha = alpha * opacity * (0.65 - si * 0.1);
     fillCmds(
       g,
@@ -314,7 +348,7 @@ function drawPetal(
     scale,
   );
 
-  drawPetalTexture(g, petal, pass);
+  if (passes.texture) drawPetalTexture(g, petal, pass);
 
   // Iridescence: a hue-shifted sheen toward the light and its complement away from it
   if (petal.iridescence) {
@@ -337,7 +371,8 @@ function drawPetal(
     );
   }
 
-  for (const mark of petal.marks) {
+  const marks = passes.marks ? petal.marks : [];
+  for (const mark of marks) {
     fillCmds(
       g,
       mark.cmds,
@@ -346,26 +381,28 @@ function drawPetal(
     );
   }
 
-  strokeCmds(
-    g,
-    petal.veinCmds,
-    {
-      color: petal.midribGlowColor,
-      width: Math.max(0.8, scale * 0.018),
-      alpha: alpha * 0.12,
-    },
-    scale,
-  );
-  strokeCmds(
-    g,
-    petal.veinCmds,
-    {
-      color: petal.veinColor,
-      width: Math.max(0.3, scale * 0.008),
-      alpha: alpha * 0.25,
-    },
-    scale,
-  );
+  if (passes.veins) {
+    strokeCmds(
+      g,
+      petal.veinCmds,
+      {
+        color: petal.midribGlowColor,
+        width: Math.max(0.8, scale * 0.018),
+        alpha: alpha * 0.12,
+      },
+      scale,
+    );
+    strokeCmds(
+      g,
+      petal.veinCmds,
+      {
+        color: petal.veinColor,
+        width: Math.max(0.3, scale * 0.008),
+        alpha: alpha * 0.25,
+      },
+      scale,
+    );
+  }
 
   strokeCmds(
     g,
@@ -456,6 +493,7 @@ function drawPetals(
   layers: readonly LayerPlan[],
   scale: number,
   alpha: number,
+  passes: PetalPasses,
   firstLayerIdx = 0,
 ) {
   const lightOffsetX = LIGHT_COS * scale * 0.012;
@@ -472,10 +510,11 @@ function drawPetals(
       lightOffsetY,
       shadowOffX,
       shadowOffY,
+      passes,
     };
 
     // Pass 1: petal overlap depth shadows (inner layers cast onto outer)
-    if (firstLayerIdx + layerIdx > 0) {
+    if (firstLayerIdx + layerIdx > 0 && passes.depthShadow) {
       for (const cmds of layerOutlines(layer)) {
         fillCmds(
           g,
@@ -945,16 +984,24 @@ function drawHead(
   head: HeadPlan,
   scale: number,
   alpha: number,
+  passes: PetalPasses,
 ): void {
   drawBlades(g, head.bracts, scale, alpha);
   drawBlades(g, head.sepals, scale, alpha);
   if (head.closedCentre) {
-    drawPetals(g, head.layers.slice(0, -1), scale, alpha);
+    drawPetals(g, head.layers.slice(0, -1), scale, alpha, passes);
     drawStamens(g, head.center.stamens, scale, alpha);
     drawCenterDisc(g, head.center, scale, alpha);
-    drawPetals(g, head.layers.slice(-1), scale, alpha, head.layers.length - 1);
+    drawPetals(
+      g,
+      head.layers.slice(-1),
+      scale,
+      alpha,
+      passes,
+      head.layers.length - 1,
+    );
   } else {
-    drawPetals(g, head.layers, scale, alpha);
+    drawPetals(g, head.layers, scale, alpha, passes);
   }
 
   for (const dd of head.dewdrops) {
@@ -982,13 +1029,14 @@ function drawHeadAt(
   angle: number,
   scale: number,
   alpha: number,
+  passes: PetalPasses,
 ): void {
   // Pixi's rotateTransform turns the accumulated matrix about the graphics
   // origin, so the rotation must come before the translation that places the head.
   g.save();
   g.rotateTransform(angle);
   g.translateTransform(x, y);
-  drawHead(g, head, scale, alpha);
+  drawHead(g, head, scale, alpha, passes);
   g.restore();
 }
 
@@ -1034,6 +1082,7 @@ export function drawFlowerFromPlan(
   options: DrawFlowerOptions = { particles: true, layer: "all" },
 ) {
   const scale = r;
+  const passes = petalPassesFor(r);
   const ordered = drawOrder(plan.florets).filter(f =>
     inLayer(f, options.layer),
   );
@@ -1064,6 +1113,7 @@ export function drawFlowerFromPlan(
       floret.angle,
       scale * floret.scale,
       alpha,
+      passes,
     );
   }
 
@@ -1177,90 +1227,98 @@ const slowPulse = (now: number, period: number): number =>
   0.5 + 0.5 * Math.sin((now / period) * Math.PI * 2);
 
 /** Pulse patterns beat hard; every other bioluminescence breathes slowly. */
-function bioWaveAt(pattern: BioPattern, now: number): number {
+export function bioWaveAt(pattern: BioPattern, now: number): number {
   if (pattern === "Pulse") return 0.3 + 0.7 * slowPulse(now, 1200);
   return 0.6 + 0.4 * slowPulse(now, 2800);
 }
 
-/** True when a head has per-frame glow to draw over it (see drawGlow). */
-const headGlows = (head: HeadPlan): boolean =>
-  head.bio !== null || head.center.nectary?.glow?.pulse != null;
+type NectaryPulse = NonNullable<NectaryGlowPlan["pulse"]>;
 
-/** True when the plan has per-frame glow to draw over its heads (see drawGlow). */
-export function hasGlow(plan: FlowerPlan): boolean {
-  return plan.heads.some(headGlows);
+/** The nectary halo's level in [minIntensity, 1] at this moment. */
+export function nectaryPulseLevel(pulse: NectaryPulse, now: number): number {
+  const wave = slowPulse(now, 1000 / pulse.speed);
+  return pulse.minIntensity + (1 - pulse.minIntensity) * wave;
 }
 
-/**
- * Bioluminescence and the nectary's pulse, drawn every frame on a separate
- * Graphics IN FRONT of the flower with additive blending: behind the petals
- * nothing would show through their fills.
- */
-export function drawGlow(
+/** The bioluminescence every head of this plan shares, or null. */
+export const bioOf = (plan: FlowerPlan): BioPlan | null =>
+  plan.heads.find(head => head.bio !== null)?.bio ?? null;
+
+/** The pulsing nectary glow the plan's heads carry, or null when none pulses. */
+export function nectaryPulseOf(plan: FlowerPlan): NectaryPulse | null {
+  return (
+    plan.heads
+      .map(head => head.center.nectary?.glow?.pulse ?? null)
+      .find(pulse => pulse !== null) ?? null
+  );
+}
+
+/** Every floret's glow geometry at full level, drawn once; a per-frame alpha does the pulsing. */
+function drawFloretGlows(
   g: Graphics,
   plan: FlowerPlan,
   r: number,
-  alpha: number,
+  drawOne: (head: HeadPlan, scale: number) => void,
 ): void {
-  const now = performance.now();
-  if (!hasGlow(plan)) return;
-
   for (const floret of plan.florets) {
-    const head = headOf(plan, floret);
-    const bio = head.bio;
-    const pulse = head.center.nectary?.glow?.pulse
-      ? head.center.nectary.glow
-      : null;
-    const bioWave = bio ? bioWaveAt(bio.pattern, now) : 0;
-    const scale = r * floret.scale;
     g.save();
     g.rotateTransform(floret.angle);
     g.translateTransform(floret.offsetX * r, floret.offsetY * r);
-
-    if (pulse?.pulse) {
-      const wave = slowPulse(now, 1000 / pulse.pulse.speed);
-      const level =
-        pulse.pulse.minIntensity + (1 - pulse.pulse.minIntensity) * wave;
-      const haloR = pulse.radius * scale;
-      g.circle(0, 0, haloR);
-      g.fill({
-        color: pulse.color,
-        alpha: alpha * pulse.intensity * level * 0.3,
-      });
-      g.circle(0, 0, haloR * 0.55);
-      g.fill({
-        color: pulse.color,
-        alpha: alpha * pulse.intensity * level * 0.35,
-      });
-    }
-
-    if (bio) {
-      const glow = alpha * bio.intensity * bioWave;
-      strokeCmds(
-        g,
-        bio.strokes,
-        {
-          color: bio.color,
-          width: Math.max(1.5, scale * 0.05),
-          alpha: glow * 0.3,
-        },
-        scale,
-      );
-      strokeCmds(
-        g,
-        bio.strokes,
-        {
-          color: bio.color,
-          width: Math.max(0.6, scale * 0.016),
-          alpha: glow * 0.9,
-        },
-        scale,
-      );
-      fillCmds(g, bio.fills, { color: bio.color, alpha: glow * 0.5 }, scale);
-    }
-
+    drawOne(headOf(plan, floret), r * floret.scale);
     g.restore();
   }
+}
+
+/**
+ * Bioluminescence at full wave, additive, IN FRONT of the flower: behind the
+ * petals nothing would show through their fills. Every alpha here is
+ * proportional to the wave, so `bioWaveAt` applied as the Graphics alpha
+ * reproduces the per-frame pulse without redrawing.
+ */
+export function drawBioGlow(g: Graphics, plan: FlowerPlan, r: number): void {
+  drawFloretGlows(g, plan, r, (head, scale) => {
+    const bio = head.bio;
+    if (!bio) return;
+    const glow = bio.intensity;
+    strokeCmds(
+      g,
+      bio.strokes,
+      {
+        color: bio.color,
+        width: Math.max(1.5, scale * 0.05),
+        alpha: glow * 0.3,
+      },
+      scale,
+    );
+    strokeCmds(
+      g,
+      bio.strokes,
+      {
+        color: bio.color,
+        width: Math.max(0.6, scale * 0.016),
+        alpha: glow * 0.9,
+      },
+      scale,
+    );
+    fillCmds(g, bio.fills, { color: bio.color, alpha: glow * 0.5 }, scale);
+  });
+}
+
+/** The pulsing nectary halo at full level; `nectaryPulseLevel` as the Graphics alpha does the pulse. */
+export function drawNectaryPulse(
+  g: Graphics,
+  plan: FlowerPlan,
+  r: number,
+): void {
+  drawFloretGlows(g, plan, r, (head, scale) => {
+    const glow = head.center.nectary?.glow;
+    if (!glow?.pulse) return;
+    const haloR = glow.radius * scale;
+    g.circle(0, 0, haloR);
+    g.fill({ color: glow.color, alpha: glow.intensity * 0.3 });
+    g.circle(0, 0, haloR * 0.55);
+    g.fill({ color: glow.color, alpha: glow.intensity * 0.35 });
+  });
 }
 
 /** Draw a multi-flower arrangement from its pre-computed plan. */
@@ -1271,6 +1329,7 @@ export function drawArrangementFromPlan(
   alpha: number,
 ) {
   const scale = r;
+  const passes = petalPassesFor(r);
 
   // Pass 1: All stems
   for (const member of plan.members) drawStem(g, member.stem, scale, alpha);
@@ -1312,6 +1371,7 @@ export function drawArrangementFromPlan(
       0,
       scale * member.scale,
       alpha,
+      passes,
     );
   }
 }

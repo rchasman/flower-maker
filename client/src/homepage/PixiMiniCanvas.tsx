@@ -113,7 +113,7 @@ function resolvePositions(
   return resolved;
 }
 
-/** One zone member's scene, drawn once with one frame of its moving layers. */
+/** One zone member's scene, drawn once with one frame of its moving layers; the caller refreshes its pictures. */
 function snapshotScene(
   p: { sid: number; sessionKey: string },
   constituentMap: Map<string, Array<{ spec: string; sid: number }>>,
@@ -134,8 +134,8 @@ function snapshotScene(
       : createFlowerScene(
           createFlowerPlan(specBySessionId.get(p.sessionKey)?.spec, p.sid),
         );
-  scene.draw(radius, 1.0);
-  scene.tick(radius, 1.0);
+  scene.draw(radius);
+  scene.tick(radius);
   return scene;
 }
 
@@ -162,6 +162,7 @@ async function renderZoneSnapshot(
       arrangementMetaMap,
       radius,
     );
+    scene.refresh(app.renderer);
     scene.root.position.set(p.x, p.y);
     container.addChild(scene.root);
     return scene;
