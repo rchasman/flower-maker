@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { PLATES, artUrl } from "./plates.ts";
-import { SPRITE_IDS } from "./timeline.ts";
+import { PLATES, SPRITE_IDS, artUrl } from "./plates.ts";
 
 const ART_DIR = join(import.meta.dir, "../../public/art");
 

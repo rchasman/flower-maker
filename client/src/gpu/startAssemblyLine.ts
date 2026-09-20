@@ -5,7 +5,7 @@ import { loadImageTexture, type ImageTexture } from "./imageTexture.ts";
 import { trackPointer } from "./pointerTrail.ts";
 import { createTrail } from "./trail.ts";
 import { artUrl, type Plate } from "../landing/plates.ts";
-import type { SpriteTransform } from "../landing/timeline.ts";
+import { SPRITE_COUNT, type SpriteTransform } from "../landing/timeline.ts";
 
 const REVEAL_SECONDS = 2;
 const PIXEL = 3;
@@ -13,27 +13,57 @@ const CONTRAST = 1.3;
 
 type Vec4 = readonly [number, number, number, number];
 
-/** Mirrors `Sprite` in line.wgsl: place = centre + pivot, shape = angle, scale, aspect, visible. */
+/**
+ * Mirrors `Sprite` in line.wgsl: place = centre + pivot, shape = angle, scale, aspect, visible,
+ * tone = exposure + texture index, cutA and cutB = half-planes in plate uv.
+ */
 export interface SpriteUniform {
   readonly place: Vec4;
   readonly shape: Vec4;
   readonly tone: Vec4;
+  readonly cutA: Vec4;
+  readonly cutB: Vec4;
 }
 
-/** Pairs each timeline transform with its plate's pivot, exposure and image aspect. */
+const HIDDEN: SpriteUniform = {
+  place: [0, 0, 0, 0],
+  shape: [0, 1, 1, 0],
+  tone: [0, 0, 0, 0],
+  cutA: [0, 0, 0, 0],
+  cutB: [0, 0, 0, 0],
+};
+
+/** Pairs each timeline sprite with its plate's exposure and image aspect, padded to the shader's array. */
 export const spriteUniforms = (
   plates: readonly Plate[],
   aspects: readonly number[],
   transforms: readonly SpriteTransform[],
-): readonly SpriteUniform[] =>
-  transforms.map((t, i) => {
-    const [pivotX, pivotY] = plates[i]?.pivot ?? [0.5, 0.5];
-    return {
-      place: [t.x, t.y, pivotX, pivotY],
-      shape: [t.angle, t.scale, aspects[i] ?? 1, t.visible],
-      tone: [plates[i]?.exposure ?? 1, 0, 0, 0],
-    };
-  });
+): readonly SpriteUniform[] => {
+  const filled = transforms.map((t): SpriteUniform => ({
+    place: [t.x, t.y, t.pivot[0], t.pivot[1]],
+    shape: [t.angle, t.scale, aspects[t.tex] ?? 1, t.visible],
+    tone: [plates[t.tex]?.exposure ?? 1, t.tex, 0, 0],
+    cutA: [
+      t.cutA.point[0],
+      t.cutA.point[1],
+      t.cutA.normal[0],
+      t.cutA.normal[1],
+    ],
+    cutB: [
+      t.cutB.point[0],
+      t.cutB.point[1],
+      t.cutB.normal[0],
+      t.cutB.normal[1],
+    ],
+  }));
+  return [
+    ...filled,
+    ...Array.from(
+      { length: Math.max(0, SPRITE_COUNT - filled.length) },
+      () => HIDDEN,
+    ),
+  ];
+};
 
 const textureBindings = (
   images: readonly ImageTexture[],

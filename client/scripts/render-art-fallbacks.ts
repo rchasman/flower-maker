@@ -1,9 +1,11 @@
 // Renders public/art/assembly-line.dither.png for browsers without WebGPU, using the same
-// line.wgsl shader the landing runs live, frozen at the start of the loop with no pointer trail.
+// line.wgsl shader the landing runs live, frozen one second into the loop with no pointer trail.
 // Headless through vgpu/node (Dawn). Run: bun client/scripts/render-art-fallbacks.ts
+// Pose checks: bun client/scripts/render-art-fallbacks.ts --time 2.3 --out /tmp/frame.png
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { parseArgs } from "node:util";
 import { PNG } from "pngjs";
 import { resolveShader } from "@vgpu/wgsl/runtime";
 import { effect, init, sampler, target, texture } from "vgpu/node";
@@ -13,11 +15,18 @@ import { spriteUniforms } from "../src/gpu/startAssemblyLine.ts";
 
 const ART_DIR = join(import.meta.dirname, "../public/art");
 const SHADER = join(import.meta.dirname, "../src/gpu/line.wgsl");
-const OUTPUT = join(ART_DIR, "assembly-line.dither.png");
 const SIZE: readonly [number, number] = [1920, 1080];
 const PIXEL = 3;
 const CONTRAST = 1.3;
-const FROZEN_AT_SECONDS = 1.0;
+
+const { values } = parseArgs({
+  options: {
+    time: { type: "string", default: "1.0" },
+    out: { type: "string", default: join(ART_DIR, "assembly-line.dither.png") },
+  },
+});
+const FROZEN_AT_SECONDS = Number(values.time);
+const OUTPUT = values.out;
 
 const { wgsl } = await resolveShader({ entry: SHADER });
 const gpu = await init();

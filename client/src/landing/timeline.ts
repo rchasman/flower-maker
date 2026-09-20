@@ -1,45 +1,38 @@
 /**
- * The assembly line loop. Pure: the same time always yields the same transforms.
- * Frame coordinates are uv with y down. Sprites rotate about their plate's pivot.
+ * The assembly line loop. Pure: the same time always yields the same sprites.
+ * Frame coordinates are uv with y down. Arms are rigged: the timeline drives joint angles and
+ * the rig turns them into link sprites and gripper positions.
  */
 
+import { PLATES, plateIndex, type Point } from "./plates.ts";
+import {
+  armLinks,
+  armTip,
+  NO_CUT,
+  REST,
+  type ArmPlacement,
+  type ArmPose,
+  type SpriteTransform,
+} from "./rig.ts";
+
 export const LOOP_SECONDS = 6;
-
-export const SPRITE_IDS = [
-  "belt",
-  "arm-pick",
-  "arm-wrap",
-  "arm-handoff",
-  "tulip",
-  "bunch",
-  "bouquet",
-] as const;
-
-export type SpriteId = (typeof SPRITE_IDS)[number];
-
-export interface SpriteTransform {
-  readonly id: SpriteId;
-  /** Where the plate's pivot lands in the frame (uv). */
-  readonly x: number;
-  readonly y: number;
-  /** Radians; positive turns the sprite counter-clockwise on screen. */
-  readonly angle: number;
-  /** Sprite height as a fraction of frame height. */
-  readonly scale: number;
-  /** 0..1 */
-  readonly visible: number;
-}
-
-const STATION_X = [0.4, 0.62, 0.84] as const;
 /** Width over height of the frame the transforms are laid out for. */
 export const DEFAULT_FRAME_ASPECT = 16 / 9;
+
+/** The belt runs right to left, so every arm works the belt on its left: pick, wrap, hand off. */
+const STATION_X = [0.78, 0.5, 0.22] as const;
 const BELT_Y = 0.66;
 const ARM_BASE_Y = 0.86;
 const ARM_BASE_DX = 0.06;
 const ARM_SCALE = 0.48;
-const PLATE_ASPECT = 1.5;
-/** Gripper position in the arm plate, relative to its base pivot, in plate uv units. */
-const GRIPPER_OFFSET = [-0.25, -0.75] as const;
+
+const ARM_IDS = ["arm-pick", "arm-wrap", "arm-handoff"] as const;
+const ARM_PLATES = ARM_IDS.map(id => PLATES[plateIndex(id)]!);
+const PLACEMENTS: readonly ArmPlacement[] = STATION_X.map(x => ({
+  x: x + ARM_BASE_DX,
+  y: ARM_BASE_Y,
+  scale: ARM_SCALE,
+}));
 
 const clamp01 = (u: number) => Math.min(1, Math.max(0, u));
 const ease = (u: number) => 0.5 - 0.5 * Math.cos(Math.PI * clamp01(u));
@@ -67,108 +60,146 @@ const present = (
   return seg(t, inFrom, inTo);
 };
 
-type Point = readonly [number, number];
+const pose = (shoulder: number, elbow: number, wrist: number): ArmPose => ({
+  shoulder: deg(shoulder),
+  elbow: deg(elbow),
+  wrist: deg(wrist),
+});
 
-/** Rotate a y-down vector counter-clockwise on screen by `angle`. */
-const rotate = ([dx, dy]: Point, angle: number): Point => [
-  dx * Math.cos(angle) + dy * Math.sin(angle),
-  -dx * Math.sin(angle) + dy * Math.cos(angle),
-];
+const mixPose = (a: ArmPose, b: ArmPose, u: number): ArmPose => ({
+  shoulder: lerp(a.shoulder, b.shoulder, u),
+  elbow: lerp(a.elbow, b.elbow, u),
+  wrist: lerp(a.wrist, b.wrist, u),
+});
+
+type Keyframe = readonly [number, ArmPose];
 
 /**
- * Where an arm's gripper lands in frame uv. Sprite sizes are fractions of frame height, so the
- * horizontal reach is divided by the frame aspect to land in uv x.
+ * Eased interpolation through keyframes sorted by time. The first keyframe must sit at 0 and the
+ * last at LOOP_SECONDS with the same pose, so the loop closes.
  */
-const gripperOf = (armX: number, angle: number, frameAspect: number): Point => {
-  const offset: Point = [
-    GRIPPER_OFFSET[0] * ARM_SCALE * PLATE_ASPECT,
-    GRIPPER_OFFSET[1] * ARM_SCALE,
-  ];
-  const [dx, dy] = rotate(offset, angle);
-  return [armX + dx / frameAspect, ARM_BASE_Y + dy];
+const track = (t: number, keys: readonly Keyframe[]): ArmPose => {
+  const next = keys.findIndex(([time]) => time > t);
+  if (next <= 0) return keys[keys.length - 1]![1];
+  const [fromTime, fromPose] = keys[next - 1]!;
+  const [toTime, toPose] = keys[next]!;
+  return mixPose(fromPose, toPose, seg(t, fromTime, toTime));
 };
 
-const arm = (
-  id: SpriteId,
-  station: number,
-  angle: number,
+/** Poses were fitted with a grid search over the rig so each gripper lands on its target. */
+/** Reaching down to the tray below the belt: shoulder leans out, elbow folds. */
+const REACH = pose(16, 30, -6);
+/** Setting the tulip down on the belt, a little higher than the tray. */
+const PLACE = pose(14, 12, -4);
+/** Paddle pressed down onto the belt. */
+const PRESS = pose(-4, 21, 6);
+/** Dipping to the belt to grab the bunch. */
+const GRAB = pose(16, 17, -6);
+/** Holding the bouquet up and out. */
+const HOLD = pose(14, -32, 4);
+
+const PICK_TRACK: readonly Keyframe[] = [
+  [0, REACH],
+  [0.9, REACH],
+  [1.5, REST],
+  [2.1, PLACE],
+  [2.6, PLACE],
+  [3.4, REST],
+  [4.8, REST],
+  [5.4, REACH],
+  [LOOP_SECONDS, REACH],
+];
+
+const WRAP_TRACK: readonly Keyframe[] = [
+  [0, REST],
+  [3.4, REST],
+  [3.9, PRESS],
+  [4.3, PRESS],
+  [4.8, REST],
+  [LOOP_SECONDS, REST],
+];
+
+const HANDOFF_TRACK: readonly Keyframe[] = [
+  [0, GRAB],
+  [0.2, GRAB],
+  [0.8, HOLD],
+  [3.0, HOLD],
+  [3.6, REST],
+  [5.4, REST],
+  [5.8, GRAB],
+  [LOOP_SECONDS, GRAB],
+];
+
+const TRACKS = [PICK_TRACK, WRAP_TRACK, HANDOFF_TRACK] as const;
+
+/** Joint angles of the three arms at time `t` (already wrapped into the loop). */
+export const armPoses = (
+  time: number,
+): readonly [ArmPose, ArmPose, ArmPose] => {
+  const t = wrap(time);
+  return [track(t, PICK_TRACK), track(t, WRAP_TRACK), track(t, HANDOFF_TRACK)];
+};
+
+const item = (
+  id: "tulip" | "bunch" | "bouquet",
+  [x, y]: Point,
+  scale: number,
+  visible: number,
 ): SpriteTransform => ({
-  id,
-  x: STATION_X[station]! + ARM_BASE_DX,
-  y: ARM_BASE_Y,
-  angle,
-  scale: ARM_SCALE,
-  visible: 1,
+  tex: plateIndex(id),
+  x,
+  y,
+  pivot: PLATES[plateIndex(id)]!.pivot,
+  angle: 0,
+  scale,
+  visible,
+  cutA: NO_CUT,
+  cutB: NO_CUT,
 });
-
-/** Arm one dips to the tray across the loop seam (4.8 to 0.9) and is back up by 1.5. */
-const pickAngle = (t: number) => deg(14) * present(t, 4.8, 5.4, 0.9, 1.5);
-
-/** Arm two presses the paddle down over the belt around 3.5 seconds. */
-const wrapAngle = (t: number) =>
-  deg(-10) * (seg(t, 3.3, 3.7) - seg(t, 3.9, 4.3));
-
-/** Arm three dips to the belt at 5.0, lifts by 6.0 and holds the bouquet out until 3.0. */
-const handoffAngle = (t: number) =>
-  deg(12) * (seg(t, 5.0, 5.4) - seg(t, 5.7, 6.0));
 
 const belt: SpriteTransform = {
-  id: "belt",
-  x: 0.64,
+  tex: plateIndex("belt"),
+  x: 0.5,
   y: BELT_Y,
+  pivot: PLATES[plateIndex("belt")]!.pivot,
   angle: 0,
-  scale: 0.78,
+  scale: 0.95,
   visible: 1,
+  cutA: NO_CUT,
+  cutB: NO_CUT,
 };
 
-const tulip = (
-  t: number,
-  pickA: number,
-  frameAspect: number,
-): SpriteTransform => {
-  const held = gripperOf(STATION_X[0]! + ARM_BASE_DX, pickA, frameAspect);
-  const dropX = STATION_X[0]! - 0.06;
-  const lowered = seg(t, 1.5, 1.9);
-  const ride = seg(t, 1.9, 3.6);
-  const x = lerp(lerp(held[0], dropX, lowered), STATION_X[1]!, ride);
-  const y = lerp(held[1] + 0.04, BELT_Y - 0.03, lowered);
-  return {
-    id: "tulip",
-    x,
-    y,
-    angle: 0,
-    scale: 0.2,
-    visible: present(t, 0.6, 0.9, 3.6, 3.9),
-  };
+/** Held objects hang a little below the gripper tip. */
+const HELD_DROP = 0.03;
+
+const tulip = (t: number, pickPose: ArmPose, frameAspect: number) => {
+  const held = armTip(ARM_PLATES[0]!, PLACEMENTS[0]!, pickPose, frameAspect);
+  const released = armTip(ARM_PLATES[0]!, PLACEMENTS[0]!, PLACE, frameAspect);
+  const ride = seg(t, 2.6, 4.0);
+  const onBelt = t >= 2.6 && t < 4.3;
+  const x = onBelt ? lerp(released[0], STATION_X[1], ride) : held[0];
+  const y = onBelt
+    ? lerp(released[1] + HELD_DROP, BELT_Y - 0.04, seg(t, 2.6, 2.9))
+    : held[1] + HELD_DROP;
+  return item("tulip", [x, y], 0.2, present(t, 0.6, 0.9, 3.9, 4.2));
 };
 
-const bunch = (t: number): SpriteTransform => ({
-  id: "bunch",
-  x: lerp(STATION_X[1]!, STATION_X[2]! - 0.1, seg(t, 3.9, 5.4)),
-  y: BELT_Y - 0.05,
-  angle: 0,
-  scale: 0.2,
-  visible: present(t, 3.6, 3.9, 5.4, 5.7),
-});
+const bunch = (t: number) =>
+  item(
+    "bunch",
+    [lerp(STATION_X[1], STATION_X[2] + 0.08, seg(t, 4.3, 5.6)), BELT_Y - 0.05],
+    0.2,
+    present(t, 4.0, 4.3, 5.5, 5.8),
+  );
 
-const bouquet = (
-  t: number,
-  handoffA: number,
-  frameAspect: number,
-): SpriteTransform => {
-  const [gx, gy] = gripperOf(
-    STATION_X[2]! + ARM_BASE_DX,
-    handoffA,
+const bouquet = (t: number, handoffPose: ArmPose, frameAspect: number) => {
+  const [x, y] = armTip(
+    ARM_PLATES[2]!,
+    PLACEMENTS[2]!,
+    handoffPose,
     frameAspect,
   );
-  return {
-    id: "bouquet",
-    x: gx,
-    y: gy + 0.04,
-    angle: 0,
-    scale: 0.24,
-    visible: present(t, 5.4, 5.7, 3.0, 3.4),
-  };
+  return item("bouquet", [x, y + 0.06], 0.24, present(t, 5.6, 5.9, 3.0, 3.4));
 };
 
 export const timeline = (
@@ -176,15 +207,23 @@ export const timeline = (
   frameAspect: number = DEFAULT_FRAME_ASPECT,
 ): readonly SpriteTransform[] => {
   const t = wrap(time);
-  const pickA = pickAngle(t);
-  const handoffA = handoffAngle(t);
+  const poses = armPoses(t);
   return [
     belt,
-    arm("arm-pick", 0, pickA),
-    arm("arm-wrap", 1, wrapAngle(t)),
-    arm("arm-handoff", 2, handoffA),
-    tulip(t, pickA, frameAspect),
+    ...ARM_PLATES.flatMap((plate, i) =>
+      armLinks(
+        plate,
+        plateIndex(ARM_IDS[i]!),
+        PLACEMENTS[i]!,
+        poses[i]!,
+        frameAspect,
+      ),
+    ),
+    tulip(t, poses[0], frameAspect),
     bunch(t),
-    bouquet(t, handoffA, frameAspect),
+    bouquet(t, poses[2], frameAspect),
   ];
 };
+
+export const SPRITE_COUNT = 1 + ARM_IDS.length * 4 + 3;
+export type { SpriteTransform } from "./rig.ts";

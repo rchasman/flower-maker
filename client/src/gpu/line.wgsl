@@ -2,6 +2,7 @@ import { bayer8, ditherBit, paperOrInk, revealMask } from "./dither.wgsl";
 
 // Composites the assembly line sprites by brightness, then dithers the result to one bit.
 // Every plate is shot on pure black, so the brightest sample at a cell is the sprite in front.
+// Arms arrive as four link sprites each, cut from one plate by half-planes at the joints.
 // The pointer trail reveals the plate's real colour under the dither.
 
 struct Params {
@@ -12,16 +13,20 @@ struct Params {
   resolution: vec2f,
 }
 
-// Packed as vec4s so the uniform array stride is a clean 48 bytes with no padding fields.
-// place = (centre.xy, pivot.xy); shape = (angle, scale, aspect, visible); tone = (exposure, 0, 0, 0).
+// place = (centre.xy, pivot.xy); shape = (angle, scale, aspect, visible); tone = (exposure, tex, 0, 0);
+// cutA / cutB = (point.xy, normal.xy) half-planes in plate uv, a zero normal cuts nothing.
 struct Sprite {
   place: vec4f,
   shape: vec4f,
   tone: vec4f,
+  cutA: vec4f,
+  cutB: vec4f,
 }
 
+const SPRITE_COUNT = 16u;
+
 @group(0) @binding(0) var<uniform> params: Params;
-@group(0) @binding(1) var<uniform> sprites: array<Sprite, 7>;
+@group(0) @binding(1) var<uniform> sprites: array<Sprite, 16>;
 @group(0) @binding(2) var tex0: texture_2d<f32>;
 @group(0) @binding(3) var tex1: texture_2d<f32>;
 @group(0) @binding(4) var tex2: texture_2d<f32>;
@@ -46,8 +51,20 @@ fn saturate(rgb: vec3f, amount: f32) -> vec3f {
   return clamp(mix(grey, rgb, amount), vec3f(0.0), vec3f(1.0));
 }
 
-// Rotate a y-down vector clockwise on screen by `angle`: the inverse of the timeline's
-// counter-clockwise sprite rotation, so this maps frame space back into the sprite.
+fn sampleTex(index: u32, uv: vec2f) -> vec3f {
+  switch index {
+    case 0u: { return textureSampleLevel(tex0, samp, uv, 0.0).rgb; }
+    case 1u: { return textureSampleLevel(tex1, samp, uv, 0.0).rgb; }
+    case 2u: { return textureSampleLevel(tex2, samp, uv, 0.0).rgb; }
+    case 3u: { return textureSampleLevel(tex3, samp, uv, 0.0).rgb; }
+    case 4u: { return textureSampleLevel(tex4, samp, uv, 0.0).rgb; }
+    case 5u: { return textureSampleLevel(tex5, samp, uv, 0.0).rgb; }
+    default: { return textureSampleLevel(tex6, samp, uv, 0.0).rgb; }
+  }
+}
+
+// Rotate a y-down vector clockwise on screen by `angle`: the inverse of the rig's
+// counter-clockwise link rotation, so this maps frame space back into the plate.
 fn unrotate(v: vec2f, angle: f32) -> vec2f {
   let c = cos(angle);
   let s = sin(angle);
@@ -61,24 +78,30 @@ fn spriteUv(s: Sprite, q: vec2f, frameAspect: f32) -> vec2f {
   return unrotate(q - centre, s.shape.x) / size + s.place.zw;
 }
 
-fn sampleSprite(tex: texture_2d<f32>, s: Sprite, q: vec2f, frameAspect: f32, gain: f32) -> Sample {
+fn keep(cut: vec4f, uv: vec2f) -> f32 {
+  return step(0.0, dot(uv - cut.xy, cut.zw));
+}
+
+// The belt surface carries a moving stripe so the line reads as running.
+fn beltStripes(uv: vec2f) -> f32 {
+  let onSurface = step(0.52, uv.y) * step(uv.y, 0.6);
+  let stripe = step(0.5, fract(uv.x * 28.0 - params.time * 0.35));
+  return 1.0 - onSurface * 0.35 * stripe;
+}
+
+fn sampleSprite(s: Sprite, q: vec2f, frameAspect: f32) -> Sample {
   let uv = spriteUv(s, q, frameAspect);
-  let inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
-  let rgb = textureSampleLevel(tex, samp, uv, 0.0).rgb * inside * s.shape.w;
+  let inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0)
+    * keep(s.cutA, uv) * keep(s.cutB, uv);
+  let tex = u32(s.tone.y + 0.5);
+  let gain = select(1.0, beltStripes(uv), tex == 0u);
+  let rgb = sampleTex(tex, uv) * inside * s.shape.w;
   return Sample(luminanceOf(rgb) * s.tone.x * gain, rgb);
 }
 
 fn brighter(a: Sample, b: Sample) -> Sample {
   if (b.lum > a.lum) { return b; }
   return a;
-}
-
-// The belt surface carries a moving stripe so the line reads as running.
-fn beltStripes(s: Sprite, q: vec2f, frameAspect: f32) -> f32 {
-  let uv = spriteUv(s, q, frameAspect);
-  let onSurface = step(0.52, uv.y) * step(uv.y, 0.6);
-  let stripe = step(0.5, fract(uv.x * 28.0 - params.time * 0.35));
-  return 1.0 - onSurface * 0.35 * stripe;
 }
 
 @fragment fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
@@ -90,13 +113,9 @@ fn beltStripes(s: Sprite, q: vec2f, frameAspect: f32) -> f32 {
   let q = vec2f(snapped.x * frameAspect, snapped.y);
 
   var best = Sample(0.0, vec3f(0.0));
-  best = brighter(best, sampleSprite(tex0, sprites[0], q, frameAspect, beltStripes(sprites[0], q, frameAspect)));
-  best = brighter(best, sampleSprite(tex1, sprites[1], q, frameAspect, 1.0));
-  best = brighter(best, sampleSprite(tex2, sprites[2], q, frameAspect, 1.0));
-  best = brighter(best, sampleSprite(tex3, sprites[3], q, frameAspect, 1.0));
-  best = brighter(best, sampleSprite(tex4, sprites[4], q, frameAspect, 1.0));
-  best = brighter(best, sampleSprite(tex5, sprites[5], q, frameAspect, 1.0));
-  best = brighter(best, sampleSprite(tex6, sprites[6], q, frameAspect, 1.0));
+  for (var i = 0u; i < SPRITE_COUNT; i++) {
+    best = brighter(best, sampleSprite(sprites[i], q, frameAspect));
+  }
 
   let luminance = clamp((best.lum - 0.5) * params.contrast + 0.5, 0.0, 1.0);
 
