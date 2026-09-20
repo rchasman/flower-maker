@@ -52,18 +52,6 @@ export function Landing({ children }: LandingProps) {
     >
       <AssemblyLineCanvas />
 
-      {/* Thins the dither behind the copy so the words stay readable over the machinery. */}
-      <div
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          inset: 0,
-          pointerEvents: "none",
-          background:
-            "radial-gradient(ellipse 46% 40% at 50% 44%, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.55) 55%, transparent 100%)",
-        }}
-      />
-
       <header
         style={{
           position: "absolute",
@@ -86,14 +74,16 @@ export function Landing({ children }: LandingProps) {
         transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
         style={{
           position: "absolute",
-          inset: 0,
+          top: 0,
+          left: 0,
+          right: 0,
+          height: "62%",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
           textAlign: "center",
-          padding: "0 1.5rem",
-          transform: "translateY(-6vh)",
+          padding: "3rem 1.5rem 0",
         }}
       >
         <span className="label" style={{ marginBottom: "1.25rem" }}>
@@ -104,7 +94,7 @@ export function Landing({ children }: LandingProps) {
           style={{
             fontFamily: "var(--font-serif)",
             fontWeight: 400,
-            fontSize: "clamp(2.75rem, 6.5vw, 5.5rem)",
+            fontSize: "clamp(2.5rem, 5.5vw, 4.75rem)",
             lineHeight: 1.02,
             letterSpacing: "-0.02em",
             color: "var(--text-primary)",
@@ -122,7 +112,7 @@ export function Landing({ children }: LandingProps) {
             lineHeight: 1.6,
             color: "var(--text-secondary)",
             maxWidth: "40ch",
-            marginBottom: "2rem",
+            marginBottom: "1.75rem",
           }}
         >
           Grow one from real botany, merge it with what everyone else is growing
