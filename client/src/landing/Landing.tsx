@@ -1,5 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { useState, type ReactNode } from "react";
+import { motion } from "motion/react";
 import { useAuth } from "react-oidc-context";
 import { useSession } from "../session/SessionProvider.tsx";
 import { AssemblyLineCanvas } from "./AssemblyLineCanvas.tsx";
@@ -9,18 +9,10 @@ interface LandingProps {
 }
 
 const MAX_NAME_LENGTH = 32;
-const PHRASES = [
-  { text: "for everyone", accent: false },
-  { text: "for agents", accent: true },
-  { text: "by everyone at once", accent: false },
-  { text: "to any address", accent: false },
-] as const;
-const PHRASE_PAUSE_MS = 2500;
-const ACCENT_PAUSE_MS = 5000;
 
 /**
  * The landing doubles as the name gate. It renders children once the user has a name;
- * until then the animated assembly line fills the viewport with the name form over it.
+ * until then the animated assembly line runs behind a centred invitation to pick a name.
  */
 export function Landing({ children }: LandingProps) {
   const { state, conn, myUser } = useSession();
@@ -28,18 +20,6 @@ export function Landing({ children }: LandingProps) {
   const [draft, setDraft] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [phraseIndex, setPhraseIndex] = useState(0);
-
-  const phrase = PHRASES[phraseIndex] ?? PHRASES[0];
-
-  useEffect(() => {
-    const delay = phrase.accent ? ACCENT_PAUSE_MS : PHRASE_PAUSE_MS;
-    const timeout = setTimeout(
-      () => setPhraseIndex(i => (i + 1) % PHRASES.length),
-      delay,
-    );
-    return () => clearTimeout(timeout);
-  }, [phraseIndex, phrase.accent]);
 
   if (myUser?.name) return <>{children}</>;
 
@@ -72,6 +52,18 @@ export function Landing({ children }: LandingProps) {
     >
       <AssemblyLineCanvas />
 
+      {/* Thins the dither behind the copy so the words stay readable over the machinery. */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          background:
+            "radial-gradient(ellipse 46% 40% at 50% 44%, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.55) 55%, transparent 100%)",
+        }}
+      />
+
       <header
         style={{
           position: "absolute",
@@ -89,70 +81,52 @@ export function Landing({ children }: LandingProps) {
       </header>
 
       <motion.div
-        initial={{ opacity: 0, y: 16 }}
+        initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
         style={{
           position: "absolute",
-          left: "1.5rem",
-          right: "1.5rem",
-          bottom: "2rem",
-          maxWidth: 640,
+          inset: 0,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          textAlign: "center",
+          padding: "0 1.5rem",
+          transform: "translateY(-6vh)",
         }}
       >
+        <span className="label" style={{ marginBottom: "1.25rem" }}>
+          A live floor of people and agents
+        </span>
+
         <h1
           style={{
             fontFamily: "var(--font-serif)",
             fontWeight: 400,
-            fontSize: "clamp(3rem, 7vw, 6rem)",
+            fontSize: "clamp(2.75rem, 6.5vw, 5.5rem)",
             lineHeight: 1.02,
             letterSpacing: "-0.02em",
             color: "var(--text-primary)",
-            marginBottom: "1.5rem",
+            maxWidth: "14ch",
+            marginBottom: "1.25rem",
           }}
         >
-          <span style={{ display: "block" }}>Flowers, assembled.</span>
-          <span
-            style={{
-              display: "block",
-              height: "1.1em",
-              overflow: "hidden",
-              fontStyle: "italic",
-            }}
-          >
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.span
-                key={phraseIndex}
-                initial={{ y: "100%" }}
-                animate={{ y: 0 }}
-                exit={{ y: "-100%" }}
-                transition={{ duration: 0.35, ease: [0.2, 0.8, 0.2, 1] }}
-                style={{
-                  display: "block",
-                  whiteSpace: "nowrap",
-                  color: phrase.accent
-                    ? "var(--accent)"
-                    : "var(--text-tertiary)",
-                }}
-              >
-                {phrase.text}
-              </motion.span>
-            </AnimatePresence>
-          </span>
+          Every flower here starts as a spec.
         </h1>
 
         <p
           style={{
             fontFamily: "var(--font-sans)",
-            fontSize: "1rem",
+            fontSize: "1.0625rem",
             lineHeight: 1.6,
             color: "var(--text-secondary)",
-            maxWidth: 480,
-            marginBottom: "1.5rem",
+            maxWidth: "40ch",
+            marginBottom: "2rem",
           }}
         >
-          Design a flower, watch everyone else design theirs live, and order the
-          result as JSON.
+          Grow one from real botany, merge it with what everyone else is growing
+          right now, and send the order out as JSON.
         </p>
 
         <form
@@ -160,7 +134,7 @@ export function Landing({ children }: LandingProps) {
             e.preventDefault();
             handleSubmit();
           }}
-          style={{ display: "flex", gap: "0.5rem", maxWidth: 480 }}
+          style={{ display: "flex", gap: "0.5rem", width: "min(100%, 26rem)" }}
         >
           <input
             type="text"
@@ -178,7 +152,7 @@ export function Landing({ children }: LandingProps) {
             disabled={!connected || submitting || !draft.trim()}
             className="btn btn-primary"
           >
-            Enter
+            Step in
           </button>
         </form>
 
