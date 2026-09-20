@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { SessionProvider } from "./session/SessionProvider.tsx";
-import { NameGate } from "./session/NameGate.tsx";
+import { Landing } from "./landing/Landing.tsx";
 import { FlowerGrid } from "./homepage/FlowerGrid.tsx";
 import { DesignerView } from "./designer/DesignerView.tsx";
 import { ChatPinup } from "./social/ChatPinup.tsx";
@@ -13,7 +13,7 @@ export function App() {
 
   return (
     <SessionProvider>
-      <NameGate>
+      <Landing>
         <div style={{ width: "100%", height: "100%", position: "relative" }}>
           <AnimatePresence mode="wait">
             {view === "grid" ? (
@@ -43,7 +43,7 @@ export function App() {
 
           <ChatPinup />
         </div>
-      </NameGate>
+      </Landing>
     </SessionProvider>
   );
 }
