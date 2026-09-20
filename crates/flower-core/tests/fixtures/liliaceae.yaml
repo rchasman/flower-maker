@@ -1,0 +1,388 @@
+name: Wild Bell
+species: Lilium bellensis
+taxonomy:
+  family: Liliaceae
+  genus: Lilium
+  species_name: bellensis
+  common_name: Wild Bell
+  botanical_class: Monocot
+petals:
+  layers:
+    - index: 0
+      count: 6
+      shape: Fimbriate
+      arrangement: Radial
+      curvature: 0
+      curl: 0.1
+      texture: Velvet
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.984
+              g: 0.812
+              b: 0.91
+              a: 1
+          - position: 1
+            color:
+              r: 0.98
+              g: 0.8
+              b: 0.082
+              a: 1
+      opacity: 1
+      vein_pattern: Arcuate
+      edge_style: Lacerate
+      width: 0.5
+      length: 1.4
+      angular_offset: 0
+      droop: 0.05
+      thickness: 0.4
+      pattern:
+        kind: Spots
+        color:
+          r: 0.863
+          g: 0.149
+          b: 0.149
+          a: 1
+        scale: 0.701
+        density: 0.395
+        extent: 0.536
+      fusion:
+        kind: Urn
+        depth: 0.632
+  bloom_progress: 1
+  wilt_progress: 0
+  symmetry: Radial
+  symmetry_order: 6
+  divergence_angle: 137.5
+  stage: Bud
+reproductive:
+  pistil:
+    style: Simple
+    stigma_shape: Stellate
+    color:
+      r: 0.388
+      g: 0.4
+      b: 0.945
+      a: 1
+    height: 0.35
+  stamens:
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.988
+        g: 0.827
+        b: 0.302
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.769
+        g: 0.71
+        b: 0.992
+        a: 1
+      pollen_load: 0.5
+      height: 0.418
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.988
+        g: 0.827
+        b: 0.302
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.769
+        g: 0.71
+        b: 0.992
+        a: 1
+      pollen_load: 0.5
+      height: 0.476
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.988
+        g: 0.827
+        b: 0.302
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.769
+        g: 0.71
+        b: 0.992
+        a: 1
+      pollen_load: 0.5
+      height: 0.428
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.988
+        g: 0.827
+        b: 0.302
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.769
+        g: 0.71
+        b: 0.992
+        a: 1
+      pollen_load: 0.5
+      height: 0.265
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.988
+        g: 0.827
+        b: 0.302
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.769
+        g: 0.71
+        b: 0.992
+        a: 1
+      pollen_load: 0.5
+      height: 0.368
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.988
+        g: 0.827
+        b: 0.302
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.769
+        g: 0.71
+        b: 0.992
+        a: 1
+      pollen_load: 0.5
+      height: 0.305
+      sway: 0.3
+  nectary:
+    position: Basal
+    color:
+      r: 0.863
+      g: 0.149
+      b: 0.149
+      a: 1
+    glow:
+      intensity: 0.6
+      color:
+        r: 0.863
+        g: 0.149
+        b: 0.149
+        a: 1
+      radius: 0.3
+    drip_rate: 0.2
+structure:
+  stem:
+    height: 0.599
+    thickness: 0.2
+    curvature: 0.4
+    color:
+      r: 0.09
+      g: 0.09
+      b: 0.09
+      a: 1
+    internode_length: 0.5
+    surface: Rough
+    branching: Dichotomous
+    style: Arching
+  sepals:
+    - shape: Petaloid
+      color:
+        r: 0.984
+        g: 0.812
+        b: 0.91
+        a: 1
+      reflex_angle: 20
+      texture: Smooth
+      length: 0.251
+      persistent: true
+    - shape: Petaloid
+      color:
+        r: 0.984
+        g: 0.812
+        b: 0.91
+        a: 1
+      reflex_angle: 20
+      texture: Smooth
+      length: 0.251
+      persistent: true
+    - shape: Petaloid
+      color:
+        r: 0.984
+        g: 0.812
+        b: 0.91
+        a: 1
+      reflex_angle: 20
+      texture: Smooth
+      length: 0.251
+      persistent: true
+  receptacle:
+    shape: Convex
+    size: 0.3
+    color:
+      r: 0.498
+      g: 0.114
+      b: 0.114
+      a: 1
+  buds: []
+foliage:
+  leaves:
+    - shape: Elliptic
+      size: 0.442
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.631
+              g: 0.384
+              b: 0.027
+              a: 1
+      vein_pattern: None
+      serration: Doubly
+      arrangement: Alternate
+      phyllotaxis_angle: 137.5
+      droop: 0.05
+      curl: 0.1
+      translucency: 0.7
+      position: 0.2
+      side: Left
+      angle_offset: 0.121
+      variegation:
+        kind: Splash
+        color:
+          r: 0.09
+          g: 0.09
+          b: 0.09
+          a: 1
+    - shape: Elliptic
+      size: 0.458
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.631
+              g: 0.384
+              b: 0.027
+              a: 1
+      vein_pattern: None
+      serration: Doubly
+      arrangement: Alternate
+      phyllotaxis_angle: 137.5
+      droop: 0.05
+      curl: 0.1
+      translucency: 0.7
+      position: 0.882
+      side: Right
+      angle_offset: -0.092
+      variegation:
+        kind: Splash
+        color:
+          r: 0.09
+          g: 0.09
+          b: 0.09
+          a: 1
+  bracts:
+    - color:
+        stops:
+          - position: 0
+            color:
+              r: 0.976
+              g: 0.451
+              b: 0.086
+              a: 1
+      size: 0.5
+      shape: Lanceolate
+      showy: true
+      position: 0.95
+    - color:
+        stops:
+          - position: 0
+            color:
+              r: 0.976
+              g: 0.451
+              b: 0.086
+              a: 1
+      size: 0.5
+      shape: Lanceolate
+      showy: true
+      position: 0.95
+    - color:
+        stops:
+          - position: 0
+            color:
+              r: 0.976
+              g: 0.451
+              b: 0.086
+              a: 1
+      size: 0.5
+      shape: Lanceolate
+      showy: true
+      position: 0.95
+    - color:
+        stops:
+          - position: 0
+            color:
+              r: 0.976
+              g: 0.451
+              b: 0.086
+              a: 1
+      size: 0.5
+      shape: Lanceolate
+      showy: true
+      position: 0.95
+    - color:
+        stops:
+          - position: 0
+            color:
+              r: 0.976
+              g: 0.451
+              b: 0.086
+              a: 1
+      size: 0.5
+      shape: Lanceolate
+      showy: true
+      position: 0.95
+    - color:
+        stops:
+          - position: 0
+            color:
+              r: 0.976
+              g: 0.451
+              b: 0.086
+              a: 1
+      size: 0.5
+      shape: Lanceolate
+      showy: true
+      position: 0.95
+  leaf_density: 0.333
+ornamentation:
+  dewdrops: []
+  particles:
+    - kind: Stardust
+      density: 20
+      color:
+        r: 0.231
+        g: 0.51
+        b: 0.965
+        a: 1
+      drift_speed: 0.3
+      lifetime: 3
+      emission_zone: Whole
+      gravity: -0.3
+aura:
+  kind: Storm
+  color:
+    r: 0.961
+    g: 0.961
+    b: 0.961
+    a: 1
+  opacity: 0.25
+  radius: 0.45
+  animation_speed: 0.5
+inflorescence:
+  kind: Panicle
+  head_count: 8
+  head_scale: 0.462
+  spread: 0.288

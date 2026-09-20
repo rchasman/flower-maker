@@ -1,9 +1,18 @@
-// Flower templates mirrored from crates/flower-core/src/templates.rs.
-// This is the client-side reference for the template picker UI.
+// The client and api template catalog. The template picker lists these and
+// the generator takes a chosen template's family and inflorescence as its
+// default answers.
+
+import type { FlowerFamily, InflorescenceKind } from "./flower-enums.ts";
 
 export interface TemplateInfo {
   name: string;
+  /** The display name, which may carry a hybrid marker or a trade descriptor. */
   scientific: string;
+  genus: string;
+  /** The species epithet, or empty when the template names only a genus. */
+  epithet: string;
+  family: FlowerFamily;
+  inflorescence?: InflorescenceKind;
   colors: string[];
   occasions: string[];
   season: string;
@@ -11,10 +20,13 @@ export interface TemplateInfo {
 }
 
 export const TEMPLATES: TemplateInfo[] = [
-  // ── Focal flowers (hand-crafted in Rust) ──────────────────────────────
+  // ── Focal flowers ─────────────────────────────────────────────────────
   {
     name: "Rose",
     scientific: "Rosa damascena",
+    genus: "Rosa",
+    epithet: "damascena",
+    family: "Rosaceae",
     colors: [
       "Red",
       "Pink",
@@ -39,6 +51,9 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Sunflower",
     scientific: "Helianthus annuus",
+    genus: "Helianthus",
+    epithet: "annuus",
+    family: "Asteraceae",
     colors: ["Yellow", "Orange", "Red", "Brown"],
     occasions: ["Birthday", "Congratulations", "Thank You", "Get Well"],
     season: "Summer-Fall",
@@ -47,6 +62,9 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Daisy",
     scientific: "Bellis perennis",
+    genus: "Bellis",
+    epithet: "perennis",
+    family: "Asteraceae",
     colors: ["White", "Pink", "Yellow"],
     occasions: ["Birthday", "Get Well", "Thank You"],
     season: "Spring-Summer",
@@ -55,6 +73,9 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Orchid",
     scientific: "Phalaenopsis amabilis",
+    genus: "Phalaenopsis",
+    epithet: "amabilis",
+    family: "Orchidaceae",
     colors: ["White", "Purple", "Pink", "Yellow"],
     occasions: [
       "Anniversary",
@@ -69,6 +90,9 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Tulip",
     scientific: "Tulipa gesneriana",
+    genus: "Tulipa",
+    epithet: "gesneriana",
+    family: "Liliaceae",
     colors: ["Red", "Yellow", "Purple", "Pink", "White", "Orange"],
     occasions: ["Anniversary", "Birthday", "Love & Romance", "Thank You"],
     season: "Spring",
@@ -79,6 +103,9 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Carnation",
     scientific: "Dianthus caryophyllus",
+    genus: "Dianthus",
+    epithet: "caryophyllus",
+    family: "Caryophyllaceae",
     colors: ["Red", "White", "Pink", "Yellow", "Orange", "Lavender"],
     occasions: ["Birthday", "Get Well", "Sympathy", "Thank You"],
     season: "Year-round",
@@ -87,6 +114,9 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Gerbera Daisy",
     scientific: "Gerbera jamesonii",
+    genus: "Gerbera",
+    epithet: "jamesonii",
+    family: "Asteraceae",
     colors: ["Red", "White", "Pink", "Yellow", "Orange"],
     occasions: ["Birthday", "Congratulations", "Thank You"],
     season: "Year-round",
@@ -95,6 +125,9 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Lily",
     scientific: "Lilium candidum",
+    genus: "Lilium",
+    epithet: "candidum",
+    family: "Liliaceae",
     colors: ["White", "Pink", "Yellow", "Orange"],
     occasions: ["Anniversary", "Sympathy", "Thank You"],
     season: "Summer",
@@ -103,6 +136,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Alstroemeria",
     scientific: "Alstroemeria aurea",
+    genus: "Alstroemeria",
+    epithet: "aurea",
+    family: "Alstroemeriaceae",
+    inflorescence: "Umbel",
     colors: ["Pink", "White", "Yellow", "Orange", "Lavender"],
     occasions: ["Birthday", "Thank You"],
     season: "Year-round",
@@ -111,6 +148,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Hydrangea",
     scientific: "Hydrangea macrophylla",
+    genus: "Hydrangea",
+    epithet: "macrophylla",
+    family: "Hydrangeaceae",
+    inflorescence: "Corymb",
     colors: ["Blue", "White", "Pink", "Green"],
     occasions: ["Anniversary", "Sympathy"],
     season: "Summer",
@@ -119,6 +160,9 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Iris",
     scientific: "Iris germanica",
+    genus: "Iris",
+    epithet: "germanica",
+    family: "Iridaceae",
     colors: ["Blue", "Purple", "White"],
     occasions: ["Birthday", "Thank You"],
     season: "Spring",
@@ -127,6 +171,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Snapdragon",
     scientific: "Antirrhinum majus",
+    genus: "Antirrhinum",
+    epithet: "majus",
+    family: "Plantaginaceae",
+    inflorescence: "Spike",
     colors: ["Pink", "White", "Yellow", "Orange"],
     occasions: ["Anniversary", "Congratulations"],
     season: "Spring-Fall",
@@ -135,6 +183,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Stock",
     scientific: "Matthiola incana",
+    genus: "Matthiola",
+    epithet: "incana",
+    family: "Brassicaceae",
+    inflorescence: "Raceme",
     colors: ["Pink", "White", "Lavender"],
     occasions: ["Anniversary", "Thank You"],
     season: "Spring",
@@ -143,6 +195,9 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Aster",
     scientific: "Aster amellus",
+    genus: "Aster",
+    epithet: "amellus",
+    family: "Asteraceae",
     colors: ["Purple", "Pink", "White"],
     occasions: ["Birthday", "Thank You"],
     season: "Fall",
@@ -151,6 +206,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Lisianthus",
     scientific: "Eustoma grandiflorum",
+    genus: "Eustoma",
+    epithet: "grandiflorum",
+    family: "Gentianaceae",
+    inflorescence: "Spray",
     colors: ["Purple", "White", "Pink"],
     occasions: ["Anniversary", "Love & Romance"],
     season: "Summer",
@@ -159,6 +218,9 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Chrysanthemum",
     scientific: "Chrysanthemum morifolium",
+    genus: "Chrysanthemum",
+    epithet: "morifolium",
+    family: "Asteraceae",
     colors: ["Yellow", "White", "Lavender", "Pink"],
     occasions: ["Birthday", "Get Well", "Thank You"],
     season: "Fall",
@@ -167,6 +229,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Delphinium",
     scientific: "Delphinium elatum",
+    genus: "Delphinium",
+    epithet: "elatum",
+    family: "Ranunculaceae",
+    inflorescence: "Spike",
     colors: ["Blue", "White"],
     occasions: ["Anniversary", "Congratulations"],
     season: "Summer",
@@ -175,6 +241,9 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Peony",
     scientific: "Paeonia lactiflora",
+    genus: "Paeonia",
+    epithet: "lactiflora",
+    family: "Paeoniaceae",
     colors: ["Pink", "White", "Red"],
     occasions: ["Anniversary", "Love & Romance"],
     season: "Spring",
@@ -183,6 +252,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Freesia",
     scientific: "Freesia refracta",
+    genus: "Freesia",
+    epithet: "refracta",
+    family: "Iridaceae",
+    inflorescence: "Raceme",
     colors: ["White", "Yellow", "Pink", "Lavender"],
     occasions: ["Birthday", "Thank You"],
     season: "Spring",
@@ -191,6 +264,9 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Ranunculus",
     scientific: "Ranunculus asiaticus",
+    genus: "Ranunculus",
+    epithet: "asiaticus",
+    family: "Ranunculaceae",
     colors: ["Pink", "White", "Yellow", "Orange", "Red"],
     occasions: ["Anniversary", "Love & Romance"],
     season: "Spring",
@@ -199,6 +275,9 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Dahlia",
     scientific: "Dahlia pinnata",
+    genus: "Dahlia",
+    epithet: "pinnata",
+    family: "Asteraceae",
     colors: ["Red", "Pink", "Yellow", "Orange", "White"],
     occasions: ["Birthday", "Thank You"],
     season: "Summer-Fall",
@@ -207,6 +286,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Sweet Pea",
     scientific: "Lathyrus odoratus",
+    genus: "Lathyrus",
+    epithet: "odoratus",
+    family: "Fabaceae",
+    inflorescence: "Raceme",
     colors: ["Pink", "White", "Lavender"],
     occasions: ["Anniversary", "Love & Romance"],
     season: "Spring",
@@ -215,6 +298,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Gladiolus",
     scientific: "Gladiolus communis",
+    genus: "Gladiolus",
+    epithet: "communis",
+    family: "Iridaceae",
+    inflorescence: "Spike",
     colors: ["White", "Pink", "Red", "Yellow", "Purple"],
     occasions: ["Anniversary", "Thank You"],
     season: "Summer",
@@ -223,6 +310,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Larkspur",
     scientific: "Consolida ajacis",
+    genus: "Consolida",
+    epithet: "ajacis",
+    family: "Ranunculaceae",
+    inflorescence: "Spike",
     colors: ["Purple", "Pink", "White"],
     occasions: ["Anniversary", "Congratulations"],
     season: "Summer",
@@ -231,6 +322,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Liatris",
     scientific: "Liatris spicata",
+    genus: "Liatris",
+    epithet: "spicata",
+    family: "Asteraceae",
+    inflorescence: "Spike",
     colors: ["Purple"],
     occasions: ["Anniversary", "Congratulations"],
     season: "Summer",
@@ -239,6 +334,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Bells of Ireland",
     scientific: "Moluccella laevis",
+    genus: "Moluccella",
+    epithet: "laevis",
+    family: "Lamiaceae",
+    inflorescence: "Spike",
     colors: ["Green"],
     occasions: ["Anniversary", "Congratulations"],
     season: "Summer",
@@ -249,6 +348,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Solidago",
     scientific: "Solidago canadensis",
+    genus: "Solidago",
+    epithet: "canadensis",
+    family: "Asteraceae",
+    inflorescence: "Panicle",
     colors: ["Yellow"],
     occasions: ["Get Well", "Thank You"],
     season: "Fall",
@@ -257,6 +360,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Hypericum",
     scientific: "Hypericum androsaemum",
+    genus: "Hypericum",
+    epithet: "androsaemum",
+    family: "Hypericaceae",
+    inflorescence: "Spray",
     colors: ["Green", "Red", "Pink"],
     occasions: ["Birthday", "Thank You"],
     season: "Summer-Fall",
@@ -265,6 +372,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Statice",
     scientific: "Limonium sinuatum",
+    genus: "Limonium",
+    epithet: "sinuatum",
+    family: "Plumbaginaceae",
+    inflorescence: "Panicle",
     colors: ["Purple", "Lavender"],
     occasions: ["Get Well", "Thank You"],
     season: "Summer",
@@ -273,6 +384,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Waxflower",
     scientific: "Chamelaucium uncinatum",
+    genus: "Chamelaucium",
+    epithet: "uncinatum",
+    family: "Myrtaceae",
+    inflorescence: "Spray",
     colors: ["Pink", "White"],
     occasions: ["Anniversary", "Thank You"],
     season: "Winter-Spring",
@@ -281,6 +396,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Queen Anne's Lace",
     scientific: "Daucus carota",
+    genus: "Daucus",
+    epithet: "carota",
+    family: "Apiaceae",
+    inflorescence: "Umbel",
     colors: ["White"],
     occasions: ["Anniversary", "Thank You"],
     season: "Summer",
@@ -289,6 +408,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Heather",
     scientific: "Calluna vulgaris",
+    genus: "Calluna",
+    epithet: "vulgaris",
+    family: "Ericaceae",
+    inflorescence: "Raceme",
     colors: ["Pink", "Purple"],
     occasions: ["Anniversary", "Thank You"],
     season: "Fall",
@@ -297,6 +420,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Bupleurum",
     scientific: "Bupleurum rotundifolium",
+    genus: "Bupleurum",
+    epithet: "rotundifolium",
+    family: "Apiaceae",
+    inflorescence: "Umbel",
     colors: ["Green"],
     occasions: ["Birthday", "Thank You"],
     season: "Summer",
@@ -305,6 +432,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Yarrow",
     scientific: "Achillea millefolium",
+    genus: "Achillea",
+    epithet: "millefolium",
+    family: "Asteraceae",
+    inflorescence: "Corymb",
     colors: ["Yellow"],
     occasions: ["Get Well", "Thank You"],
     season: "Summer",
@@ -313,6 +444,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Limonium",
     scientific: "Limonium latifolium",
+    genus: "Limonium",
+    epithet: "latifolium",
+    family: "Plumbaginaceae",
+    inflorescence: "Panicle",
     colors: ["Lavender", "Purple"],
     occasions: ["Get Well", "Thank You"],
     season: "Summer",
@@ -323,6 +458,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Spray Rose",
     scientific: "Rosa spray",
+    genus: "Rosa",
+    epithet: "",
+    family: "Rosaceae",
+    inflorescence: "Spray",
     colors: ["Red", "White", "Pink", "Yellow", "Orange", "Peach"],
     occasions: ["Anniversary", "Birthday", "Love & Romance", "Thank You"],
     season: "Year-round",
@@ -331,6 +470,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Mini Carnation",
     scientific: "Dianthus caryophyllus mini",
+    genus: "Dianthus",
+    epithet: "caryophyllus",
+    family: "Caryophyllaceae",
+    inflorescence: "Spray",
     colors: ["Red", "Pink", "White", "Yellow", "Orange"],
     occasions: ["Birthday", "Get Well", "Thank You"],
     season: "Year-round",
@@ -339,6 +482,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Button Pom",
     scientific: "Chrysanthemum button",
+    genus: "Chrysanthemum",
+    epithet: "morifolium",
+    family: "Asteraceae",
+    inflorescence: "Spray",
     colors: ["Green", "Yellow"],
     occasions: ["Birthday", "Thank You"],
     season: "Fall",
@@ -347,6 +494,9 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Fuji Mum",
     scientific: "Chrysanthemum fuji",
+    genus: "Chrysanthemum",
+    epithet: "morifolium",
+    family: "Asteraceae",
     colors: ["Lavender", "Green", "White"],
     occasions: ["Anniversary", "Thank You"],
     season: "Fall",
@@ -355,6 +505,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Cushion Pom",
     scientific: "Chrysanthemum cushion",
+    genus: "Chrysanthemum",
+    epithet: "morifolium",
+    family: "Asteraceae",
+    inflorescence: "Spray",
     colors: ["Yellow", "Green", "White"],
     occasions: ["Birthday", "Thank You"],
     season: "Fall",
@@ -363,6 +517,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Kermit Pom",
     scientific: "Chrysanthemum kermit",
+    genus: "Chrysanthemum",
+    epithet: "morifolium",
+    family: "Asteraceae",
+    inflorescence: "Spray",
     colors: ["Green"],
     occasions: ["Birthday", "Thank You"],
     season: "Fall",
@@ -371,6 +529,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Spray Mum",
     scientific: "Chrysanthemum spray",
+    genus: "Chrysanthemum",
+    epithet: "morifolium",
+    family: "Asteraceae",
+    inflorescence: "Spray",
     colors: ["Yellow", "White", "Lavender", "Pink"],
     occasions: ["Birthday", "Get Well", "Thank You"],
     season: "Fall",
@@ -379,6 +541,10 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Matsumoto Aster",
     scientific: "Callistephus chinensis",
+    genus: "Callistephus",
+    epithet: "chinensis",
+    family: "Asteraceae",
+    inflorescence: "Spray",
     colors: ["Pink", "Purple", "Lavender", "White"],
     occasions: ["Birthday", "Thank You"],
     season: "Summer-Fall",
@@ -387,6 +553,9 @@ export const TEMPLATES: TemplateInfo[] = [
   {
     name: "Sweet William",
     scientific: "Dianthus barbatus",
+    genus: "Dianthus",
+    epithet: "barbatus",
+    family: "Caryophyllaceae",
     colors: ["Pink", "Red", "White", "Purple"],
     occasions: ["Birthday", "Thank You"],
     season: "Spring-Summer",
@@ -394,7 +563,11 @@ export const TEMPLATES: TemplateInfo[] = [
   },
   {
     name: "Solidaster",
-    scientific: "x Solidaster luteus",
+    scientific: "× Solidaster luteus",
+    genus: "Solidaster",
+    epithet: "luteus",
+    family: "Asteraceae",
+    inflorescence: "Panicle",
     colors: ["Yellow"],
     occasions: ["Get Well", "Thank You"],
     season: "Summer-Fall",

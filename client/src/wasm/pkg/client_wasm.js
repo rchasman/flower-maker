@@ -1,3 +1,5 @@
+/* @ts-self-types="./client_wasm.d.ts" */
+
 /**
  * Single-zone garden simulation with rapier2d physics.
  * Runs in the designer view for YOUR flowers only.
@@ -27,25 +29,9 @@ export class GardenSimulation {
         const ret = wasm.gardensimulation_flower_count(this.__wbg_ptr);
         return ret >>> 0;
     }
-    /**
-     * Get pending merge events as JSON: [{ "a": session_id, "b": session_id }, ...]
-     * @returns {string}
-     */
-    get_merge_events() {
-        let deferred1_0;
-        let deferred1_1;
-        try {
-            const ret = wasm.gardensimulation_get_merge_events(this.__wbg_ptr);
-            deferred1_0 = ret[0];
-            deferred1_1 = ret[1];
-            return getStringFromWasm0(ret[0], ret[1]);
-        } finally {
-            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
-        }
-    }
     constructor() {
         const ret = wasm.gardensimulation_new();
-        this.__wbg_ptr = ret >>> 0;
+        this.__wbg_ptr = ret;
         GardenSimulationFinalization.register(this, this.__wbg_ptr, this);
         return this;
     }
@@ -60,25 +46,9 @@ export class GardenSimulation {
      * Required buffer size in f32 elements for SharedArrayBuffer allocation.
      * @returns {number}
      */
-    static render_buffer_size() {
-        const ret = wasm.gardensimulation_render_buffer_size();
+    render_buffer_size() {
+        const ret = wasm.gardensimulation_render_buffer_size(this.__wbg_ptr);
         return ret >>> 0;
-    }
-    /**
-     * Export render data as JSON for PixiJS
-     * @returns {string}
-     */
-    render_data() {
-        let deferred1_0;
-        let deferred1_1;
-        try {
-            const ret = wasm.gardensimulation_render_data(this.__wbg_ptr);
-            deferred1_0 = ret[0];
-            deferred1_1 = ret[1];
-            return getStringFromWasm0(ret[0], ret[1]);
-        } finally {
-            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
-        }
     }
     /**
      * Set the physics body position for a flower (used for drag interaction).
@@ -153,20 +123,19 @@ export class GardenSimulation {
     }
 }
 if (Symbol.dispose) GardenSimulation.prototype[Symbol.dispose] = GardenSimulation.prototype.free;
-
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
-        __wbg___wbindgen_copy_to_typed_array_d2f20acdab8e0740: function(arg0, arg1, arg2) {
+        __wbg___wbindgen_copy_to_typed_array_cccd104be8cf0b8d: function(arg0, arg1, arg2) {
             new Uint8Array(arg2.buffer, arg2.byteOffset, arg2.byteLength).set(getArrayU8FromWasm0(arg0, arg1));
         },
-        __wbg___wbindgen_throw_6ddd609b62940d55: function(arg0, arg1) {
+        __wbg___wbindgen_throw_5d9e815e6fdf150f: function(arg0, arg1) {
             throw new Error(getStringFromWasm0(arg0, arg1));
         },
-        __wbg_error_8d9a8e04cd1d3588: function(arg0) {
+        __wbg_error_756c5934221e6fee: function(arg0) {
             console.error(arg0);
         },
-        __wbindgen_cast_0000000000000001: function(arg0, arg1) {
+        __wbindgen_generic_0000000000000001: function(arg0, arg1) {
             // Cast intrinsic for `Ref(String) -> Externref`.
             const ret = getStringFromWasm0(arg0, arg1);
             return ret;
@@ -189,7 +158,7 @@ function __wbg_get_imports() {
 
 const GardenSimulationFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_gardensimulation_free(ptr >>> 0, 1));
+    : new FinalizationRegistry(ptr => wasm.__wbg_gardensimulation_free(ptr, 1));
 
 function getArrayU8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
@@ -205,8 +174,7 @@ function getFloat32ArrayMemory0() {
 }
 
 function getStringFromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    return decodeText(ptr, len);
+    return decodeText(ptr >>> 0, len);
 }
 
 let cachedUint8ArrayMemory0 = null;
@@ -290,8 +258,9 @@ if (!('encodeInto' in cachedTextEncoder)) {
 
 let WASM_VECTOR_LEN = 0;
 
-let wasmModule, wasm;
+let wasmModule, wasmInstance, wasm;
 function __wbg_finalize_init(instance, module) {
+    wasmInstance = instance;
     wasm = instance.exports;
     wasmModule = module;
     cachedFloat32ArrayMemory0 = null;
@@ -302,11 +271,15 @@ function __wbg_finalize_init(instance, module) {
 
 async function __wbg_load(module, imports) {
     if (typeof Response === 'function' && module instanceof Response) {
+        if (!module.ok) {
+            throw new Error(`failed to fetch Wasm: ${module.status} ${module.statusText} fetching '${module.url}'`);
+        }
+
         if (typeof WebAssembly.instantiateStreaming === 'function') {
             try {
                 return await WebAssembly.instantiateStreaming(module, imports);
             } catch (e) {
-                const validResponse = module.ok && expectedResponseType(module.type);
+                const validResponse = expectedResponseType(module.type);
 
                 if (validResponse && module.headers.get('Content-Type') !== 'application/wasm') {
                     console.warn("`WebAssembly.instantiateStreaming` failed because your server does not serve Wasm with `application/wasm` MIME type. Falling back to `WebAssembly.instantiate` which is slower. Original error:\n", e);

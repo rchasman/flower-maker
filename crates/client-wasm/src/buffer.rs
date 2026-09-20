@@ -24,8 +24,6 @@ pub const FLOATS_PER_FLOWER: usize = 14;
 pub const HEADER_FLOATS: usize = 2;
 pub const MAX_FLOWERS: usize = 64;
 pub const BUFFER_FLOATS: usize = HEADER_FLOATS + MAX_FLOWERS * FLOATS_PER_FLOWER;
-/// Total byte size: (2 + 64*14) * 4 = 3592 bytes
-pub const BUFFER_BYTES: usize = BUFFER_FLOATS * 4;
 
 pub struct FlowerData {
     pub session_id: u64,

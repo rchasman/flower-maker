@@ -10,10 +10,6 @@ export class GardenSimulation {
     [Symbol.dispose](): void;
     ambient_light(): number;
     flower_count(): number;
-    /**
-     * Get pending merge events as JSON: [{ "a": session_id, "b": session_id }, ...]
-     */
-    get_merge_events(): string;
     constructor();
     /**
      * Remove a flower immediately (no animation)
@@ -22,11 +18,7 @@ export class GardenSimulation {
     /**
      * Required buffer size in f32 elements for SharedArrayBuffer allocation.
      */
-    static render_buffer_size(): number;
-    /**
-     * Export render data as JSON for PixiJS
-     */
-    render_data(): string;
+    render_buffer_size(): number;
     /**
      * Set the physics body position for a flower (used for drag interaction).
      */
@@ -39,7 +31,7 @@ export class GardenSimulation {
     /**
      * Add or update a flower from SpacetimeDB data
      */
-    upsert_flower(session_id: bigint, spec_json: string, x: number, y: number): void;
+    upsert_flower(session_id: bigint, spec_yaml: string, x: number, y: number): void;
     /**
      * Start wilt-out animation for a flower (it will be removed after animation completes)
      */
@@ -61,11 +53,9 @@ export interface InitOutput {
     readonly __wbg_gardensimulation_free: (a: number, b: number) => void;
     readonly gardensimulation_ambient_light: (a: number) => number;
     readonly gardensimulation_flower_count: (a: number) => number;
-    readonly gardensimulation_get_merge_events: (a: number) => [number, number];
     readonly gardensimulation_new: () => number;
     readonly gardensimulation_remove_flower: (a: number, b: bigint) => void;
-    readonly gardensimulation_render_buffer_size: () => number;
-    readonly gardensimulation_render_data: (a: number) => [number, number];
+    readonly gardensimulation_render_buffer_size: (a: number) => number;
     readonly gardensimulation_set_body_position: (a: number, b: bigint, c: number, d: number) => void;
     readonly gardensimulation_tick: (a: number, b: number) => number;
     readonly gardensimulation_time_of_day: (a: number) => number;
@@ -75,7 +65,6 @@ export interface InitOutput {
     readonly gardensimulation_wind_y: (a: number) => number;
     readonly gardensimulation_write_to_buffer: (a: number, b: number, c: number, d: any) => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;
-    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_start: () => void;

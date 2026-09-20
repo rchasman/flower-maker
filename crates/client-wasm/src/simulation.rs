@@ -87,6 +87,20 @@ impl PhysicsWorld {
             .unwrap_or((0.0, 0.0))
     }
 
+    /// Collider radius and body mass, or None when the handle is gone.
+    pub fn body_params(&self, handle: RigidBodyHandle) -> Option<(f32, f32)> {
+        let body = self.rigid_body_set.get(handle)?;
+        let collider = body.colliders().first().and_then(|h| self.collider_set.get(*h))?;
+        let radius = collider.shape().as_ball()?.radius;
+        Some((radius, body.mass()))
+    }
+
+    /// True when the body already has this collider radius and mass.
+    pub fn body_matches(&self, handle: RigidBodyHandle, radius: f32, mass: f32) -> bool {
+        self.body_params(handle)
+            .is_some_and(|(r, m)| (r - radius).abs() < 1e-4 && (m - mass).abs() < 1e-3)
+    }
+
     pub fn rotation(&self, handle: RigidBodyHandle) -> f32 {
         self.rigid_body_set.get(handle)
             .map(|b| b.rotation().angle())
@@ -113,25 +127,4 @@ impl PhysicsWorld {
         );
     }
 
-    /// Get all currently contacting collider pairs as (user_data_a, user_data_b).
-    pub fn contact_pairs(&self) -> Vec<(u64, u64)> {
-        let mut pairs = Vec::new();
-        for pair in self.narrow_phase.contact_pairs() {
-            if pair.has_any_active_contact {
-                let a_session = self.session_id_for_collider(pair.collider1);
-                let b_session = self.session_id_for_collider(pair.collider2);
-                if let (Some(a), Some(b)) = (a_session, b_session) {
-                    pairs.push((a, b));
-                }
-            }
-        }
-        pairs
-    }
-
-    fn session_id_for_collider(&self, collider_handle: ColliderHandle) -> Option<u64> {
-        let collider = self.collider_set.get(collider_handle)?;
-        let body_handle = collider.parent()?;
-        let body = self.rigid_body_set.get(body_handle)?;
-        Some(body.user_data as u64)
-    }
 }

@@ -1,0 +1,440 @@
+name: Wild Pilgrim
+species: Magnolia pilgrimensis
+taxonomy:
+  family: Magnoliaceae
+  genus: Magnolia
+  species_name: pilgrimensis
+  common_name: Wild Pilgrim
+  botanical_class: Magnoliid
+petals:
+  layers:
+    - index: 0
+      count: 6
+      shape: Filiform
+      arrangement: Spiral
+      curvature: -0.7
+      curl: 0.5
+      texture: Waxy
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.49
+              g: 0.827
+              b: 0.988
+              a: 1
+          - position: 0.816
+            color:
+              r: 0.49
+              g: 0.827
+              b: 0.988
+              a: 1
+          - position: 1
+            color:
+              r: 0.573
+              g: 0.251
+              b: 0.055
+              a: 1
+      opacity: 0.5
+      vein_pattern: Branching
+      edge_style: Lacerate
+      width: 1.5
+      length: 1.4
+      angular_offset: 0
+      droop: 0.6
+      thickness: 0.4
+      pattern:
+        kind: Flame
+        color:
+          r: 0.847
+          g: 0.706
+          b: 0.996
+          a: 1
+        scale: 0.701
+        density: 0.395
+        extent: 0.536
+      fusion:
+        kind: Trumpet
+        depth: 0.632
+    - index: 1
+      count: 10
+      shape: Orbicular
+      arrangement: Spiral
+      curvature: -0.3
+      curl: 0.3
+      texture: Waxy
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.925
+              g: 0.282
+              b: 0.6
+              a: 1
+          - position: 0.795
+            color:
+              r: 0.925
+              g: 0.282
+              b: 0.6
+              a: 1
+          - position: 1
+            color:
+              r: 0.918
+              g: 0.702
+              b: 0.031
+              a: 1
+      opacity: 0.5
+      vein_pattern: Branching
+      edge_style: Lacerate
+      width: 1.4
+      length: 1.2
+      angular_offset: 16.828
+      droop: 0.6
+      thickness: 0.35
+      pattern:
+        kind: Flame
+        color:
+          r: 0.847
+          g: 0.706
+          b: 0.996
+          a: 1
+        scale: 0.313
+        density: 0.794
+        extent: 0.79
+      fusion:
+        kind: Free
+        depth: 0.348
+    - index: 2
+      count: 16
+      shape: Orbicular
+      arrangement: Spiral
+      curvature: 0.1
+      curl: 0.1
+      texture: Waxy
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.925
+              g: 0.282
+              b: 0.6
+              a: 1
+          - position: 0.693
+            color:
+              r: 0.925
+              g: 0.282
+              b: 0.6
+              a: 1
+          - position: 1
+            color:
+              r: 0.918
+              g: 0.702
+              b: 0.031
+              a: 1
+      opacity: 0.5
+      vein_pattern: Branching
+      edge_style: Lacerate
+      width: 1.3
+      length: 1
+      angular_offset: 13.451
+      droop: 0.6
+      thickness: 0.3
+      pattern:
+        kind: Flame
+        color:
+          r: 0.847
+          g: 0.706
+          b: 0.996
+          a: 1
+        scale: 0.4
+        density: 0.597
+        extent: 0.425
+      fusion:
+        kind: Free
+        depth: 0.446
+  bloom_progress: 1
+  wilt_progress: 0
+  symmetry: Spiral
+  symmetry_order: 0
+  divergence_angle: 137.5
+  stage: Bloom
+reproductive:
+  pistil:
+    style: Compound
+    stigma_shape: Fimbriate
+    color:
+      r: 0.984
+      g: 0.812
+      b: 0.91
+      a: 1
+    height: 0.35
+  stamens: []
+  pollen:
+    particle_count: 22
+    drift_speed: 0.3
+    color:
+      r: 0.937
+      g: 0.267
+      b: 0.267
+      a: 1
+    luminosity: 0.7
+    dispersal: Wind
+    trail: false
+structure:
+  stem:
+    height: 1
+    thickness: 0.45
+    curvature: 0.6
+    color:
+      r: 0.345
+      g: 0.11
+      b: 0.529
+      a: 1
+    thorns:
+      density: 0.4
+      size: 0.15
+      color:
+        r: 0.241
+        g: 0.077
+        b: 0.37
+        a: 1
+      shape: Stellate
+      curve: 0.2
+    internode_length: 0.5
+    surface: Crystalline
+    branching: Sympodial
+    style: Twining
+  sepals:
+    - shape: Petaloid
+      color:
+        r: 0.369
+        g: 0.918
+        b: 0.831
+        a: 1
+      reflex_angle: 160
+      texture: Smooth
+      length: 0.251
+      persistent: true
+    - shape: Petaloid
+      color:
+        r: 0.369
+        g: 0.918
+        b: 0.831
+        a: 1
+      reflex_angle: 160
+      texture: Smooth
+      length: 0.251
+      persistent: true
+    - shape: Petaloid
+      color:
+        r: 0.369
+        g: 0.918
+        b: 0.831
+        a: 1
+      reflex_angle: 160
+      texture: Smooth
+      length: 0.251
+      persistent: true
+  receptacle:
+    shape: Convex
+    size: 0.3
+    color:
+      r: 0.996
+      g: 0.953
+      b: 0.78
+      a: 1
+  buds:
+    - position: 0.573
+      side: Right
+      size: 0.44
+      openness: 0.289
+    - position: 0.638
+      side: Left
+      size: 0.424
+      openness: 0.351
+    - position: 0.733
+      side: Right
+      size: 0.358
+      openness: 0.25
+foliage:
+  leaves:
+    - shape: Bipinnate
+      size: 0.442
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.369
+              g: 0.918
+              b: 0.831
+              a: 1
+      vein_pattern: Dichotomous
+      serration: Coarse
+      arrangement: Alternate
+      phyllotaxis_angle: 137.5
+      droop: 0.6
+      curl: 0.1
+      translucency: 0.2
+      position: 0.2
+      side: Left
+      angle_offset: 0.121
+      variegation:
+        kind: None
+        color:
+          r: 0.961
+          g: 0.961
+          b: 0.961
+          a: 1
+    - shape: Bipinnate
+      size: 0.458
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.369
+              g: 0.918
+              b: 0.831
+              a: 1
+      vein_pattern: Dichotomous
+      serration: Coarse
+      arrangement: Alternate
+      phyllotaxis_angle: 137.5
+      droop: 0.6
+      curl: 0.1
+      translucency: 0.2
+      position: 0.432
+      side: Right
+      angle_offset: -0.092
+      variegation:
+        kind: None
+        color:
+          r: 0.961
+          g: 0.961
+          b: 0.961
+          a: 1
+    - shape: Bipinnate
+      size: 0.394
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.369
+              g: 0.918
+              b: 0.831
+              a: 1
+      vein_pattern: Dichotomous
+      serration: Coarse
+      arrangement: Alternate
+      phyllotaxis_angle: 137.5
+      droop: 0.6
+      curl: 0.1
+      translucency: 0.2
+      position: 0.516
+      side: Left
+      angle_offset: -0.005
+      variegation:
+        kind: None
+        color:
+          r: 0.961
+          g: 0.961
+          b: 0.961
+          a: 1
+    - shape: Bipinnate
+      size: 0.38
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.369
+              g: 0.918
+              b: 0.831
+              a: 1
+      vein_pattern: Dichotomous
+      serration: Coarse
+      arrangement: Alternate
+      phyllotaxis_angle: 137.5
+      droop: 0.6
+      curl: 0.1
+      translucency: 0.2
+      position: 0.741
+      side: Right
+      angle_offset: -0.14
+      variegation:
+        kind: None
+        color:
+          r: 0.961
+          g: 0.961
+          b: 0.961
+          a: 1
+    - shape: Bipinnate
+      size: 0.462
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.369
+              g: 0.918
+              b: 0.831
+              a: 1
+      vein_pattern: Dichotomous
+      serration: Coarse
+      arrangement: Alternate
+      phyllotaxis_angle: 137.5
+      droop: 0.6
+      curl: 0.1
+      translucency: 0.2
+      position: 0.797
+      side: Left
+      angle_offset: 0.034
+      variegation:
+        kind: None
+        color:
+          r: 0.961
+          g: 0.961
+          b: 0.961
+          a: 1
+  bracts: []
+  leaf_density: 0.833
+ornamentation:
+  dewdrops:
+    - size: 0.04
+      count: 12
+      refraction: 0.5
+      placement: Random
+      surface_tension: 0.6
+  particles:
+    - kind: Spores
+      density: 20
+      color:
+        r: 0.992
+        g: 0.729
+        b: 0.455
+        a: 1
+      drift_speed: 0.3
+      lifetime: 3
+      emission_zone: Whole
+      gravity: -0.1
+  bioluminescence:
+    pattern: Veins
+    color:
+      r: 0.573
+      g: 0.251
+      b: 0.055
+      a: 1
+    intensity: 0.7
+    trigger: Night
+aura:
+  kind: Ethereal
+  color:
+    r: 0.863
+    g: 0.149
+    b: 0.149
+    a: 1
+  opacity: 0.25
+  radius: 0.45
+  animation_speed: 0.5
+inflorescence:
+  kind: Spray
+  head_count: 3
+  head_scale: 0.912
+  spread: 0.288

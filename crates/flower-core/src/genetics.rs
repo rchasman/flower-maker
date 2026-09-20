@@ -1,30 +1,5 @@
 use std::cell::Cell;
 use crate::catalog::*;
-use serde::{Deserialize, Serialize};
-
-/// Genetic traits for flower breeding/combination
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FlowerGenome {
-    pub traits: Vec<GeneticTrait>,
-    pub generation: u32,
-    pub lineage: Vec<String>,     // parent flower names
-    pub mutations: Vec<Mutation>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GeneticTrait {
-    pub name: String,
-    pub dominant: f64,           // 0.0-1.0 dominance
-    pub value: f64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Mutation {
-    pub trait_name: String,
-    pub original: f64,
-    pub mutated: f64,
-    pub generation: u32,
-}
 
 /// Cross two flower specs to produce offspring. Deterministic given a seed.
 pub fn cross(parent_a: &FlowerSpec, parent_b: &FlowerSpec, seed: u64) -> FlowerSpec {
@@ -51,15 +26,26 @@ pub fn cross(parent_a: &FlowerSpec, parent_b: &FlowerSpec, seed: u64) -> FlowerS
         a * (1.0 - t) + b * t
     };
 
+    let pick_head_count = |a: u32, b: u32| -> u32 {
+        (pick_f64(a as f64, b as f64).round() as u32).max(1)
+    };
+
+    // Petals and taxonomy come from the same parent so the child's family agrees with its petals.
+    let petal_parent = if next() > 0.5 { parent_a } else { parent_b };
+    let symmetry_parent = if next() > 0.5 { parent_a } else { parent_b };
+
     FlowerSpec {
         name: format!("{} × {}", parent_a.name, parent_b.name),
         species: if next() > 0.5 { parent_a.species.clone() } else { parent_b.species.clone() },
-        taxonomy: if next() > 0.5 { parent_a.taxonomy.clone() } else { parent_b.taxonomy.clone() },
+        taxonomy: petal_parent.taxonomy.clone(),
         petals: PetalSystem {
-            layers: if next() > 0.5 { parent_a.petals.layers.clone() } else { parent_b.petals.layers.clone() },
+            layers: petal_parent.petals.layers.clone(),
             bloom_progress: 0.0,
             wilt_progress: 0.0,
-            symmetry: if next() > 0.5 { parent_a.petals.symmetry.clone() } else { parent_b.petals.symmetry.clone() },
+            symmetry: symmetry_parent.petals.symmetry.clone(),
+            symmetry_order: symmetry_parent.petals.symmetry_order,
+            divergence_angle: symmetry_parent.petals.divergence_angle,
+            stage: LifeStage::Bloom,
         },
         reproductive: if next() > 0.5 { parent_a.reproductive.clone() } else { parent_b.reproductive.clone() },
         structure: StructureSystem {
@@ -82,6 +68,7 @@ pub fn cross(parent_a: &FlowerSpec, parent_b: &FlowerSpec, seed: u64) -> FlowerS
                 flexibility: pick_f64(parent_a.structure.peduncle.flexibility, parent_b.structure.peduncle.flexibility),
                 color: pick_color(&parent_a.structure.peduncle.color, &parent_b.structure.peduncle.color),
             },
+            buds: if next() > 0.5 { parent_a.structure.buds.clone() } else { parent_b.structure.buds.clone() },
         },
         foliage: if next() > 0.5 { parent_a.foliage.clone() } else { parent_b.foliage.clone() },
         ornamentation: if next() > 0.5 { parent_a.ornamentation.clone() } else { parent_b.ornamentation.clone() },
@@ -116,5 +103,64 @@ pub fn cross(parent_a: &FlowerSpec, parent_b: &FlowerSpec, seed: u64) -> FlowerS
             pollinator_attraction: pick_f64(parent_a.personality.pollinator_attraction, parent_b.personality.pollinator_attraction),
             fragrance: if next() > 0.5 { parent_a.personality.fragrance.clone() } else { parent_b.personality.fragrance.clone() },
         },
+        inflorescence: Inflorescence {
+            kind: if next() > 0.5 { parent_a.inflorescence.kind.clone() } else { parent_b.inflorescence.kind.clone() },
+            head_count: pick_head_count(parent_a.inflorescence.head_count, parent_b.inflorescence.head_count),
+            head_scale: pick_f64(parent_a.inflorescence.head_scale, parent_b.inflorescence.head_scale),
+            spread: pick_f64(parent_a.inflorescence.spread, parent_b.inflorescence.spread),
+        },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parent(family: FlowerFamily, petal_count: u32, head_count: u32) -> FlowerSpec {
+        FlowerSpec {
+            taxonomy: Taxonomy { family, ..Taxonomy::default() },
+            petals: PetalSystem {
+                layers: vec![PetalLayer { count: petal_count, ..PetalLayer::default() }],
+                ..PetalSystem::default()
+            },
+            inflorescence: Inflorescence { head_count, ..Inflorescence::default() },
+            ..FlowerSpec::default()
+        }
+    }
+
+    #[test]
+    fn child_family_follows_the_parent_that_gave_its_petals() {
+        let iris = parent(FlowerFamily::Iridaceae, 3, 1);
+        let rose = parent(FlowerFamily::Rosaceae, 5, 1);
+
+        (0..64u64).for_each(|seed| {
+            let child = cross(&iris, &rose, seed);
+            let petal_count = child.petals.layers[0].count;
+            let family_matches_petals = match petal_count {
+                3 => matches!(child.taxonomy.family, FlowerFamily::Iridaceae),
+                5 => matches!(child.taxonomy.family, FlowerFamily::Rosaceae),
+                _ => false,
+            };
+            assert!(
+                family_matches_petals,
+                "seed {seed}: petals from count-{petal_count} parent but family {:?}",
+                child.taxonomy.family
+            );
+        });
+    }
+
+    #[test]
+    fn child_stage_is_bloom_and_head_count_stays_at_least_one() {
+        let bud = FlowerSpec {
+            petals: PetalSystem { stage: LifeStage::Bud, ..PetalSystem::default() },
+            ..parent(FlowerFamily::Invented, 4, 1)
+        };
+        let spray = parent(FlowerFamily::Asteraceae, 8, 7);
+
+        (0..32u64).for_each(|seed| {
+            let child = cross(&bud, &spray, seed);
+            assert!(matches!(child.petals.stage, LifeStage::Bloom));
+            assert!((1..=7).contains(&child.inflorescence.head_count), "seed {seed}: {}", child.inflorescence.head_count);
+        });
     }
 }

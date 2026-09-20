@@ -1,0 +1,246 @@
+name: Wild Lantern
+species: Novaflora lanternensis
+taxonomy:
+  family: Invented
+  genus: Novaflora
+  species_name: lanternensis
+  common_name: Wild Lantern
+  botanical_class: Dicot
+petals:
+  layers:
+    - index: 0
+      count: 4
+      shape: Ovate
+      arrangement: Radial
+      curvature: -0.4
+      curl: 0.5
+      texture: Smooth
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.863
+              g: 0.149
+              b: 0.149
+              a: 1
+          - position: 1
+            color:
+              r: 0.984
+              g: 0.812
+              b: 0.91
+              a: 1
+      opacity: 1
+      vein_pattern: None
+      edge_style: Smooth
+      width: 0.5
+      length: 1.4
+      angular_offset: 0
+      droop: 0.05
+      thickness: 0.4
+      pattern:
+        kind: None
+        color:
+          r: 0.639
+          g: 0.902
+          b: 0.208
+          a: 1
+        scale: 0.701
+        density: 0.395
+        extent: 0.536
+      fusion:
+        kind: Free
+        depth: 0.632
+  bloom_progress: 1
+  wilt_progress: 0
+  symmetry: Radial
+  symmetry_order: 4
+  divergence_angle: 137.5
+  stage: Bloom
+reproductive:
+  pistil:
+    style: Simple
+    stigma_shape: Capitate
+    color:
+      r: 0.961
+      g: 0.961
+      b: 0.961
+      a: 1
+    height: 0.35
+  stamens: []
+  pollen:
+    particle_count: 22
+    drift_speed: 0.3
+    color:
+      r: 0.918
+      g: 0.702
+      b: 0.031
+      a: 1
+    luminosity: 0.2
+    dispersal: Wind
+    trail: false
+  nectary:
+    position: Basal
+    color:
+      r: 0.639
+      g: 0.902
+      b: 0.208
+      a: 1
+    glow:
+      intensity: 0.6
+      color:
+        r: 0.639
+        g: 0.902
+        b: 0.208
+        a: 1
+      radius: 0.3
+    drip_rate: 0.2
+structure:
+  stem:
+    height: 0.428
+    thickness: 0.2
+    curvature: 0
+    color:
+      r: 0.082
+      g: 0.502
+      b: 0.239
+      a: 1
+    thorns:
+      density: 0.4
+      size: 0.15
+      color:
+        r: 0.057
+        g: 0.351
+        b: 0.167
+        a: 1
+      shape: Straight
+      curve: 0.2
+    internode_length: 0.5
+    surface: Waxy
+    branching: None
+    style: Straight
+  sepals:
+    - shape: Lanceolate
+      color:
+        r: 0.29
+        g: 0.871
+        b: 0.502
+        a: 1
+      reflex_angle: 20
+      texture: Smooth
+      length: 0.251
+      persistent: true
+    - shape: Lanceolate
+      color:
+        r: 0.29
+        g: 0.871
+        b: 0.502
+        a: 1
+      reflex_angle: 20
+      texture: Smooth
+      length: 0.251
+      persistent: true
+    - shape: Lanceolate
+      color:
+        r: 0.29
+        g: 0.871
+        b: 0.502
+        a: 1
+      reflex_angle: 20
+      texture: Smooth
+      length: 0.251
+      persistent: true
+    - shape: Lanceolate
+      color:
+        r: 0.29
+        g: 0.871
+        b: 0.502
+        a: 1
+      reflex_angle: 20
+      texture: Smooth
+      length: 0.251
+      persistent: true
+    - shape: Lanceolate
+      color:
+        r: 0.29
+        g: 0.871
+        b: 0.502
+        a: 1
+      reflex_angle: 20
+      texture: Smooth
+      length: 0.251
+      persistent: true
+  receptacle:
+    shape: Convex
+    size: 0.644
+    color:
+      r: 0.231
+      g: 0.51
+      b: 0.965
+      a: 1
+  buds: []
+foliage:
+  leaves:
+    - shape: Ovate
+      size: 0.442
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.29
+              g: 0.871
+              b: 0.502
+              a: 1
+      vein_pattern: Palmate
+      serration: None
+      arrangement: Alternate
+      phyllotaxis_angle: 137.5
+      droop: 0.05
+      curl: 0.1
+      translucency: 0.2
+      position: 0.2
+      side: Left
+      angle_offset: 0.121
+      variegation:
+        kind: None
+        color:
+          r: 0.078
+          g: 0.722
+          b: 0.651
+          a: 1
+    - shape: Ovate
+      size: 0.458
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.29
+              g: 0.871
+              b: 0.502
+              a: 1
+      vein_pattern: Palmate
+      serration: None
+      arrangement: Alternate
+      phyllotaxis_angle: 137.5
+      droop: 0.05
+      curl: 0.1
+      translucency: 0.2
+      position: 0.882
+      side: Right
+      angle_offset: -0.092
+      variegation:
+        kind: None
+        color:
+          r: 0.078
+          g: 0.722
+          b: 0.651
+          a: 1
+  bracts: []
+  leaf_density: 0.333
+ornamentation:
+  dewdrops: []
+  particles: []
+inflorescence:
+  kind: Solitary
+  head_count: 1
+  head_scale: 0.662
+  spread: 0.288

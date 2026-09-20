@@ -1,0 +1,1051 @@
+name: Wild Saber
+species: Hypericum saberensis
+taxonomy:
+  family: Hypericaceae
+  genus: Hypericum
+  species_name: saberensis
+  common_name: Wild Saber
+  botanical_class: Dicot
+petals:
+  layers:
+    - index: 0
+      count: 5
+      shape: Ovate
+      arrangement: Radial
+      curvature: 0.7
+      curl: 0
+      texture: Glassy
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.639
+              g: 0.902
+              b: 0.208
+              a: 1
+          - position: 0.816
+            color:
+              r: 0.639
+              g: 0.902
+              b: 0.208
+              a: 1
+          - position: 1
+            color:
+              r: 0.863
+              g: 0.149
+              b: 0.149
+              a: 1
+      opacity: 0.5
+      vein_pattern: Dichotomous
+      edge_style: Revolute
+      width: 1.5
+      length: 1.4
+      angular_offset: 0
+      droop: 0.6
+      thickness: 0.4
+      pattern:
+        kind: Band
+        color:
+          r: 0.388
+          g: 0.4
+          b: 0.945
+          a: 1
+        scale: 0.701
+        density: 0.395
+        extent: 0.536
+      fusion:
+        kind: Tube
+        depth: 0.632
+    - index: 1
+      count: 5
+      shape: Falcate
+      arrangement: Radial
+      curvature: 0.85
+      curl: 0
+      texture: Glassy
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.992
+              g: 0.729
+              b: 0.455
+              a: 1
+          - position: 0.795
+            color:
+              r: 0.992
+              g: 0.729
+              b: 0.455
+              a: 1
+          - position: 1
+            color:
+              r: 1
+              g: 0.984
+              b: 0.922
+              a: 1
+      opacity: 0.5
+      vein_pattern: Dichotomous
+      edge_style: Revolute
+      width: 1.4
+      length: 1.2
+      angular_offset: 33.656
+      droop: 0.6
+      thickness: 0.35
+      pattern:
+        kind: Band
+        color:
+          r: 0.388
+          g: 0.4
+          b: 0.945
+          a: 1
+        scale: 0.313
+        density: 0.794
+        extent: 0.79
+      fusion:
+        kind: Free
+        depth: 0.348
+  bloom_progress: 1
+  wilt_progress: 0
+  symmetry: Radial
+  symmetry_order: 5
+  divergence_angle: 137.5
+  stage: Bud
+reproductive:
+  pistil:
+    style: Branched
+    stigma_shape: Lobed
+    color:
+      r: 0.976
+      g: 0.451
+      b: 0.086
+      a: 1
+    height: 0.35
+  stamens:
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.568
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.626
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.578
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.415
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.518
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.455
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.354
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.494
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.412
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.447
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.592
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.398
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.388
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.624
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.608
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.513
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.559
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.503
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.522
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.379
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.562
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.641
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.387
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.608
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.436
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.47
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.558
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.62
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.596
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.535
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.403
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.432
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.377
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.477
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.531
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.555
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.383
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.504
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.601
+      sway: 0.3
+    - filament_curve: 0.2
+      filament_color:
+        r: 0.573
+        g: 0.251
+        b: 0.055
+        a: 1
+      anther_shape: Versatile
+      anther_color:
+        r: 0.753
+        g: 0.149
+        b: 0.827
+        a: 1
+      pollen_load: 0.5
+      height: 0.644
+      sway: 0.3
+structure:
+  stem:
+    height: 1
+    thickness: 0.45
+    curvature: 0.8
+    color:
+      r: 0.471
+      g: 0.208
+      b: 0.059
+      a: 1
+    internode_length: 0.5
+    surface: Pearlescent
+    branching: Alternate
+    style: Trailing
+  sepals:
+    - shape: Ovate
+      color:
+        r: 0.316
+        g: 0.316
+        b: 0.334
+        a: 1
+      reflex_angle: 160
+      texture: Smooth
+      length: 0.251
+      persistent: true
+    - shape: Ovate
+      color:
+        r: 0.316
+        g: 0.316
+        b: 0.334
+        a: 1
+      reflex_angle: 160
+      texture: Smooth
+      length: 0.251
+      persistent: true
+    - shape: Ovate
+      color:
+        r: 0.316
+        g: 0.316
+        b: 0.334
+        a: 1
+      reflex_angle: 160
+      texture: Smooth
+      length: 0.251
+      persistent: true
+    - shape: Ovate
+      color:
+        r: 0.316
+        g: 0.316
+        b: 0.334
+        a: 1
+      reflex_angle: 160
+      texture: Smooth
+      length: 0.251
+      persistent: true
+    - shape: Ovate
+      color:
+        r: 0.316
+        g: 0.316
+        b: 0.334
+        a: 1
+      reflex_angle: 160
+      texture: Smooth
+      length: 0.251
+      persistent: true
+  receptacle:
+    shape: Convex
+    size: 0.3
+    color:
+      r: 0.769
+      g: 0.71
+      b: 0.992
+      a: 1
+  buds:
+    - position: 0.573
+      side: Right
+      size: 0.44
+      openness: 0.289
+    - position: 0.638
+      side: Left
+      size: 0.424
+      openness: 0.351
+    - position: 0.733
+      side: Right
+      size: 0.358
+      openness: 0.25
+foliage:
+  leaves:
+    - shape: Cordate
+      size: 0.442
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.631
+              g: 0.631
+              b: 0.667
+              a: 1
+      vein_pattern: Anastomosing
+      serration: Dentate
+      arrangement: Opposite
+      phyllotaxis_angle: 137.5
+      droop: 0.6
+      curl: 0.1
+      translucency: 0.7
+      position: 0.2
+      side: Left
+      angle_offset: 0.121
+      variegation:
+        kind: Splash
+        color:
+          r: 0.659
+          g: 0.333
+          b: 0.969
+          a: 1
+    - shape: Cordate
+      size: 0.458
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.631
+              g: 0.631
+              b: 0.667
+              a: 1
+      vein_pattern: Anastomosing
+      serration: Dentate
+      arrangement: Opposite
+      phyllotaxis_angle: 137.5
+      droop: 0.6
+      curl: 0.1
+      translucency: 0.7
+      position: 0.432
+      side: Right
+      angle_offset: -0.092
+      variegation:
+        kind: Splash
+        color:
+          r: 0.659
+          g: 0.333
+          b: 0.969
+          a: 1
+    - shape: Cordate
+      size: 0.394
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.631
+              g: 0.631
+              b: 0.667
+              a: 1
+      vein_pattern: Anastomosing
+      serration: Dentate
+      arrangement: Opposite
+      phyllotaxis_angle: 137.5
+      droop: 0.6
+      curl: 0.1
+      translucency: 0.7
+      position: 0.516
+      side: Left
+      angle_offset: -0.005
+      variegation:
+        kind: Splash
+        color:
+          r: 0.659
+          g: 0.333
+          b: 0.969
+          a: 1
+    - shape: Cordate
+      size: 0.38
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.631
+              g: 0.631
+              b: 0.667
+              a: 1
+      vein_pattern: Anastomosing
+      serration: Dentate
+      arrangement: Opposite
+      phyllotaxis_angle: 137.5
+      droop: 0.6
+      curl: 0.1
+      translucency: 0.7
+      position: 0.741
+      side: Right
+      angle_offset: -0.14
+      variegation:
+        kind: Splash
+        color:
+          r: 0.659
+          g: 0.333
+          b: 0.969
+          a: 1
+    - shape: Cordate
+      size: 0.462
+      color:
+        stops:
+          - position: 0
+            color:
+              r: 0.631
+              g: 0.631
+              b: 0.667
+              a: 1
+      vein_pattern: Anastomosing
+      serration: Dentate
+      arrangement: Opposite
+      phyllotaxis_angle: 137.5
+      droop: 0.6
+      curl: 0.1
+      translucency: 0.7
+      position: 0.797
+      side: Left
+      angle_offset: 0.034
+      variegation:
+        kind: Splash
+        color:
+          r: 0.659
+          g: 0.333
+          b: 0.969
+          a: 1
+  bracts:
+    - color:
+        stops:
+          - position: 0
+            color:
+              r: 0.09
+              g: 0.09
+              b: 0.09
+              a: 1
+      size: 0.5
+      shape: Lanceolate
+      showy: true
+      position: 0.95
+    - color:
+        stops:
+          - position: 0
+            color:
+              r: 0.09
+              g: 0.09
+              b: 0.09
+              a: 1
+      size: 0.5
+      shape: Lanceolate
+      showy: true
+      position: 0.95
+    - color:
+        stops:
+          - position: 0
+            color:
+              r: 0.09
+              g: 0.09
+              b: 0.09
+              a: 1
+      size: 0.5
+      shape: Lanceolate
+      showy: true
+      position: 0.95
+    - color:
+        stops:
+          - position: 0
+            color:
+              r: 0.09
+              g: 0.09
+              b: 0.09
+              a: 1
+      size: 0.5
+      shape: Lanceolate
+      showy: true
+      position: 0.95
+    - color:
+        stops:
+          - position: 0
+            color:
+              r: 0.09
+              g: 0.09
+              b: 0.09
+              a: 1
+      size: 0.5
+      shape: Lanceolate
+      showy: true
+      position: 0.95
+  leaf_density: 0.833
+ornamentation:
+  dewdrops:
+    - size: 0.04
+      count: 12
+      refraction: 0.5
+      placement: Random
+      surface_tension: 0.6
+  particles:
+    - kind: Butterflies
+      density: 20
+      color:
+        r: 0.918
+        g: 0.702
+        b: 0.031
+        a: 1
+      drift_speed: 0.3
+      lifetime: 3
+      emission_zone: Whole
+      gravity: 0
+  bioluminescence:
+    pattern: Veins
+    color:
+      r: 0.863
+      g: 0.149
+      b: 0.149
+      a: 1
+    intensity: 0.7
+    trigger: Night
+aura:
+  kind: Flame
+  color:
+    r: 0.925
+    g: 0.282
+    b: 0.6
+    a: 1
+  opacity: 0.25
+  radius: 0.45
+  animation_speed: 0.5
+inflorescence:
+  kind: Raceme
+  head_count: 10
+  head_scale: 0.562
+  spread: 0.288

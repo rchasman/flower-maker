@@ -1,7 +1,10 @@
 // WASM module loader for the rapier2d-based garden simulation.
 // Loads the wasm-pack output from client/src/wasm/pkg/
 
+import { FLOATS_PER_FLOWER, HEADER_FLOATS } from "./loop.ts";
+
 let simulation: GardenSim | null = null;
+const STUB_MAX_FLOWERS = 64;
 
 export interface GardenSim {
   upsert_flower(
@@ -13,12 +16,10 @@ export interface GardenSim {
   wilt_flower(session_id: bigint): void;
   remove_flower(session_id: bigint): void;
   tick(dt: number): number;
-  get_merge_events(): string;
-  render_data(): string;
-  /** Write render data to a Float32Array (SharedArrayBuffer-backed). */
-  write_to_buffer?(buf: Float32Array): number;
+  /** Write render data to a Float32Array (SharedArrayBuffer-backed). Returns the flower count. */
+  write_to_buffer(buf: Float32Array): number;
   /** Required Float32Array length for render buffer allocation. */
-  render_buffer_size?(): number;
+  render_buffer_size(): number;
   /** Set the physics body position for a flower (drag interaction). */
   set_body_position(session_id: bigint, x: number, y: number): void;
   flower_count(): number;
@@ -73,27 +74,18 @@ function createStub(): GardenSim {
     tick() {
       return flowers.size;
     },
-    get_merge_events() {
-      return "[]";
+    render_buffer_size() {
+      return HEADER_FLOATS + STUB_MAX_FLOWERS * FLOATS_PER_FLOWER;
     },
-    render_data() {
-      const data = [...flowers.entries()].map(([sid, f]) => ({
-        sid,
-        x: f.x,
-        y: f.y,
-        rotation: 0,
-        scale: 1,
-        alpha: 1,
-        spec_name: "stub",
-        has_aura: false,
-        has_glow: false,
-        particles: 0,
-        petal_color_r: 0.8,
-        petal_color_g: 0.4,
-        petal_color_b: 0.6,
-        petal_count: 5,
-      }));
-      return JSON.stringify(data);
+    write_to_buffer(buf: Float32Array) {
+      const visible = [...flowers.entries()].slice(0, STUB_MAX_FLOWERS);
+      buf[0] = visible.length;
+      buf[1] = (buf[1] ?? 0) + 1;
+      for (const [i, [sid, f]] of visible.entries()) {
+        const off = HEADER_FLOATS + i * FLOATS_PER_FLOWER;
+        buf.set([sid, f.x, f.y, 0, 1, 1, 0, 0, 0, 0.8, 0.4, 0.6, 5, 0], off);
+      }
+      return visible.length;
     },
     flower_count() {
       return flowers.size;
