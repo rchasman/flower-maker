@@ -3,9 +3,11 @@ import {
   useContext,
   useEffect,
   useRef,
+  useState,
   type ReactNode,
 } from "react";
 import { useAuth } from "react-oidc-context";
+import { hasStoredOidcSession } from "../auth/oidcConfig.ts";
 import { useSpacetimeDB, useUsers } from "../spacetime/hooks.ts";
 import {
   getMyIdentity,
@@ -21,7 +23,10 @@ interface SessionContext {
   conn: DbConnection | null;
   identityHex: string | null;
   myUser: User | null;
-  isSignedIn: boolean;
+  /** A visitor with a stored OIDC session, which auth has yet to rehydrate. */
+  authRestoring: boolean;
+  /** A signed-in visitor whose anonymous flowers are still being claimed. */
+  claimPending: boolean;
 }
 
 const Ctx = createContext<SessionContext>({
@@ -29,8 +34,11 @@ const Ctx = createContext<SessionContext>({
   conn: null,
   identityHex: null,
   myUser: null,
-  isSignedIn: false,
+  authRestoring: false,
+  claimPending: false,
 });
+
+const CLAIM_TIMEOUT_MS = 6000;
 
 function identityStr(id: unknown): string | null {
   if (!id) return null;
@@ -42,6 +50,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const oidcToken = auth.user?.id_token;
   const claimAttempted = useRef(false);
+  // Read before the claim clears it, so the loading screen knows a claim is due.
+  const claimDue = useRef(getSavedAnonIdentityHex() !== null);
+  const [claimGaveUp, setClaimGaveUp] = useState(false);
 
   // If user just signed in via OIDC, disconnect the anonymous connection
   // so useSpacetimeDB reconnects with the OIDC token
@@ -75,6 +86,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     ? (users.find(u => identityStr(u.identity) === identityHex) ?? null)
     : null;
 
+  const claimPending =
+    auth.isAuthenticated && claimDue.current && !myUser && !claimGaveUp;
+
+  // A claim that never lands must fall through to the name gate, not hang.
+  useEffect(() => {
+    if (!claimPending) return;
+    const timer = setTimeout(() => setClaimGaveUp(true), CLAIM_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [claimPending]);
+
   return (
     <Ctx.Provider
       value={{
@@ -82,7 +103,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         conn,
         identityHex,
         myUser,
-        isSignedIn: auth.isAuthenticated,
+        authRestoring: auth.isLoading && hasStoredOidcSession(),
+        claimPending,
       }}
     >
       {children}
