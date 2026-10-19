@@ -18,13 +18,6 @@ export class GardenSimulation {
     /**
      * @returns {number}
      */
-    ambient_light() {
-        const ret = wasm.gardensimulation_ambient_light(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * @returns {number}
-     */
     flower_count() {
         const ret = wasm.gardensimulation_flower_count(this.__wbg_ptr);
         return ret >>> 0;
@@ -69,13 +62,6 @@ export class GardenSimulation {
         return ret >>> 0;
     }
     /**
-     * @returns {number}
-     */
-    time_of_day() {
-        const ret = wasm.gardensimulation_time_of_day(this.__wbg_ptr);
-        return ret;
-    }
-    /**
      * Give a flower a new spec where it stands; a spec update is not a move.
      * False when there is no such flower yet, so the caller adds it instead.
      * @param {bigint} session_id
@@ -106,20 +92,6 @@ export class GardenSimulation {
      */
     wilt_flower(session_id) {
         wasm.gardensimulation_wilt_flower(this.__wbg_ptr, session_id);
-    }
-    /**
-     * @returns {number}
-     */
-    wind_x() {
-        const ret = wasm.gardensimulation_wind_x(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * @returns {number}
-     */
-    wind_y() {
-        const ret = wasm.gardensimulation_wind_y(this.__wbg_ptr);
-        return ret;
     }
     /**
      * Write render data into a SharedArrayBuffer-backed f32 slice.

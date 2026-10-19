@@ -45,13 +45,16 @@ import {
   drawAura,
   drawBioGlow,
   drawFlowerFromPlan,
+  drawGroundContact,
   drawNectaryPulse,
   drawParticles,
   nectaryPulseLevel,
   nectaryPulseOf,
   type Canvas,
 } from "./pixi-draw.ts";
+import { cmdsBounds } from "./geometry.ts";
 import type { ArrangementPlan, FlowerPlan } from "./render.ts";
+import { clamp } from "./util.ts";
 import { freePetalMesh } from "./shaders/petalShade.ts";
 import { PlantLightFilter, createLightAnchor } from "./shaders/plantLight.ts";
 
@@ -249,8 +252,14 @@ export function createFlowerScene(plan: FlowerPlan): FlowerScene {
   const pulseGlow = pulse ? createGlowPicture() : null;
   const particles = plan.particles.length > 0 ? new Graphics() : null;
 
+  const ground = new Graphics();
+  ground.eventMode = "none";
   const plant = new Container();
-  plant.addChild(...(back ? [back.picture.view] : []), front.picture.view);
+  plant.addChild(
+    ground,
+    ...(back ? [back.picture.view] : []),
+    front.picture.view,
+  );
   const effects = [
     ...(aura ? [aura.layer] : []),
     ...(pulseGlow ? [pulseGlow.view] : []),
@@ -281,6 +290,15 @@ export function createFlowerScene(plan: FlowerPlan): FlowerScene {
     root,
     flower: plant,
     draw: r => {
+      ground.clear();
+      drawGroundContact(
+        ground,
+        plan.base,
+        r,
+        clamp(0.2, 0.7, (plan.bounds.maxX - plan.bounds.minX) * 0.25),
+        true,
+        plan.bounds.maxX * 7919 + plan.bounds.minY * 104729,
+      );
       drawFlowerFromPlan(front.redraw(), plan, r, {
         particles: false,
         layer: frontLayer,
@@ -330,13 +348,27 @@ export function createArrangementScene(plan: ArrangementPlan): FlowerScene {
   const root = new Container();
   const lit = createLitPlant();
   const { picture, light } = lit;
+  const ground = new Graphics();
+  ground.eventMode = "none";
   const plant = new Container();
-  plant.addChild(picture.view);
+  plant.addChild(ground, picture.view);
+  const container = cmdsBounds(plan.adornment?.cmds ?? []);
   root.addChild(plant);
   return {
     root,
     flower: plant,
     draw: r => {
+      ground.clear();
+      drawGroundContact(
+        ground,
+        plan.base,
+        r,
+        container
+          ? Math.max(0.3, (container.maxX - container.minX) * 0.6)
+          : 0.4,
+        false,
+        0,
+      );
       drawArrangementFromPlan(lit.redraw(), plan, r);
       light.setHeads(arrangementHeadLights(plan, r));
       picture.invalidate();

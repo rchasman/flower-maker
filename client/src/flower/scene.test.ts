@@ -42,11 +42,13 @@ const filtersOf = (filters: unknown): readonly Filter[] => {
 };
 
 describe("flower scene", () => {
-  test("a solitary flower is one plant holding one picture, with no extra layers", () => {
+  test("a solitary flower is one plant holding its ground contact and one picture, with no extra layers", () => {
     const scene = createFlowerScene(createFlowerPlan(spec(), 7));
     expect(scene.root.children).toEqual([scene.flower]);
-    expect(scene.flower.children).toHaveLength(1);
-    const [picture] = scene.flower.children;
+    expect(scene.flower.children).toHaveLength(2);
+    const [ground, picture] = scene.flower.children;
+    expect(ground).toBeInstanceOf(Graphics);
+    expect(ground!.eventMode).toBe("none");
     expect(picture).toBeInstanceOf(Sprite);
     expect(picture!.visible).toBe(false);
     scene.draw(70);
@@ -61,9 +63,10 @@ describe("flower scene", () => {
       ),
     );
     expect(scene.root.children).toEqual([scene.flower]);
-    expect(scene.flower.children).toHaveLength(2);
-    expect(scene.flower.children[0]).toBeInstanceOf(Sprite);
+    expect(scene.flower.children).toHaveLength(3);
+    expect(scene.flower.children[0]).toBeInstanceOf(Graphics);
     expect(scene.flower.children[1]).toBeInstanceOf(Sprite);
+    expect(scene.flower.children[2]).toBeInstanceOf(Sprite);
     scene.draw(70);
     scene.destroy();
   });
@@ -104,14 +107,16 @@ describe("flower scene", () => {
     scene.destroy();
   });
 
-  test("an arrangement is one plant holding one picture", () => {
+  test("an arrangement is one plant holding its ground contact and one picture", () => {
     const scene = createArrangementScene({
       members: [],
       adornment: null,
+      base: [0, 0],
     });
     expect(scene.root.children).toEqual([scene.flower]);
-    expect(scene.flower.children).toHaveLength(1);
-    expect(scene.flower.children[0]).toBeInstanceOf(Sprite);
+    expect(scene.flower.children).toHaveLength(2);
+    expect(scene.flower.children[0]).toBeInstanceOf(Graphics);
+    expect(scene.flower.children[1]).toBeInstanceOf(Sprite);
     scene.destroy();
   });
 });

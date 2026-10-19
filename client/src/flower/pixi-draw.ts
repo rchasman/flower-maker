@@ -43,7 +43,7 @@ import type {
 } from "./render.ts";
 import type { StalkPlan, StalkShading, StemPlan } from "./stem.ts";
 import { createPetalMesh } from "./shaders/petalShade.ts";
-import { GOLDEN_ANGLE, LIGHT_ANGLE, unreachable } from "./util.ts";
+import { GOLDEN_ANGLE, LIGHT_ANGLE, sidHash, unreachable } from "./util.ts";
 
 // ── Canvas ──
 
@@ -1190,6 +1190,69 @@ export function drawNectaryPulse(
     g.circle(0, 0, haloR * 0.55);
     g.fill({ color: glow.color, alpha: glow.intensity * 0.35 });
   });
+}
+
+// ── Ground contact ──
+
+const SOIL = 0x2a2018;
+const GRASS = 0x34502e;
+/** the contact shadow's soft edge: rings from the core out, each fainter */
+const SHADOW_RINGS = [
+  { size: 1, alpha: 0.12 },
+  { size: 0.75, alpha: 0.14 },
+  { size: 0.5, alpha: 0.18 },
+];
+
+/**
+ * Where a plant meets the ground, under it: a soft contact shadow cast away
+ * from the light, and for a rooted plant a low mound of soil with a few
+ * blades of grass. `spread` is the shadow's half width in plan units; `seed`
+ * varies the grass.
+ */
+export function drawGroundContact(
+  g: Graphics,
+  [baseX, baseY]: readonly [number, number],
+  r: number,
+  spread: number,
+  rooted: boolean,
+  seed: number,
+): void {
+  const x = baseX * r;
+  const y = baseY * r;
+  const rx = spread * r;
+  // The light comes from the upper right, so the shadow falls to the left
+  const shadowX = x - rx * 0.25;
+  for (const ring of SHADOW_RINGS) {
+    g.ellipse(shadowX, y, rx * ring.size, rx * ring.size * 0.22);
+    g.fill({ color: 0x000000, alpha: ring.alpha });
+  }
+  if (!rooted) return;
+  const mound = r * 0.09;
+  g.ellipse(x, y, mound, mound * 0.32);
+  g.fill({ color: SOIL, alpha: 0.9 });
+  const blades = Array.from({ length: 5 }, (_, i) => ({
+    lean: (sidHash(seed, 60 + i) - 0.5) * 0.6 + (i % 2 === 0 ? -0.35 : 0.35),
+    height: r * (0.07 + sidHash(seed, 70 + i) * 0.08),
+    footX: x + (sidHash(seed, 80 + i) - 0.5) * mound * 1.6,
+  }));
+  const halfFoot = r * 0.006;
+  for (const { lean, height, footX } of blades) {
+    const bendX = footX + lean * height * 0.2;
+    g.moveTo(footX - halfFoot, y);
+    g.quadraticCurveTo(
+      bendX,
+      y - height * 0.5,
+      footX + lean * height,
+      y - height,
+    );
+    g.quadraticCurveTo(
+      bendX + halfFoot,
+      y - height * 0.45,
+      footX + halfFoot,
+      y,
+    );
+    g.fill({ color: GRASS, alpha: 0.85 });
+  }
 }
 
 /** Draw a multi-flower arrangement from its pre-computed plan. */

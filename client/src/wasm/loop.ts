@@ -4,43 +4,22 @@ export type RenderCallback = (pool: FlowerRenderData[], count: number) => void;
 
 export interface FlowerRenderData {
   sid: number;
+  /** the plant's foot on the bed, canvas px */
   x: number;
   y: number;
-  rotation: number;
   scale: number;
   alpha: number;
-  has_aura: boolean;
-  has_glow: boolean;
-  particles: number;
-  petal_color_r: number;
-  petal_color_g: number;
-  petal_color_b: number;
-  petal_count: number;
 }
 
 // SharedArrayBuffer layout constants (must match buffer.rs)
-export const FLOATS_PER_FLOWER = 14;
+export const FLOATS_PER_FLOWER = 5;
 export const HEADER_FLOATS = 2;
 
 // ── Object pool: pre-allocated FlowerRenderData slots, reused every frame ──
 const INITIAL_POOL_CAPACITY = 256;
 
 function createEmptyFlower(): FlowerRenderData {
-  return {
-    sid: 0,
-    x: 0,
-    y: 0,
-    rotation: 0,
-    scale: 0,
-    alpha: 0,
-    has_aura: false,
-    has_glow: false,
-    particles: 0,
-    petal_color_r: 0,
-    petal_color_g: 0,
-    petal_color_b: 0,
-    petal_count: 0,
-  };
+  return { sid: 0, x: 0, y: 0, scale: 0, alpha: 0 };
 }
 
 /** Module-level pool — grows by 2x when capacity is exceeded, never shrinks. */
@@ -95,16 +74,8 @@ function readFromBuffer(buf: Float32Array): number {
     slot.sid = buf[off]!;
     slot.x = buf[off + 1]!;
     slot.y = buf[off + 2]!;
-    slot.rotation = buf[off + 3]!;
-    slot.scale = buf[off + 4]!;
-    slot.alpha = buf[off + 5]!;
-    slot.has_aura = buf[off + 6]! > 0.5;
-    slot.has_glow = buf[off + 7]! > 0.5;
-    slot.particles = buf[off + 8]!;
-    slot.petal_color_r = buf[off + 9]!;
-    slot.petal_color_g = buf[off + 10]!;
-    slot.petal_color_b = buf[off + 11]!;
-    slot.petal_count = buf[off + 12]!;
+    slot.scale = buf[off + 3]!;
+    slot.alpha = buf[off + 4]!;
   }
 
   return count;

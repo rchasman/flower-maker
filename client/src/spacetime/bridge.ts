@@ -1,3 +1,4 @@
+import { BED_TOP, type Bed } from "../canvas/garden.ts";
 import type { ArrangementMeta } from "../flower/render.ts";
 import { readStream, parseSpec } from "../lib/utils.ts";
 import type { GardenSim } from "../wasm/loader.ts";
@@ -42,11 +43,29 @@ export function setCanvasViewport(w: number, h: number) {
   viewportH = h;
 }
 
-export function getCanvasViewport(): { w: number; h: number; pad: number } {
-  return { w: viewportW, h: viewportH, pad: 60 };
+const BED_SIDE_PAD = 60;
+const BED_BOTTOM_PAD = 36;
+
+/** Where plants stand on the canvas, px: a plant's foot is always inside it. */
+export function gardenBed(): Bed {
+  return {
+    left: BED_SIDE_PAD,
+    top: viewportH * BED_TOP,
+    right: viewportW - BED_SIDE_PAD,
+    bottom: viewportH - BED_BOTTOM_PAD,
+  };
 }
 
-/** Map server positions (0–100 range) to fill the canvas viewport with padding. */
+/** A server position (0–100 across the bed) on the canvas, px. */
+export function toCanvasPosition(cx: number, cy: number): [number, number] {
+  const bed = gardenBed();
+  return [
+    bed.left + (cx / 100) * (bed.right - bed.left),
+    bed.top + (cy / 100) * (bed.bottom - bed.top),
+  ];
+}
+
+/** Where a session's plant stands on the canvas, px; a grid slot when it has no position yet. */
 function resolvePosition(
   session: FlowerSession,
   index: number,
@@ -54,34 +73,22 @@ function resolvePosition(
 ): [number, number] {
   const cx = Number(session.canvasX);
   const cy = Number(session.canvasY);
+  if (cx !== 0 || cy !== 0) return toCanvasPosition(cx, cy);
 
-  const pad = 60;
-  const usableW = viewportW - pad * 2;
-  const usableH = viewportH - pad * 2;
-
-  if (cx !== 0 || cy !== 0) {
-    // Server stores 0–100, scale to fill canvas
-    return [pad + (cx / 100) * usableW, pad + (cy / 100) * usableH];
-  }
-
-  // Fallback grid when position is unset
   const cols = Math.max(1, Math.ceil(Math.sqrt(total)));
   const rows = Math.max(1, Math.ceil(total / cols));
-  const col = index % cols;
-  const row = Math.floor(index / cols);
-  return [
-    pad + (usableW / Math.max(1, cols)) * (col + 0.5),
-    pad + (usableH / Math.max(1, rows)) * (row + 0.5),
-  ];
+  return toCanvasPosition(
+    (((index % cols) + 0.5) / cols) * 100,
+    ((Math.floor(index / cols) + 0.5) / rows) * 100,
+  );
 }
 
-/** A canvas point in px as the server's 0–100 position: the inverse of resolvePosition. */
+/** A canvas point in px as the server's 0–100 bed position: the inverse of toCanvasPosition. */
 export function toServerPosition(x: number, y: number): [number, number] {
-  const { w, h, pad } = getCanvasViewport();
-  return [
-    Math.max(0, Math.min(100, ((x - pad) / (w - pad * 2)) * 100)),
-    Math.max(0, Math.min(100, ((y - pad) / (h - pad * 2)) * 100)),
-  ];
+  const bed = gardenBed();
+  const share = (v: number, from: number, to: number) =>
+    Math.max(0, Math.min(100, ((v - from) / (to - from)) * 100));
+  return [share(x, bed.left, bed.right), share(y, bed.top, bed.bottom)];
 }
 
 /** What the garden canvas needs to hear from the database besides the simulation. */

@@ -8,7 +8,6 @@
 export class GardenSimulation {
     free(): void;
     [Symbol.dispose](): void;
-    ambient_light(): number;
     flower_count(): number;
     constructor();
     /**
@@ -27,7 +26,6 @@ export class GardenSimulation {
      * Advance physics + animations by dt seconds. Returns active flower count.
      */
     tick(dt: number): number;
-    time_of_day(): number;
     /**
      * Give a flower a new spec where it stands; a spec update is not a move.
      * False when there is no such flower yet, so the caller adds it instead.
@@ -41,8 +39,6 @@ export class GardenSimulation {
      * Start the wilt-out animation; a wilting flower no longer pushes the others.
      */
     wilt_flower(session_id: bigint): void;
-    wind_x(): number;
-    wind_y(): number;
     /**
      * Write render data into a SharedArrayBuffer-backed f32 slice.
      * Call from JS: `sim.write_to_buffer(new Float32Array(sharedBuf))`
@@ -56,19 +52,15 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbg_gardensimulation_free: (a: number, b: number) => void;
-    readonly gardensimulation_ambient_light: (a: number) => number;
     readonly gardensimulation_flower_count: (a: number) => number;
     readonly gardensimulation_new: () => number;
     readonly gardensimulation_remove_flower: (a: number, b: bigint) => void;
     readonly gardensimulation_render_buffer_size: (a: number) => number;
     readonly gardensimulation_set_body_position: (a: number, b: bigint, c: number, d: number) => void;
     readonly gardensimulation_tick: (a: number, b: number) => number;
-    readonly gardensimulation_time_of_day: (a: number) => number;
     readonly gardensimulation_update_spec: (a: number, b: bigint, c: number, d: number) => number;
     readonly gardensimulation_upsert_flower: (a: number, b: bigint, c: number, d: number, e: number, f: number) => void;
     readonly gardensimulation_wilt_flower: (a: number, b: bigint) => void;
-    readonly gardensimulation_wind_x: (a: number) => number;
-    readonly gardensimulation_wind_y: (a: number) => number;
     readonly gardensimulation_write_to_buffer: (a: number, b: number, c: number, d: any) => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;

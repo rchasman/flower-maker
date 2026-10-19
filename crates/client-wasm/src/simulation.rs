@@ -19,7 +19,7 @@ pub struct PhysicsWorld {
 impl PhysicsWorld {
     pub fn new() -> Self {
         Self {
-            gravity: vector![0.0, 0.0], // top-down, no gravity
+            gravity: vector![0.0, 0.0], // the bed is the ground plane: plants slide on it, nothing falls
             integration_params: IntegrationParameters::default(),
             physics_pipeline: PhysicsPipeline::new(),
             island_manager: IslandManager::new(),
@@ -42,10 +42,11 @@ impl PhysicsWorld {
         mass: f32,
         session_id: u64,
     ) -> RigidBodyHandle {
+        // A planted flower slides over the bed but never spins on it
         let body = RigidBodyBuilder::dynamic()
             .translation(vector![x, y])
             .linear_damping(2.0)  // flowers slow down naturally
-            .angular_damping(1.0)
+            .lock_rotations()
             .user_data(session_id as u128)
             .build();
         let handle = self.rigid_body_set.insert(body);
@@ -110,12 +111,6 @@ impl PhysicsWorld {
     pub fn body_matches(&self, handle: RigidBodyHandle, radius: f32, mass: f32) -> bool {
         self.body_params(handle)
             .is_some_and(|(r, m)| (r - radius).abs() < 1e-4 && (m - mass).abs() < 1e-3)
-    }
-
-    pub fn rotation(&self, handle: RigidBodyHandle) -> f32 {
-        self.rigid_body_set.get(handle)
-            .map(|b| b.rotation().angle())
-            .unwrap_or(0.0)
     }
 
     /// Step the physics world forward by dt seconds.
