@@ -78,6 +78,17 @@ impl PhysicsWorld {
         }
     }
 
+    /// The body keeps moving but no longer collides with anything.
+    pub fn set_ghost(&mut self, handle: RigidBodyHandle) {
+        let Some(body) = self.rigid_body_set.get(handle) else { return };
+        let colliders: Vec<_> = body.colliders().to_vec();
+        for collider in colliders {
+            if let Some(c) = self.collider_set.get_mut(collider) {
+                c.set_sensor(true);
+            }
+        }
+    }
+
     pub fn position(&self, handle: RigidBodyHandle) -> (f32, f32) {
         self.rigid_body_set.get(handle)
             .map(|b| {

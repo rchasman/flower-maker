@@ -10,6 +10,7 @@ export const gardensimulation_render_buffer_size: (a: number) => number;
 export const gardensimulation_set_body_position: (a: number, b: bigint, c: number, d: number) => void;
 export const gardensimulation_tick: (a: number, b: number) => number;
 export const gardensimulation_time_of_day: (a: number) => number;
+export const gardensimulation_update_spec: (a: number, b: bigint, c: number, d: number) => number;
 export const gardensimulation_upsert_flower: (a: number, b: bigint, c: number, d: number, e: number, f: number) => void;
 export const gardensimulation_wilt_flower: (a: number, b: bigint) => void;
 export const gardensimulation_wind_x: (a: number) => number;

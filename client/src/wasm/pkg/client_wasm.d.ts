@@ -29,11 +29,16 @@ export class GardenSimulation {
     tick(dt: number): number;
     time_of_day(): number;
     /**
-     * Add or update a flower from SpacetimeDB data
+     * Give a flower a new spec where it stands; a spec update is not a move.
+     * False when there is no such flower yet, so the caller adds it instead.
+     */
+    update_spec(session_id: bigint, spec_yaml: string): boolean;
+    /**
+     * Add a flower at (x, y), or move an existing one there with its new spec.
      */
     upsert_flower(session_id: bigint, spec_yaml: string, x: number, y: number): void;
     /**
-     * Start wilt-out animation for a flower (it will be removed after animation completes)
+     * Start the wilt-out animation; a wilting flower no longer pushes the others.
      */
     wilt_flower(session_id: bigint): void;
     wind_x(): number;
@@ -59,6 +64,7 @@ export interface InitOutput {
     readonly gardensimulation_set_body_position: (a: number, b: bigint, c: number, d: number) => void;
     readonly gardensimulation_tick: (a: number, b: number) => number;
     readonly gardensimulation_time_of_day: (a: number) => number;
+    readonly gardensimulation_update_spec: (a: number, b: bigint, c: number, d: number) => number;
     readonly gardensimulation_upsert_flower: (a: number, b: bigint, c: number, d: number, e: number, f: number) => void;
     readonly gardensimulation_wilt_flower: (a: number, b: bigint) => void;
     readonly gardensimulation_wind_x: (a: number) => number;
