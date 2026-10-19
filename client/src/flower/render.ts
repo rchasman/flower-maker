@@ -101,6 +101,7 @@ import {
 } from "./stem.ts";
 import {
   GOLDEN_ANGLE,
+  LIGHT_DIRECTION,
   clamp,
   lerp,
   sidHash,
@@ -1743,7 +1744,28 @@ function weightBow(weight: number): number {
   return lerp(HEAD_BOW[0], HEAD_BOW[1], w);
 }
 
-/** The stem axis from (0, length) up to the origin, bowed at the tip the way it already leans, or by the seed when it is upright. */
+/** Heading of the light, radians from screen up, positive toward +x: where a growing tip turns. */
+const LIGHT_HEADING = Math.atan2(LIGHT_DIRECTION[0], -LIGHT_DIRECTION[1]);
+/** The share of the light's heading a stem's tip turns through: a stout short stem to a slender tall one. */
+const LIGHT_TURN = [0.18, 0.5] as const;
+
+/**
+ * Phototropism: the growing zone under the head turns toward the light, so
+ * the tip heads partway to it. A slender stem bends further than a stout one;
+ * the seed varies each plant so a bed does not lean in lockstep.
+ */
+function lightTurn(stemData: ParsedStem, length: number, sid: number): number {
+  const tall = (length - STEM_LENGTH[0]) / (STEM_LENGTH[1] - STEM_LENGTH[0]);
+  const slender = clamp(0, 1, 0.5 * tall + 0.5 * (1 - stemData.thickness));
+  const jitter = 0.75 + sidHash(sid, 4) * 0.5;
+  return LIGHT_HEADING * lerp(LIGHT_TURN[0], LIGHT_TURN[1], slender) * jitter;
+}
+
+/**
+ * The stem axis from (0, length) up to the origin. The tip turns toward the
+ * light, then the head's weight bows it further the way the stem leans, or
+ * by the seed when it stands upright.
+ */
 function plantAxis(
   stemData: ParsedStem,
   length: number,
@@ -1751,11 +1773,13 @@ function plantAxis(
   bow: number,
   sid: number,
 ): StemAxis {
+  const turn = lightTurn(stemData, length, sid);
   const unbowed = stemAxis(
     [0, length],
     [0, 0],
     stemData.curvature + arch,
     stemData.style,
+    turn,
   );
   const lean = stemTipHeading(unbowed);
   const side = run(() => {
@@ -1767,7 +1791,7 @@ function plantAxis(
     [0, 0],
     stemData.curvature + arch,
     stemData.style,
-    side * bow,
+    turn + side * bow,
   );
 }
 

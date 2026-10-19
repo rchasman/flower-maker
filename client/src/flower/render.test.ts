@@ -315,17 +315,25 @@ describe("plant proportions", () => {
     }
   });
 
-  test("the solitary head leans with the stem tip, 5 to 12 degrees under its weight", () => {
+  test("the solitary head leans with the stem tip: toward the light, then further under its weight", () => {
     const light = plant({ count: 3, length: 0.5, width: 0.3 });
     const heavy = plant({ count: 30, length: 2, width: 1.5 });
     for (const plan of [light, heavy]) {
-      const lean = Math.abs(plan.florets[0].angle);
-      expect(lean).toBeGreaterThanOrEqual(Math.PI * (5 / 180) - 1e-9);
-      expect(lean).toBeLessThanOrEqual(Math.PI * (12 / 180) + 1e-9);
-      expect(plan.florets[0].angle).toBeCloseTo(plan.stem!.axis.tipBend, 6);
+      const lean = plan.florets[0].angle;
+      expect(lean).toBeGreaterThan(Math.PI * (5 / 180));
+      expect(lean).toBeLessThan(Math.PI * (35 / 180));
+      expect(lean).toBeCloseTo(plan.stem!.axis.tipBend, 6);
     }
-    expect(Math.abs(heavy.florets[0].angle)).toBeGreaterThan(
-      Math.abs(light.florets[0].angle),
+    const bow = heavy.florets[0].angle - light.florets[0].angle;
+    expect(bow).toBeCloseTo(Math.PI * (7 / 180), 6);
+  });
+
+  test("a slender stem turns further toward the light than a stout one", () => {
+    const layer = { count: 5, length: 1, width: 0.8 };
+    const slender = plant(layer, [], { height: 1, thickness: 0.1 });
+    const stout = plant(layer, [], { height: 0.2, thickness: 0.9 });
+    expect(slender.stem!.axis.tipBend).toBeGreaterThan(
+      stout.stem!.axis.tipBend + Math.PI * (5 / 180),
     );
   });
 
