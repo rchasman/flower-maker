@@ -69,7 +69,7 @@ void main() {
   vec3 n = normalize(vNormal);
   vec3 base = baseAt(vSurface.x);
   float diffuse = clamp((dot(n, uLight) + 0.35) / 1.35, 0.0, 1.0);
-  vec3 rgb = base * (0.15 + 0.85 * diffuse);
+  vec3 rgb = base * (0.2 + 1.05 * diffuse);
   rgb += base * uTranslucency * vSurface.y * (1.0 - diffuse) * 0.4;
   vec3 halfway = normalize(uLight + vec3(0.0, 0.0, 1.0));
   rgb += vec3(uMaterial.x * pow(max(dot(n, halfway), 0.0), uMaterial.y));
