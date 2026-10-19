@@ -9,6 +9,11 @@ export class GardenSimulation {
     free(): void;
     [Symbol.dispose](): void;
     flower_count(): number;
+    /**
+     * A plant held by the pointer passes through the others, so it can be set down on one to merge
+     * without shoving it away; let go, it collides again.
+     */
+    hold(session_id: bigint, held: boolean): void;
     constructor();
     /**
      * Remove a flower immediately (no animation)
@@ -57,6 +62,7 @@ export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbg_gardensimulation_free: (a: number, b: number) => void;
     readonly gardensimulation_flower_count: (a: number) => number;
+    readonly gardensimulation_hold: (a: number, b: bigint, c: number) => void;
     readonly gardensimulation_new: () => number;
     readonly gardensimulation_remove_flower: (a: number, b: bigint) => void;
     readonly gardensimulation_render_buffer_size: (a: number) => number;

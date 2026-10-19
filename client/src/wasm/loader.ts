@@ -24,6 +24,8 @@ export interface GardenSim {
   render_buffer_size(): number;
   /** The rectangle, canvas px, every plant's foot stays inside. */
   set_bed(left: number, top: number, right: number, bottom: number): void;
+  /** A held plant passes through the others until it is let go. */
+  hold(session_id: bigint, held: boolean): void;
   /** Set the physics body position for a flower (drag interaction). */
   set_body_position(session_id: bigint, x: number, y: number): void;
   flower_count(): number;
@@ -74,6 +76,9 @@ function createStub(): GardenSim {
     },
     remove_flower(sid: bigint) {
       flowers.delete(Number(sid));
+    },
+    hold() {
+      // the stub has no collisions to pass through
     },
     set_bed(left: number, top: number, right: number, bottom: number) {
       bed = { left, top, right, bottom };

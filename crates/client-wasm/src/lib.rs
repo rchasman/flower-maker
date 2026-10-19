@@ -72,7 +72,7 @@ impl GardenSimulation {
     pub fn wilt_flower(&mut self, session_id: u64) {
         if let Some(flower) = self.flowers.iter_mut().find(|f| f.session_id == session_id) {
             flower.anim.start_wilt();
-            self.world.set_ghost(flower.body_handle);
+            self.world.set_ghost(flower.body_handle, true);
         }
     }
 
@@ -151,6 +151,14 @@ impl GardenSimulation {
     /// The rectangle, canvas px, that every plant's foot stays inside from the next tick on.
     pub fn set_bed(&mut self, left: f32, top: f32, right: f32, bottom: f32) {
         self.bed = Some(Bed { left, top, right, bottom });
+    }
+
+    /// A plant held by the pointer passes through the others, so it can be set down on one to merge
+    /// without shoving it away; let go, it collides again.
+    pub fn hold(&mut self, session_id: u64, held: bool) {
+        if let Some(flower) = self.flowers.iter().find(|f| f.session_id == session_id) {
+            self.world.set_ghost(flower.body_handle, held);
+        }
     }
 
     /// Set the physics body position for a flower (used for drag interaction).
@@ -244,5 +252,19 @@ mod tests {
         sim.tick(1.0 / 60.0);
         assert_eq!(sim.world.position(sim.flowers[0].body_handle).1, 100.0);
         assert_eq!(sim.world.position(sim.flowers[1].body_handle).0, 0.0);
+    }
+
+    #[test]
+    fn a_held_plant_passes_over_another_without_shoving_it() {
+        let mut sim = GardenSimulation::new();
+        sim.upsert_flower(1, &spray_yaml(1), 0.0, 0.0);
+        sim.upsert_flower(2, &spray_yaml(1), 200.0, 0.0);
+        sim.hold(1, true);
+        for step in 0..30 {
+            sim.set_body_position(1, 200.0 * step as f32 / 29.0, 0.0);
+            sim.tick(1.0 / 60.0);
+        }
+        let (x, _) = sim.world.position(sim.flowers[1].body_handle);
+        assert!((x - 200.0).abs() < 1e-3, "the target was shoved to {x}");
     }
 }
