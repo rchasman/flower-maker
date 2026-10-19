@@ -120,6 +120,7 @@ export type PetalPasses = {
   marks: boolean;
   gradient: boolean;
   depthShadow: boolean;
+  folds: boolean;
 };
 
 /** Which petal passes a flower drawn at radius r gets. */
@@ -132,6 +133,7 @@ export function petalPassesFor(r: number): PetalPasses {
     marks: detail,
     gradient: shading,
     depthShadow: shading,
+    folds: shading,
   };
 }
 
@@ -336,6 +338,16 @@ function drawPetal(
   );
 
   fillCmds(g, petal.cmds, { color: petal.highlightColor, alpha: 0.15 }, scale);
+
+  const folds = passes.folds ? petal.folds : [];
+  for (const fold of folds) {
+    fillCmds(
+      g,
+      fold.cmds,
+      { color: fold.color, alpha: opacity * fold.alpha },
+      scale,
+    );
+  }
 
   if (passes.texture) drawPetalTexture(g, petal, pass);
 
