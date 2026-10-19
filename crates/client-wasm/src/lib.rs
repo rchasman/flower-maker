@@ -4,7 +4,7 @@ mod buffer;
 use flower_core::catalog::FlowerSpec;
 use flower_core::animation::FlowerAnimation;
 use flower_core::physics::body_params;
-use simulation::PhysicsWorld;
+use simulation::{Bed, PhysicsWorld};
 use buffer::RenderBuffer;
 use wasm_bindgen::prelude::*;
 
@@ -20,6 +20,8 @@ struct FlowerInstance {
 #[wasm_bindgen]
 pub struct GardenSimulation {
     world: PhysicsWorld,
+    /// where plants may stand; unbounded until the canvas reports its bed
+    bed: Option<Bed>,
     flowers: Vec<FlowerInstance>,
     render_buf: RenderBuffer,
 }
@@ -30,6 +32,7 @@ impl GardenSimulation {
     pub fn new() -> Self {
         Self {
             world: PhysicsWorld::new(),
+            bed: None,
             flowers: Vec::new(),
             render_buf: RenderBuffer::new(),
         }
@@ -96,6 +99,11 @@ impl GardenSimulation {
     /// Advance physics + animations by dt seconds. Returns active flower count.
     pub fn tick(&mut self, dt: f32) -> u32 {
         self.world.step(dt);
+        if let Some(bed) = self.bed {
+            for flower in &self.flowers {
+                self.world.keep_inside(flower.body_handle, &bed);
+            }
+        }
 
         for flower in &mut self.flowers {
             flower.anim.tick(dt as f64);
@@ -138,6 +146,11 @@ impl GardenSimulation {
 
     pub fn flower_count(&self) -> u32 {
         self.flowers.len() as u32
+    }
+
+    /// The rectangle, canvas px, that every plant's foot stays inside from the next tick on.
+    pub fn set_bed(&mut self, left: f32, top: f32, right: f32, bottom: f32) {
+        self.bed = Some(Bed { left, top, right, bottom });
     }
 
     /// Set the physics body position for a flower (used for drag interaction).
@@ -220,5 +233,16 @@ mod tests {
         }
         let (x, _) = sim.world.position(sim.flowers[1].body_handle);
         assert!((x - 1.0).abs() < 1e-3, "the neighbour moved to {x}");
+    }
+
+    #[test]
+    fn a_shoved_plant_stops_at_the_edge_of_the_bed() {
+        let mut sim = GardenSimulation::new();
+        sim.set_bed(0.0, 100.0, 400.0, 300.0);
+        sim.upsert_flower(1, &spray_yaml(1), 200.0, 90.0);
+        sim.upsert_flower(2, &spray_yaml(1), -50.0, 200.0);
+        sim.tick(1.0 / 60.0);
+        assert_eq!(sim.world.position(sim.flowers[0].body_handle).1, 100.0);
+        assert_eq!(sim.world.position(sim.flowers[1].body_handle).0, 0.0);
     }
 }

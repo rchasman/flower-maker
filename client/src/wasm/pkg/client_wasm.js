@@ -44,6 +44,16 @@ export class GardenSimulation {
         return ret >>> 0;
     }
     /**
+     * The rectangle, canvas px, that every plant's foot stays inside from the next tick on.
+     * @param {number} left
+     * @param {number} top
+     * @param {number} right
+     * @param {number} bottom
+     */
+    set_bed(left, top, right, bottom) {
+        wasm.gardensimulation_set_bed(this.__wbg_ptr, left, top, right, bottom);
+    }
+    /**
      * Set the physics body position for a flower (used for drag interaction).
      * @param {bigint} session_id
      * @param {number} x
