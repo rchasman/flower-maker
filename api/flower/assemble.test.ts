@@ -497,6 +497,18 @@ describe("answers", () => {
     );
   });
 
+  test("one color named for base and tip shades the tip only slightly", () => {
+    const spec = assemble(rose, "faithful", {
+      outer_base_color: rose.colors[0],
+      outer_tip_color: rose.colors[0],
+    });
+    const [base, tip] = first(spec.petals.layers, "layers").color.stops;
+    if (!base || !tip) throw new Error("a two-stop gradient");
+    const channels = ["r", "g", "b"] as const;
+    expect(channels.some(c => tip.color[c] < base.color[c])).toBe(true);
+    expect(channels.every(c => tip.color[c] >= base.color[c] * 0.9)).toBe(true);
+  });
+
   test("sepal color words resolve against the petal and leaf colors", () => {
     const matching = assemble(rose, "faithful", {
       sepal_color: "matching",
