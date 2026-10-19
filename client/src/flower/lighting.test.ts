@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { LIFE_STAGES, type LifeStage } from "../data/flower-enums.ts";
+import {
+  LIFE_STAGES,
+  type LifeStage,
+  type SurfaceTexture,
+} from "../data/flower-enums.ts";
 import {
   MAX_LIT_HEADS,
   arrangementHeadLights,
@@ -7,7 +11,7 @@ import {
   headLights,
   inLayer,
   isBackFloret,
-  translucencyOf,
+  petalTranslucency,
   volumeStrength,
 } from "./lighting.ts";
 import {
@@ -94,9 +98,9 @@ describe("volume strength", () => {
   });
 });
 
-describe("translucency", () => {
+describe("petal translucency", () => {
   test("papery and silk petals pass more light than waxy and leathery ones", () => {
-    const by = (texture: string) => translucencyOf(head({ texture }));
+    const by = (texture: SurfaceTexture) => petalTranslucency(texture, 1);
     expect(by("Papery")).toBeGreaterThan(by("Smooth"));
     expect(by("Silk")).toBeGreaterThan(by("Smooth"));
     expect(by("Smooth")).toBeGreaterThan(by("Waxy"));
@@ -104,17 +108,13 @@ describe("translucency", () => {
   });
 
   test("the glassy opacity class opens a material up, solid keeps it at its floor", () => {
-    const solid = translucencyOf(head({ opacity: 1 }));
-    const translucent = translucencyOf(head({ opacity: 0.75 }));
-    const glassy = translucencyOf(head({ opacity: 0.5 }));
+    const solid = petalTranslucency("Smooth", 1);
+    const translucent = petalTranslucency("Smooth", 0.75);
+    const glassy = petalTranslucency("Smooth", 0.5);
     expect(solid).toBeCloseTo(0.6 * 0.35, 6);
     expect(translucent).toBeGreaterThan(solid);
     expect(glassy).toBeGreaterThan(translucent);
     expect(glassy).toBeCloseTo(0.6, 6);
-  });
-
-  test("a head without petals passes no light", () => {
-    expect(translucencyOf(head({ stage: "SeedHead" }))).toBe(0);
   });
 });
 
@@ -155,7 +155,6 @@ describe("head lights", () => {
       9,
     );
     expect(light!.strength).toBeCloseTo(0.35, 6);
-    expect(light!.translucency).toBeCloseTo(translucencyOf(plan.heads[0]), 9);
   });
 
   test("the front and back layers split a spike's florets and keep the largest first", () => {

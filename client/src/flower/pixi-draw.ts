@@ -6,13 +6,17 @@
  */
 
 import {
+  Container,
   FillGradient,
   Graphics,
+  Mesh,
+  MeshGeometry,
+  Shader,
   type FillInput,
   type StrokeInput,
 } from "pixi.js";
 import type { BioPattern } from "../data/flower-enums.ts";
-import { darkenColor, lightenColor } from "./color.ts";
+import { darkenColor, desaturate, lightenColor } from "./color.ts";
 import type {
   BioPlan,
   NectaryGlowPlan,
@@ -21,7 +25,12 @@ import type {
 } from "./effects.ts";
 import type { DrawCmd } from "./geometry.ts";
 import type { BudPlan, SeedHeadPlan } from "./lifeStage.ts";
-import { inLayer, type FloretLayer } from "./lighting.ts";
+import {
+  MATERIALS,
+  inLayer,
+  petalTranslucency,
+  type FloretLayer,
+} from "./lighting.ts";
 import type {
   ArrangementPlan,
   CorollaPlan,
@@ -33,7 +42,41 @@ import type {
   PlacedFloret,
 } from "./render.ts";
 import type { StalkPlan, StalkShading, StemPlan } from "./stem.ts";
+import { createPetalMesh } from "./shaders/petalShade.ts";
 import { GOLDEN_ANGLE, LIGHT_ANGLE, unreachable } from "./util.ts";
+
+// ── Canvas ──
+
+/**
+ * Where a plant is drawn: a Container whose children, in draw order, are
+ * Graphics segments and the nested canvases of its heads. A head is its own
+ * Container that pixi places and turns, so anything added to it shares the
+ * transform of the Graphics around it.
+ */
+export type Canvas = {
+  /** the Graphics segment that draws on top of everything added so far */
+  g(): Graphics;
+  /** a canvas on top of everything so far, at (x, y) and turned by `angle` */
+  nest(x: number, y: number, angle: number): Canvas;
+  /** a petal mesh on top of everything so far */
+  mesh(mesh: Mesh<MeshGeometry, Shader>): void;
+};
+
+export function canvasOn(container: Container): Canvas {
+  return {
+    g: () => {
+      const last = container.children.at(-1);
+      return last instanceof Graphics
+        ? last
+        : container.addChild(new Graphics());
+    },
+    nest: (x, y, angle) =>
+      canvasOn(container.addChild(new Container({ x, y, rotation: angle }))),
+    mesh: mesh => {
+      container.addChild(mesh);
+    },
+  };
+}
 
 // ── Low-level path helpers ──
 
@@ -110,7 +153,7 @@ const LIGHT_SIN = Math.sin(LIGHT_ANGLE);
 
 /** Below this drawn radius the texture pass, the vein strokes and the marks are too small to read. */
 export const DETAIL_RADIUS = 40;
-/** Below this drawn radius the gradient partials and the depth shadows go too. */
+/** Below this drawn radius the depth shadows go too. */
 export const SHADING_RADIUS = 24;
 
 /** The optional petal passes; the plan is the same at every radius, only these are drawn or not. */
@@ -118,9 +161,7 @@ export type PetalPasses = {
   texture: boolean;
   veins: boolean;
   marks: boolean;
-  gradient: boolean;
   depthShadow: boolean;
-  folds: boolean;
 };
 
 /** Which petal passes a flower drawn at radius r gets. */
@@ -131,9 +172,7 @@ export function petalPassesFor(r: number): PetalPasses {
     texture: detail,
     veins: detail,
     marks: detail,
-    gradient: shading,
     depthShadow: shading,
-    folds: shading,
   };
 }
 
@@ -154,106 +193,15 @@ function drawPetalTexture(
   petal: PetalPlan,
   pass: PetalPass,
 ): void {
-  const { scale, lightOffsetX, lightOffsetY } = pass;
+  const { scale } = pass;
   switch (petal.texture) {
-    case "Velvet": {
-      // Edge darkening — thick inner stroke for soft absorbed-light look
-      strokeCmds(
-        g,
-        petal.cmds,
-        {
-          color: petal.textureEdge,
-          width: Math.max(1.5, scale * 0.025),
-          alpha: 0.2,
-        },
-        scale,
-      );
-      break;
-    }
-    case "Silk": {
-      // Bright specular band — thin highlight stripe across petal center
-      fillCmds(
-        g,
-        petal.cmds,
-        { color: petal.textureHighlight, alpha: 0.12 },
-        scale,
-        lightOffsetX * 2,
-        lightOffsetY * 2,
-      );
-      break;
-    }
-    case "Waxy": {
-      // Sharp specular — bright highlight near petal base
-      fillCmds(
-        g,
-        petal.cmds,
-        { color: petal.textureHighlight, alpha: 0.15 },
-        scale,
-        lightOffsetX * 1.5,
-        lightOffsetY * 1.5,
-      );
-      break;
-    }
-    case "Metallic": {
-      // Color-shift: warm/cool offset fills for metallic sheen
-      fillCmds(
-        g,
-        petal.cmds,
-        { color: petal.textureHighlight, alpha: 0.2 },
-        scale,
-        lightOffsetX,
-        lightOffsetY,
-      );
-      fillCmds(
-        g,
-        petal.cmds,
-        { color: petal.textureEdge, alpha: 0.12 },
-        scale,
-        -lightOffsetX,
-        -lightOffsetY,
-      );
-      break;
-    }
     case "Papery": {
       // Desaturated overlay — muted, translucent look
       fillCmds(
         g,
         petal.cmds,
-        { color: petal.textureHighlight, alpha: 0.08 },
+        { color: desaturate(petal.color, 0.3), alpha: 0.08 },
         scale,
-      );
-      break;
-    }
-    case "Glassy":
-    case "Crystalline": {
-      // Sharp specular point — bright white highlight
-      fillCmds(
-        g,
-        petal.cmds,
-        { color: 0xffffff, alpha: 0.18 },
-        scale,
-        lightOffsetX * 2.5,
-        lightOffsetY * 2.5,
-      );
-      break;
-    }
-    case "Pearlescent": {
-      // Warm and cool offset fills for rainbow sheen
-      fillCmds(
-        g,
-        petal.cmds,
-        { color: petal.textureHighlight, alpha: 0.1 },
-        scale,
-        lightOffsetX * 0.8,
-        lightOffsetY * 0.8,
-      );
-      fillCmds(
-        g,
-        petal.cmds,
-        { color: petal.textureEdge, alpha: 0.08 },
-        scale,
-        -lightOffsetX * 0.5,
-        -lightOffsetY * 0.5,
       );
       break;
     }
@@ -271,7 +219,14 @@ function drawPetalTexture(
       );
       break;
     }
-    // Matte textures get no extra pass
+    // Gloss, sheen and the rest are how the surface takes light: the petal shader draws them
+    case "Velvet":
+    case "Silk":
+    case "Waxy":
+    case "Metallic":
+    case "Glassy":
+    case "Crystalline":
+    case "Pearlescent":
     case "Smooth":
     case "Rough":
     case "Hairy":
@@ -285,9 +240,9 @@ function drawPetalTexture(
   }
 }
 
-/** One petal or corolla lobe: fill, gradient stops, light, shadow, texture, marks, veins, outline. */
+/** One petal or corolla lobe: its lit blade, then texture, marks, veins and outline over it. */
 function drawPetal(
-  g: Graphics,
+  canvas: Canvas,
   petal: PetalPlan,
   petalIdx: number,
   pass: PetalPass,
@@ -297,7 +252,7 @@ function drawPetal(
   // Intra-layer depth: each petal casts a subtle shadow on the one behind it
   if (petalIdx > 0 && passes.depthShadow) {
     fillCmds(
-      g,
+      canvas.g(),
       petal.cmds,
       { color: 0x000000, alpha: 0.04 },
       scale * 1.01,
@@ -306,49 +261,16 @@ function drawPetal(
     );
   }
 
-  fillCmds(g, petal.cmds, { color: petal.color, alpha: opacity }, scale);
+  const blade = createPetalMesh(petal.surface, {
+    stops: petal.stops,
+    material: MATERIALS[petal.texture],
+    translucency: petalTranslucency(petal.texture, opacity),
+    opacity,
+  });
+  blade.scale.set(scale);
+  canvas.mesh(blade);
 
-  const gradientStops = passes.gradient ? petal.gradientStops.slice(1) : [];
-  for (const [si, stop] of gradientStops.entries()) {
-    const stopAlpha = opacity * (0.65 - si * 0.1);
-    fillCmds(
-      g,
-      stop.cmds,
-      { color: stop.blendedColor, alpha: Math.max(0.15, stopAlpha) },
-      scale,
-    );
-  }
-
-  fillCmds(
-    g,
-    petal.cmds,
-    { color: petal.lightColor, alpha: opacity * 0.18 },
-    scale,
-    lightOffsetX,
-    lightOffsetY,
-  );
-
-  fillCmds(
-    g,
-    petal.cmds,
-    { color: petal.shadowColor, alpha: opacity * 0.1 },
-    scale,
-    -lightOffsetX * 0.7,
-    -lightOffsetY * 0.7,
-  );
-
-  fillCmds(g, petal.cmds, { color: petal.highlightColor, alpha: 0.15 }, scale);
-
-  const folds = passes.folds ? petal.folds : [];
-  for (const fold of folds) {
-    fillCmds(
-      g,
-      fold.cmds,
-      { color: fold.color, alpha: opacity * fold.alpha },
-      scale,
-    );
-  }
-
+  const g = canvas.g();
   if (passes.texture) drawPetalTexture(g, petal, pass);
 
   // Iridescence: a hue-shifted sheen toward the light and its complement away from it
@@ -483,9 +405,9 @@ const layerOutlines = (layer: LayerPlan): DrawCmd[][] => [
   ...(layer.corolla?.lobes.map(lobe => lobe.cmds) ?? []),
 ];
 
-/** Draw petal layers with 7-pass rendering per petal; a fused layer draws its corolla body, lobes and throat. */
+/** Draw petal layers, each after the shadow it casts on the layer under it; a fused layer draws its corolla body, lobes and throat. */
 function drawPetals(
-  g: Graphics,
+  canvas: Canvas,
   layers: readonly LayerPlan[],
   scale: number,
   passes: PetalPasses,
@@ -511,7 +433,7 @@ function drawPetals(
     if (firstLayerIdx + layerIdx > 0 && passes.depthShadow) {
       for (const cmds of layerOutlines(layer)) {
         fillCmds(
-          g,
+          canvas.g(),
           cmds,
           { color: 0x000000, alpha: 0.06 },
           scale * 1.02,
@@ -522,15 +444,15 @@ function drawPetals(
     }
 
     // Pass 2: normal petal rendering (with intra-layer overlap shadows)
-    if (layer.corolla) drawCorollaBody(g, layer.corolla, pass);
+    if (layer.corolla) drawCorollaBody(canvas.g(), layer.corolla, pass);
     for (const [petalIdx, petal] of layer.petals.entries()) {
-      drawPetal(g, petal, petalIdx, pass);
+      drawPetal(canvas, petal, petalIdx, pass);
     }
     if (layer.corolla) {
       for (const [lobeIdx, lobe] of layer.corolla.lobes.entries()) {
-        drawPetal(g, lobe, lobeIdx, pass);
+        drawPetal(canvas, lobe, lobeIdx, pass);
       }
-      drawThroat(g, layer.corolla, pass);
+      drawThroat(canvas.g(), layer.corolla, pass);
     }
   }
 }
@@ -945,22 +867,29 @@ function drawStem(g: Graphics, stem: StemPlan, scale: number) {
  * or an arrangement member is the same head moved, scaled and tilted.
  */
 function drawHead(
-  g: Graphics,
+  canvas: Canvas,
   head: HeadPlan,
   scale: number,
   passes: PetalPasses,
 ): void {
-  drawBlades(g, head.bracts, scale);
-  drawBlades(g, head.sepals, scale);
+  drawBlades(canvas.g(), head.bracts, scale);
+  drawBlades(canvas.g(), head.sepals, scale);
   if (head.closedCentre) {
-    drawPetals(g, head.layers.slice(0, -1), scale, passes);
-    drawStamens(g, head.center.stamens, scale);
-    drawCenterDisc(g, head.center, scale);
-    drawPetals(g, head.layers.slice(-1), scale, passes, head.layers.length - 1);
+    drawPetals(canvas, head.layers.slice(0, -1), scale, passes);
+    drawStamens(canvas.g(), head.center.stamens, scale);
+    drawCenterDisc(canvas.g(), head.center, scale);
+    drawPetals(
+      canvas,
+      head.layers.slice(-1),
+      scale,
+      passes,
+      head.layers.length - 1,
+    );
   } else {
-    drawPetals(g, head.layers, scale, passes);
+    drawPetals(canvas, head.layers, scale, passes);
   }
 
+  const g = canvas.g();
   for (const dd of head.dewdrops) {
     const dx = dd.x * scale;
     const dy = dd.y * scale;
@@ -972,14 +901,14 @@ function drawHead(
   }
 
   if (!head.closedCentre) {
-    drawStamens(g, head.center.stamens, scale);
-    drawCenterDisc(g, head.center, scale);
+    drawStamens(canvas.g(), head.center.stamens, scale);
+    drawCenterDisc(canvas.g(), head.center, scale);
   }
 }
 
-/** drawHead translated to (x, y) and rotated by `angle`, leaving the transform as it was. */
+/** drawHead on its own canvas at (x, y), turned by `angle`. */
 function drawHeadAt(
-  g: Graphics,
+  canvas: Canvas,
   head: HeadPlan,
   x: number,
   y: number,
@@ -987,13 +916,7 @@ function drawHeadAt(
   scale: number,
   passes: PetalPasses,
 ): void {
-  // Pixi's rotateTransform turns the accumulated matrix about the graphics
-  // origin, so the rotation must come before the translation that places the head.
-  g.save();
-  g.rotateTransform(angle);
-  g.translateTransform(x, y);
-  drawHead(g, head, scale, passes);
-  g.restore();
+  drawHead(canvas.nest(x, y, angle), head, scale, passes);
 }
 
 /** The head plan a floret draws; every floret indexes a head by construction. */
@@ -1031,7 +954,7 @@ export type DrawFlowerOptions = {
 
 /** Draw a flower from its pre-computed plan: stem, branches and pedicels, leaves, buds, then every head back to front. */
 export function drawFlowerFromPlan(
-  g: Graphics,
+  canvas: Canvas,
   plan: FlowerPlan,
   r: number,
   options: DrawFlowerOptions = { particles: true, layer: "all" },
@@ -1043,6 +966,7 @@ export function drawFlowerFromPlan(
   );
   const plant = options.layer !== "back";
 
+  const g = canvas.g();
   if (plan.stem) {
     const stemColor = plan.stem.color;
     if (plant) {
@@ -1061,7 +985,7 @@ export function drawFlowerFromPlan(
 
   for (const floret of ordered) {
     drawHeadAt(
-      g,
+      canvas,
       headOf(plan, floret),
       floret.offsetX * scale,
       floret.offsetY * scale,
@@ -1071,7 +995,7 @@ export function drawFlowerFromPlan(
     );
   }
 
-  if (options.particles && plant) drawParticles(g, plan, r);
+  if (options.particles && plant) drawParticles(canvas.g(), plan, r);
 }
 
 /** The plan's particles at this moment, in front of the flower. */
@@ -1270,12 +1194,13 @@ export function drawNectaryPulse(
 
 /** Draw a multi-flower arrangement from its pre-computed plan. */
 export function drawArrangementFromPlan(
-  g: Graphics,
+  canvas: Canvas,
   plan: ArrangementPlan,
   r: number,
 ) {
   const scale = r;
   const passes = petalPassesFor(r);
+  const g = canvas.g();
 
   // Pass 1: All stems
   for (const member of plan.members) drawStem(g, member.stem, scale);
@@ -1310,7 +1235,7 @@ export function drawArrangementFromPlan(
   // Pass 4: Flower heads (back to front — hero last so it's on top)
   for (const member of plan.members.toReversed()) {
     drawHeadAt(
-      g,
+      canvas,
       member.flowerPlan.heads[0],
       member.offsetX * scale,
       member.offsetY * scale,

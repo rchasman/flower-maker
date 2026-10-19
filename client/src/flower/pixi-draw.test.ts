@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { Graphics } from "pixi.js";
+import { Container, Graphics } from "pixi.js";
 import type { DrawCmd } from "./geometry.ts";
 import { createFlowerPlan } from "./render.ts";
 import {
   DETAIL_RADIUS,
   SHADING_RADIUS,
+  canvasOn,
   drawFlowerFromPlan,
   fillCmds,
   petalPassesFor,
@@ -47,9 +48,7 @@ describe("petalPassesFor", () => {
     texture: true,
     veins: true,
     marks: true,
-    gradient: true,
     depthShadow: true,
-    folds: true,
   };
 
   test("a flower at or above the detail radius gets every pass", () => {
@@ -72,14 +71,12 @@ describe("petalPassesFor", () => {
     });
   });
 
-  test("below the shading radius the gradient partials, depth shadows and folds go too", () => {
+  test("below the shading radius the depth shadows go too", () => {
     expect(petalPassesFor(SHADING_RADIUS - 1)).toEqual({
       texture: false,
       veins: false,
       marks: false,
-      gradient: false,
       depthShadow: false,
-      folds: false,
     });
   });
 
@@ -92,7 +89,7 @@ describe("petalPassesFor", () => {
               count: 6,
               length: 1.2,
               width: 0.9,
-              texture: "Velvet",
+              texture: "Frosted",
               color: {
                 stops: [
                   { position: 0, color: { r: 0.9, g: 0.3, b: 0.4, a: 1 } },
@@ -107,10 +104,19 @@ describe("petalPassesFor", () => {
       }),
       3,
     );
+    const instructions = (node: Container): number =>
+      node.children.reduce(
+        (sum, child) =>
+          sum +
+          (child instanceof Graphics
+            ? child.context.instructions.length
+            : instructions(child)),
+        0,
+      );
     const count = (r: number): number => {
-      const g = new Graphics();
-      drawFlowerFromPlan(g, plan, r);
-      return g.context.instructions.length;
+      const plant = new Container();
+      drawFlowerFromPlan(canvasOn(plant), plan, r);
+      return instructions(plant);
     };
     expect(count(DETAIL_RADIUS - 1)).toBeLessThan(count(DETAIL_RADIUS));
     expect(count(SHADING_RADIUS - 1)).toBeLessThan(count(SHADING_RADIUS));

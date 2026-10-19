@@ -117,13 +117,12 @@ describe("flower scene", () => {
 });
 
 describe("packHeadLights", () => {
-  test("packs centre, radius and strength, then translucency, and caps at the shader size", () => {
-    const light = { x: 1, y: 2, radius: 3, strength: 0.4, translucency: 0.5 };
+  test("packs centre, radius and strength, and caps at the shader size", () => {
+    const light = { x: 1, y: 2, radius: 3, strength: 0.4 };
     const packed = packHeadLights([light]);
     Array.from(packed.heads.slice(0, 4)).map((v, i) =>
       expect(v).toBeCloseTo([1, 2, 3, 0.4][i]!, 6),
     );
-    expect(packed.fx[0]).toBe(0.5);
     expect(packed.count).toBe(1);
     expect(packed.heads).toHaveLength(MAX_LIT_HEADS * 4);
     const many = packHeadLights(Array.from({ length: 100 }, () => light));

@@ -22,10 +22,13 @@ import {
   Container,
   Graphics,
   GraphicsContext,
+  Mesh,
   RenderTexture,
   Sprite,
   type BLEND_MODES,
+  type MeshGeometry,
   type Renderer,
+  type Shader,
 } from "pixi.js";
 import {
   arrangementHeadLights,
@@ -37,6 +40,7 @@ import {
 import {
   bioOf,
   bioWaveAt,
+  canvasOn,
   drawArrangementFromPlan,
   drawAura,
   drawBioGlow,
@@ -45,8 +49,10 @@ import {
   drawParticles,
   nectaryPulseLevel,
   nectaryPulseOf,
+  type Canvas,
 } from "./pixi-draw.ts";
 import type { ArrangementPlan, FlowerPlan } from "./render.ts";
+import { freePetalMesh } from "./shaders/petalShade.ts";
 import { PlantLightFilter, createLightAnchor } from "./shaders/plantLight.ts";
 
 export type FlowerScene = {
@@ -159,23 +165,43 @@ function createPicture(source: Container, blendMode: BLEND_MODES): Picture {
   };
 }
 
-/** A Graphics shaded by a PlantLightFilter through its light anchor, as a picture. */
+/** Every petal mesh under `node`; a mesh's geometry and shader outlive it unless freed. */
+const meshesUnder = (node: Container): Mesh<MeshGeometry, Shader>[] =>
+  node.children.flatMap(child =>
+    child instanceof Mesh ? [child] : meshesUnder(child),
+  );
+
+function clearPlant(plant: Container): void {
+  meshesUnder(plant).map(freePetalMesh);
+  plant.removeChildren().map(child => child.destroy({ children: true }));
+}
+
+/** A plant canvas shaded by a PlantLightFilter through its light anchor, as a picture. */
 function createLitPlant(): {
   picture: Picture;
-  graphics: Graphics;
+  /** clears the plant and returns an empty canvas to draw it on */
+  redraw(): Canvas;
   light: PlantLightFilter;
+  destroy(): void;
 } {
   const anchor = createLightAnchor();
-  const graphics = new Graphics();
+  const plant = new Container();
   const light = new PlantLightFilter(anchor);
-  graphics.filters = [light];
+  plant.filters = [light];
   const source = new Container();
-  source.addChild(anchor, graphics);
+  source.addChild(anchor, plant);
   const picture = createPicture(source, "normal");
   return {
     picture,
-    graphics,
+    redraw: () => {
+      clearPlant(plant);
+      return canvasOn(plant);
+    },
     light,
+    destroy: () => {
+      clearPlant(plant);
+      light.destroy();
+    },
   };
 }
 
@@ -255,16 +281,14 @@ export function createFlowerScene(plan: FlowerPlan): FlowerScene {
     root,
     flower: plant,
     draw: r => {
-      front.graphics.clear();
-      drawFlowerFromPlan(front.graphics, plan, r, {
+      drawFlowerFromPlan(front.redraw(), plan, r, {
         particles: false,
         layer: frontLayer,
       });
       front.light.setHeads(headLights(plan, r, frontLayer));
       front.picture.invalidate();
       if (back) {
-        back.graphics.clear();
-        drawFlowerFromPlan(back.graphics, plan, r, {
+        drawFlowerFromPlan(back.redraw(), plan, r, {
           particles: false,
           layer: "back",
         });
@@ -293,9 +317,9 @@ export function createFlowerScene(plan: FlowerPlan): FlowerScene {
     },
     destroy: () => {
       root.destroy({ children: true });
+      front.destroy();
+      back?.destroy();
       pictures.map(picture => picture.destroy());
-      front.light.destroy();
-      back?.light.destroy();
       aura?.destroy();
     },
   };
@@ -304,7 +328,8 @@ export function createFlowerScene(plan: FlowerPlan): FlowerScene {
 /** An arrangement is one static picture: its members' front heads are what the light shades. */
 export function createArrangementScene(plan: ArrangementPlan): FlowerScene {
   const root = new Container();
-  const { picture, graphics, light } = createLitPlant();
+  const lit = createLitPlant();
+  const { picture, light } = lit;
   const plant = new Container();
   plant.addChild(picture.view);
   root.addChild(plant);
@@ -312,8 +337,7 @@ export function createArrangementScene(plan: ArrangementPlan): FlowerScene {
     root,
     flower: plant,
     draw: r => {
-      graphics.clear();
-      drawArrangementFromPlan(graphics, plan, r);
+      drawArrangementFromPlan(lit.redraw(), plan, r);
       light.setHeads(arrangementHeadLights(plan, r));
       picture.invalidate();
     },
@@ -321,8 +345,8 @@ export function createArrangementScene(plan: ArrangementPlan): FlowerScene {
     tick: () => {},
     destroy: () => {
       root.destroy({ children: true });
+      lit.destroy();
       picture.destroy();
-      light.destroy();
     },
   };
 }

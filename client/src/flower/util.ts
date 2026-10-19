@@ -20,6 +20,16 @@ export const LIGHT_DIRECTION: readonly [number, number] = [
   Math.sin(LIGHT_ANGLE),
 ];
 
+/** How high the light stands above the flower's plane, radians. */
+export const LIGHT_ELEVATION = 0.75;
+
+/** Unit vector toward the light in 3D: x and y in flower space, z toward the viewer. */
+export const LIGHT_VECTOR: readonly [number, number, number] = [
+  Math.cos(LIGHT_ANGLE) * Math.cos(LIGHT_ELEVATION),
+  Math.sin(LIGHT_ANGLE) * Math.cos(LIGHT_ELEVATION),
+  Math.sin(LIGHT_ELEVATION),
+];
+
 /** The sunflower spiral step, about 137.5 degrees. */
 export const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 

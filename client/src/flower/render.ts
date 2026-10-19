@@ -15,6 +15,7 @@ import {
   fallbackColor,
   lerpColor,
   lightenColor,
+  type GradientStop,
 } from "./color.ts";
 import {
   generateCorolla,
@@ -39,12 +40,11 @@ import {
   type Floret,
   type InflorescenceLayout,
 } from "./inflorescence.ts";
-import { generatePetalFolds } from "./folds.ts";
 import { generatePetalMarks, type PetalMark } from "./patterns.ts";
+import { petalSurface, type PetalSurface } from "./surface.ts";
 import {
   createPetalFrame,
   generatePetal,
-  generatePetalPartial,
   overlappingWidth,
   petalLocalToFlower,
   placePetal,
@@ -101,7 +101,6 @@ import {
 } from "./stem.ts";
 import {
   GOLDEN_ANGLE,
-  LIGHT_ANGLE,
   clamp,
   lerp,
   sidHash,
@@ -217,26 +216,17 @@ export type PetalPlan = {
   angle: number;
   veinCmds: DrawCmd[];
   marks: readonly PetalMark[];
-  /** light and shade on the waves of a buckled margin, empty for a flat one */
-  folds: readonly PetalMark[];
+  /** the blade as a lit mesh, unit flower space */
+  surface: PetalSurface;
+  /** the petal's colors from base (0) to tip (1); one stop for a plain petal */
+  stops: readonly GradientStop[];
   color: number;
-  highlightColor: number;
   outlineColor: number;
   veinColor: number;
-  lightColor: number;
-  shadowColor: number;
   midribGlowColor: number;
   texture: SurfaceTexture;
-  textureHighlight: number;
-  textureEdge: number;
   /** two extra sheen fills when the spec is iridescent */
   iridescence: PetalIridescence | null;
-  gradientStops: ReadonlyArray<{
-    position: number;
-    color: number;
-    blendedColor: number;
-    cmds: DrawCmd[];
-  }>;
 };
 
 /** A layer whose petals are fused into one cup; drawn instead of `petals`. */
@@ -313,26 +303,6 @@ function scatterColor(color: number, amount: number, seed: number): number {
   const r = Math.min(255, Math.max(0, ((color >> 16) & 0xff) + shift));
   const g = Math.min(255, Math.max(0, ((color >> 8) & 0xff) + shift));
   const b = Math.min(255, Math.max(0, (color & 0xff) + shift));
-  return (r << 16) | (g << 8) | b;
-}
-
-/** Directional light tint — petals facing the light source appear brighter. */
-function lightTint(color: number, petalAngle: number): number {
-  // Cosine falloff: petals facing the light get up to 10% brightness boost
-  const dot = Math.cos(petalAngle - LIGHT_ANGLE);
-  const boost = dot * 0.1; // [-0.1, 0.1]
-  const r = Math.min(
-    255,
-    Math.max(0, Math.floor(((color >> 16) & 0xff) * (1 + boost))),
-  );
-  const g = Math.min(
-    255,
-    Math.max(0, Math.floor(((color >> 8) & 0xff) * (1 + boost))),
-  );
-  const b = Math.min(
-    255,
-    Math.max(0, Math.floor((color & 0xff) * (1 + boost))),
-  );
   return (r << 16) | (g << 8) | b;
 }
 
@@ -755,16 +725,14 @@ type ParsedSpec = {
   family: FlowerFamily;
 };
 
-type ParsedGradientStop = { position: number; color: number };
-
 const isResolvedStop = (stop: {
   position: number;
   color: number | null;
-}): stop is ParsedGradientStop => stop.color !== null;
+}): stop is GradientStop => stop.color !== null;
 
 function parseGradientStops(
   color: RawColorGradient | undefined,
-): ParsedGradientStop[] {
+): GradientStop[] {
   return (color?.stops ?? [])
     .map(s => ({ position: s.position ?? 0, color: colorToHex(s.color) }))
     .filter(isResolvedStop);
@@ -1226,59 +1194,6 @@ function computePetalAngles(
       return unreachable(arrangement);
   }
 }
-
-type TextureColors = { textureHighlight: number; textureEdge: number };
-
-const plainTexture = (color: number): TextureColors => ({
-  textureHighlight: color,
-  textureEdge: color,
-});
-
-/** Texture-specific highlight and edge colors for a petal. */
-const TEXTURE_COLORS: Record<SurfaceTexture, (color: number) => TextureColors> =
-  {
-    Smooth: plainTexture,
-    Velvet: color => ({
-      textureHighlight: color,
-      textureEdge: darkenColor(color, 0.3),
-    }),
-    Silk: color => ({
-      textureHighlight: lightenColor(color, 0.3),
-      textureEdge: color,
-    }),
-    Papery: color => ({
-      textureHighlight: desaturate(color, 0.3),
-      textureEdge: lightenColor(color, 0.1),
-    }),
-    Waxy: color => ({
-      textureHighlight: lightenColor(color, 0.4),
-      textureEdge: darkenColor(color, 0.6),
-    }),
-    Rough: plainTexture,
-    Hairy: plainTexture,
-    Glassy: color => ({ textureHighlight: 0xffffff, textureEdge: color }),
-    Crystalline: color => ({
-      textureHighlight: 0xffffff,
-      textureEdge: lightenColor(color, 0.2),
-    }),
-    Scaled: plainTexture,
-    Metallic: color => ({
-      textureHighlight: lightenColor(color, 0.45),
-      textureEdge: darkenColor(coolShift(color), 0.8),
-    }),
-    Pearlescent: color => ({
-      textureHighlight: warmShift(lightenColor(color, 0.2)),
-      textureEdge: coolShift(color),
-    }),
-    Fuzzy: plainTexture,
-    Frosted: color => ({
-      textureHighlight: 0xffffff,
-      textureEdge: lightenColor(color, 0.3),
-    }),
-    Leathery: plainTexture,
-    Powdery: plainTexture,
-  };
-
 /** A head with nothing to draw still needs a reach so it can be laid out and hit. */
 const MIN_HEAD_REACH = 0.15;
 
@@ -1316,9 +1231,6 @@ const RACEME_ARCH = 0.02;
 const PETAL_FORESHORTEN = 0.85;
 /** back florets are drawn this much darker */
 const BACK_SHADE = 0.92;
-/** Strongest alpha of a fold lobe turned away from the light, and of one turned toward it. */
-const FOLD_SHADE_ALPHA = 0.6;
-const FOLD_LIGHT_ALPHA = 0.4;
 /** adjacent petals of a spiralled ring overlap by this share of their width */
 const SPIRAL_OVERLAP = 0.38;
 /** each inner ring of a spiralled bloom sits this much deeper in the cup */
@@ -1540,37 +1452,14 @@ function buildHead(src: HeadSource, stage: LifeStage, back: boolean): HeadPlan {
       { frame, angle, cmds }: PlacedPetal,
       i: number,
     ): PetalPlan => {
-      const scattered = scatterColor(
-        layerColor,
-        0.06,
-        i * 7.3 + layerIdx * 13.1,
-      );
-      const lit = lightTint(scattered, angle);
-
-      // Build gradient stops with scatter+lightTint applied per-petal,
-      // and generate partial sub-paths for each stop beyond the first
-      const gradientStops =
+      const lit = scatterColor(layerColor, 0.06, i * 7.3 + layerIdx * 13.1);
+      const stops =
         layer.gradientStops.length >= 2
-          ? layer.gradientStops.map((stop, si) => {
-              const stopScattered = scatterColor(
-                tint(stop.color),
-                0.04,
-                i * 5.1 + si * 3.7,
-              );
-              const stopLit = lightTint(stopScattered, angle);
-              const stopCmds: DrawCmd[] =
-                si === 0 ? [] : generatePetalPartial(frame, stop.position);
-              return {
-                position: stop.position,
-                color: stopLit,
-                blendedColor:
-                  si === 0
-                    ? stopLit
-                    : lerpColor(lit, stopLit, 0.5 + (si - 1) * 0.15),
-                cmds: stopCmds,
-              };
-            })
-          : [];
+          ? layer.gradientStops.map((stop, si) => ({
+              position: stop.position,
+              color: scatterColor(tint(stop.color), 0.04, i * 5.1 + si * 3.7),
+            }))
+          : [{ position: 0, color: lit }];
 
       return {
         cmds,
@@ -1588,33 +1477,16 @@ function buildHead(src: HeadSource, stage: LifeStage, back: boolean): HeadPlan {
           frame,
           sidHash(sid, 800 + layerIdx * 100 + i),
         ),
-        folds: generatePetalFolds(frame, Math.cos(angle - LIGHT_ANGLE)).map(
-          fold =>
-            fold.shade < 0
-              ? {
-                  cmds: fold.cmds,
-                  color: darkenColor(lit, 0.55),
-                  alpha: -fold.shade * FOLD_SHADE_ALPHA,
-                }
-              : {
-                  cmds: fold.cmds,
-                  color: lightenColor(lit, 0.35),
-                  alpha: fold.shade * FOLD_LIGHT_ALPHA,
-                },
-        ),
+        surface: petalSurface(frame),
+        stops,
         color: lit,
-        highlightColor: lightenColor(lit, 0.18),
         outlineColor: darkenColor(lit, 0.55),
         veinColor: darkenColor(lit, 0.6),
-        lightColor: lightenColor(lit, 0.15),
-        shadowColor: darkenColor(lit, 0.8),
         midribGlowColor: lightenColor(lit, 0.2),
         texture: layer.texture,
-        ...TEXTURE_COLORS[layer.texture](lit),
         iridescence: iridescence
           ? iridescentPetal(iridescence, lit, angle)
           : null,
-        gradientStops,
       };
     };
 

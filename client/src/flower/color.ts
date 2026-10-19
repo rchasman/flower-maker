@@ -42,6 +42,26 @@ export function lerpColor(a: number, b: number, t: number): number {
   return (r << 16) | (g << 8) | bl;
 }
 
+/** A color at a position along a gradient, 0 at its start and 1 at its end. */
+export type GradientStop = { position: number; color: number };
+
+/** The color of a piecewise linear gradient at `position`; stops ascend by position. */
+export function gradientAt(
+  stops: readonly GradientStop[],
+  position: number,
+): number {
+  const next = stops.findIndex(stop => stop.position >= position);
+  if (next === -1) return stops.at(-1)!.color;
+  if (next === 0) return stops[0]!.color;
+  const a = stops[next - 1]!;
+  const b = stops[next]!;
+  return lerpColor(
+    a.color,
+    b.color,
+    (position - a.position) / Math.max(1e-6, b.position - a.position),
+  );
+}
+
 /** Blend a color toward its luminance gray; 0 leaves it unchanged, 1 is gray. */
 export function desaturate(color: number, amount: number): number {
   const r = (color >> 16) & 0xff;
