@@ -251,6 +251,16 @@ describe("parseFoliage", () => {
 });
 
 describe("createArrangementPlan", () => {
+  test("draws exactly the flowers it holds, however many", () => {
+    const flowers = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        spec: specWith([{ count: 5 + (i % 4) }]),
+        sid: 200 + i,
+      }));
+    expect(createArrangementPlan(flowers(2)).members).toHaveLength(2);
+    expect(createArrangementPlan(flowers(15)).members).toHaveLength(15);
+  });
+
   test("is deterministic for the same constituents", () => {
     const constituents = Array.from({ length: 5 }, (_, i) => ({
       spec: specWith([{ count: 5 + i }]),
