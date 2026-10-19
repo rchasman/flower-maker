@@ -3103,25 +3103,68 @@ function generateAdornmentFromSpec(
   return applyMaterialOpacity(plan, opacityMul);
 }
 
-/** Pick the right adornment for an arrangement level. */
-function adornmentForLevel(
-  level: number,
+type ContainerType = AdornmentSpec["container"]["type"];
+type BaseType = NonNullable<AdornmentSpec["base"]>["type"];
+
+/** The rungs an arrangement climbs as merges grow it: the fewest flowers that stand in each container. */
+const CONTAINER_LADDER: ReadonlyArray<{
+  from: number;
+  container: ContainerType;
+  base: BaseType;
+}> = [
+  { from: 2, container: "tie", base: "none" },
+  { from: 4, container: "wrap", base: "none" },
+  { from: 7, container: "basket", base: "none" },
+  { from: 10, container: "vase", base: "none" },
+  { from: 20, container: "urn", base: "pedestal" },
+  { from: 50, container: "urn", base: "plinth" },
+];
+
+/**
+ * The container and base an arrangement of `count` flowers stands in. It
+ * only climbs: every merge adds flowers, so an arrangement never steps down.
+ * Null for a single flower, which stands on its own stem.
+ */
+export function containerForCount(
+  count: number,
+): { container: ContainerType; base: BaseType } | null {
+  return CONTAINER_LADDER.findLast(rung => count >= rung.from) ?? null;
+}
+
+/** The AI's adornment on the arrangement's rung: it styles the container, the flower count picks it. */
+function onRung(
+  spec: AdornmentSpec,
+  rung: { container: ContainerType; base: BaseType },
+): AdornmentSpec {
+  return {
+    ...spec,
+    container: { ...spec.container, type: rung.container },
+    base:
+      rung.base === "none"
+        ? spec.base
+        : { type: rung.base, color: spec.base?.color ?? spec.container.color },
+  };
+}
+
+/** The rung's container in the given colors, for an arrangement the AI has not dressed. */
+function plainAdornment(
   baseY: number,
+  rung: { container: ContainerType; base: BaseType },
   colors?: { main: number; accent: number },
-): AdornmentPlan | null {
-  if (level <= 1) return null; // single stem — no adornment
-  if (level <= 2) return generateTieAdornment(baseY, colors); // group (2-3)
-  if (level <= 3) return generateWrapAdornment(baseY, colors); // bunch (4-6)
-  if (level <= 5) return generateVaseAdornment(baseY, colors); // arrangement/bouquet (7-19)
-  // centerpiece/installation (20+) — vase on a pedestal
-  const vase = generateVaseAdornment(baseY, colors);
+): AdornmentPlan {
+  const container = CONTAINER_GENERATORS[rung.container](baseY, colors);
+  if (rung.base === "none") return container;
   const pedestal = generatePedestalAdornment(baseY, colors);
   return {
     cmds: pedestal.cmds,
     color: pedestal.color,
     opacity: pedestal.opacity,
-    accent: { cmds: vase.cmds, color: vase.color, opacity: vase.opacity },
-    detail: vase.accent,
+    accent: {
+      cmds: container.cmds,
+      color: container.color,
+      opacity: container.opacity,
+    },
+    detail: container.accent,
   };
 }
 
@@ -3204,11 +3247,17 @@ export function createArrangementPlan(
     };
   });
 
-  // Phase 2: if AI provided a structured spec, use it directly
-  // Phase 1: extract colors from meta and pass to level-gated generator
-  const adornment = meta?.adornment_spec
-    ? generateAdornmentFromSpec(baseY, meta.adornment_spec)
-    : adornmentForLevel(level, baseY, extractAdornmentColors(meta));
+  const rung = containerForCount(count);
+  const adornment = run(() => {
+    if (!rung) return null;
+    if (meta?.adornment_spec) {
+      return generateAdornmentFromSpec(
+        baseY,
+        onRung(meta.adornment_spec, rung),
+      );
+    }
+    return plainAdornment(baseY, rung, extractAdornmentColors(meta));
+  });
 
   const lowest = [
     ...members.map(m => cmdsBounds(m.stem.cmds)),

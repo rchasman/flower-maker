@@ -22,6 +22,15 @@ export class GardenSimulation {
         const ret = wasm.gardensimulation_flower_count(this.__wbg_ptr);
         return ret >>> 0;
     }
+    /**
+     * A plant held by the pointer passes through the others, so it can be set down on one to merge
+     * without shoving it away; let go, it collides again.
+     * @param {bigint} session_id
+     * @param {boolean} held
+     */
+    hold(session_id, held) {
+        wasm.gardensimulation_hold(this.__wbg_ptr, session_id, held);
+    }
     constructor() {
         const ret = wasm.gardensimulation_new();
         this.__wbg_ptr = ret;

@@ -1,12 +1,13 @@
 import { BED_TOP, plantRadius, type Bed } from "../canvas/garden.ts";
-import type { ArrangementMeta } from "../flower/render.ts";
+import { containerForCount, type ArrangementMeta } from "../flower/render.ts";
 import { readStream, parseSpec } from "../lib/utils.ts";
 import type { GardenSim } from "../wasm/loader.ts";
 import type { DbConnection, FlowerSession, FlowerSpec } from "./types.ts";
 import { isVariant } from "./types.ts";
 import {
   arrangementFlowers,
-  arrangementMeta,
+  inheritedMeta,
+  overridesBySession,
   type ArrangementFlower,
 } from "./arrangements.ts";
 import { getMyIdentity } from "./connection.ts";
@@ -128,13 +129,12 @@ export function wireToWasm(
   applyBed();
   const specOf = (sid: bigint): string | undefined =>
     conn.db.flowerSpec.sessionId.find(sid)?.spec;
-  const overridesOf = (sid: bigint) => overridesFor(conn, sid);
   const pushArrangement = (sid: bigint) => {
-    const rows = overridesOf(sid);
+    const bySession = overridesBySession([...conn.db.partOverride.iter()]);
     canvas.setArrangement(
       Number(sid),
-      arrangementFlowers(rows),
-      arrangementMeta(rows),
+      arrangementFlowers(bySession.get(String(sid)) ?? []),
+      inheritedMeta(String(sid), bySession),
     );
   };
   const place = (session: FlowerSession, spec: string) => {
@@ -244,6 +244,7 @@ export async function handleMerge(
         spec_b: parseSpec(specB.spec),
         total_count: totalCount,
         level: levelForCount(totalCount),
+        rung: containerForCount(totalCount),
         parent_adornments:
           parentAdornments.length > 0 ? parentAdornments : undefined,
       }),

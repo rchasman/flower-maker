@@ -13,8 +13,10 @@ import {
 } from "./petal.ts";
 import { colorFromSpec, desaturate } from "./color.ts";
 import {
+  containerForCount,
   createArrangementPlan,
   createFlowerPlan,
+  type ArrangementMeta,
   type LeafPlan,
 } from "./render.ts";
 import { flattenCmds, pointInPolygon } from "./test-helpers.ts";
@@ -259,6 +261,35 @@ describe("createArrangementPlan", () => {
       }));
     expect(createArrangementPlan(flowers(2)).members).toHaveLength(2);
     expect(createArrangementPlan(flowers(15)).members).toHaveLength(15);
+  });
+
+  test("the container climbs with the flower count and the AI cannot step it down", () => {
+    const flowers = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        spec: specWith([{ count: 5 }]),
+        sid: 300 + i,
+      }));
+    const dressedAs = (type: "tie" | "urn"): ArrangementMeta => ({
+      adornment_spec: {
+        container: {
+          type,
+          material: "silk",
+          color: { r: 0.8, g: 0.2, b: 0.3 },
+        },
+        accent: { type: "bow", color: { r: 1, g: 1, b: 1 } },
+        mood: "calm",
+      },
+    });
+    expect(containerForCount(1)).toBeNull();
+    expect(
+      [2, 4, 7, 10, 20, 50].map(n => containerForCount(n)?.container),
+    ).toEqual(["tie", "wrap", "basket", "vase", "urn", "urn"]);
+    // a pair now stands in its tie at once, before any AI answer
+    expect(createArrangementPlan(flowers(2)).adornment).not.toBeNull();
+    // an urn asked for two flowers is drawn as their tie
+    expect(
+      createArrangementPlan(flowers(2), dressedAs("urn")).adornment,
+    ).toEqual(createArrangementPlan(flowers(2), dressedAs("tie")).adornment);
   });
 
   test("is deterministic for the same constituents", () => {

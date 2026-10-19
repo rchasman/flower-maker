@@ -54,6 +54,8 @@ export interface FlowerCanvasHandle extends CanvasEvents {
 interface FlowerCanvasProps {
   onFlowerClick?: (sid: number) => void;
   onFlowerDrag?: (sid: number, x: number, y: number) => void;
+  /** a plant picked up (true) or let go (false) */
+  onFlowerHold?: (sid: number, held: boolean) => void;
   onFlowerDragEnd?: (sid: number, x: number, y: number) => void;
   /** a flower dropped onto another, at the target's position in canvas px */
   onMergeDrop?: (
@@ -170,7 +172,14 @@ function arrangementFootprint(r: number): Footprint {
 
 export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
   function FlowerCanvas(
-    { onFlowerClick, onFlowerDrag, onFlowerDragEnd, onMergeDrop, selectedId },
+    {
+      onFlowerClick,
+      onFlowerDrag,
+      onFlowerHold,
+      onFlowerDragEnd,
+      onMergeDrop,
+      selectedId,
+    },
     ref,
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -194,6 +203,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const footRef = useRef<Map<number, { x: number; y: number }>>(new Map());
     const onFlowerClickRef = useRef(onFlowerClick);
     const onFlowerDragRef = useRef(onFlowerDrag);
+    const onFlowerHoldRef = useRef(onFlowerHold);
     const onFlowerDragEndRef = useRef(onFlowerDragEnd);
     const onMergeDropRef = useRef(onMergeDrop);
     const mergeTargetRef = useRef<{
@@ -229,6 +239,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     selectedIdRef.current = selectedId;
     onFlowerClickRef.current = onFlowerClick;
     onFlowerDragRef.current = onFlowerDrag;
+    onFlowerHoldRef.current = onFlowerHold;
     onFlowerDragEndRef.current = onFlowerDragEnd;
     onMergeDropRef.current = onMergeDrop;
 
@@ -639,6 +650,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
               const dy = pos.y - drag.originY;
               if (dx * dx + dy * dy < DRAG_THRESHOLD * DRAG_THRESHOLD) return;
               drag.started = true;
+              onFlowerHoldRef.current?.(drag.sid, true);
               const g = scenesRef.current.get(drag.sid)?.scene.flower;
               if (g) g.cursor = "grabbing";
             }
@@ -728,6 +740,9 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
                   requestAnimationFrame(shakeFrame);
                 }
               } else {
+                // A plant set down beside the others collides again; one set
+                // down on a merge stays passing through while it fades out
+                onFlowerHoldRef.current?.(drag.sid, false);
                 const foot = footRef.current.get(drag.sid);
                 if (foot)
                   onFlowerDragEndRef.current?.(drag.sid, foot.x, foot.y);

@@ -237,9 +237,28 @@ the `fullName`.
 
 ## Combine
 
-`POST /api/flower/combine` (`api/flower/combine.ts`) describes what two flowers
-become when merged. The client (`client/src/spacetime/bridge.ts`, `handleMerge`)
-sends:
+A merge happens in two steps (`client/src/spacetime/bridge.ts`, `handleMerge`):
+
+1. The `merge_sessions(a, b, x, y)` reducer runs at once. The new arrangement
+   holds exactly A's flowers then B's, as `constituent:N` overrides with
+   `forked_from = "merge:a+b"`, and stands where the player dropped it.
+2. Then `POST /api/flower/combine` (`api/flower/combine.ts`) names and dresses
+   it, and `set_merge_arrangement(a, b, json)` stores the answer as the
+   arrangement's `part_path = "arrangement"` override.
+
+The container evolves without waiting for the AI:
+
+- **Its type climbs with the flower count** (`containerForCount` in
+  `client/src/flower/render.ts`): tie (2 to 3), wrap (4 to 6), basket (7 to
+  9), vase (10 to 19), urn on a pedestal (20 to 49), urn on a plinth (50 and
+  up). Every merge adds flowers, so it never steps down. The renderer
+  enforces the rung whatever type the AI names.
+- **Its material, colors and accent carry over.** Until the AI answers, an
+  arrangement wears the look of the parent with more flowers
+  (`inheritedMeta` in `client/src/spacetime/arrangements.ts`). Then the AI
+  restyles it from the parents' looks.
+
+The client sends:
 
 ```json
 {
@@ -247,17 +266,19 @@ sends:
   "spec_b": { "...parsed FlowerSpec of session B": true },
   "total_count": 5,
   "level": "bunch",
-  "parent_adornments": [{ "...arrangement override of a parent": true }],
-  "model": "typesafe-ai/jev"
+  "rung": { "container": "wrap", "base": "none" },
+  "parent_adornments": [{ "...arrangement override of a parent": true }]
 }
 ```
 
-`parent_adornments` and `model` are optional. `level` is one of stem, group,
-bunch, arrangement, bouquet, centerpiece, installation, from `total_count`.
+`parent_adornments` is optional. `level` is one of stem, group, bunch,
+arrangement, bouquet, centerpiece, installation, from `total_count`. The
+handler always uses `ARRANGEMENT_MODEL` (`api/config/models.ts`), a text
+model: Jev cannot write text.
 
 The handler calls `streamText` with `COMBINE_SYSTEM_PROMPT`, a prompt that
-embeds both specs as JSON and the parent adornments with evolution rules, and
-`Output.object({ schema: ArrangementSchema })`:
+embeds both specs, the rung and the parent adornments with evolution rules,
+and `Output.object({ schema: ArrangementSchema })`:
 
 | Field               | Type                                                                                            |
 | ------------------- | ----------------------------------------------------------------------------------------------- |
@@ -272,12 +293,6 @@ embeds both specs as JSON and the parent adornments with evolution rules, and
 Container types: tie, wrap, basket, vase, urn. Materials: kraft, tissue, silk,
 ceramic, glass, wicker, metal. Accent types: ribbon, bow, twine, trim, band,
 none. Base types: none, saucer, pedestal, plinth. Colors are RGB in 0 to 1.
-
-The response is `result.toTextStreamResponse()`. The client reads the whole
-stream to a string and passes it unchanged as `ai_arrangement_json` to the
-`merge_sessions` reducer, which stores it as a `part_override` row with
-`part_path = "arrangement"`. The renderer's `parseArrangementMeta` reads
-`adornment_spec` from that row to draw the container.
 
 ## Order
 

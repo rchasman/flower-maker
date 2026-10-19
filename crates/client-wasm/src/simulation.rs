@@ -88,13 +88,13 @@ impl PhysicsWorld {
         }
     }
 
-    /// The body keeps moving but no longer collides with anything.
-    pub fn set_ghost(&mut self, handle: RigidBodyHandle) {
+    /// A ghost body keeps moving but passes through everything; a solid one collides again.
+    pub fn set_ghost(&mut self, handle: RigidBodyHandle, ghost: bool) {
         let Some(body) = self.rigid_body_set.get(handle) else { return };
         let colliders: Vec<_> = body.colliders().to_vec();
         for collider in colliders {
             if let Some(c) = self.collider_set.get_mut(collider) {
-                c.set_sensor(true);
+                c.set_sensor(ghost);
             }
         }
     }

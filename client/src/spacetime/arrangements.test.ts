@@ -1,10 +1,24 @@
 import { describe, expect, test } from "bun:test";
-import { arrangementFlowers, arrangementMeta } from "./arrangements.ts";
+import { arrangementFlowers, inheritedMeta } from "./arrangements.ts";
 
-const row = (partPath: string, overrideJson: string) => ({
+const row = (partPath: string, overrideJson: string, forkedFrom = "") => ({
   partPath,
   overrideJson,
+  forkedFrom,
 });
+
+const dressed = (material: string) =>
+  row(
+    "arrangement",
+    JSON.stringify({
+      name: material,
+      adornment_spec: {
+        container: { type: "tie", material, color: { r: 1, g: 0, b: 0 } },
+        accent: { type: "bow", color: { r: 0, g: 0, b: 1 } },
+        mood: "calm",
+      },
+    }),
+  );
 
 describe("arrangementFlowers", () => {
   test("flowers come in slot order, whatever order the rows arrive in, and gaps close", () => {
@@ -34,6 +48,47 @@ describe("arrangementFlowers", () => {
 
   test("a single flower has no arrangement flowers and no meta", () => {
     expect(arrangementFlowers([row("petals.layers.0", "x")])).toEqual([]);
-    expect(arrangementMeta([row("petals.layers.0", "x")])).toBeNull();
+    expect(
+      inheritedMeta("1", new Map([["1", [row("petals.layers.0", "x")]]])),
+    ).toBeNull();
+  });
+});
+
+describe("inheritedMeta", () => {
+  const bySession = new Map([
+    // a dressed arrangement of three, a plain flower, and their merge
+    [
+      "1",
+      [
+        row("constituent:0", "a"),
+        row("constituent:1", "b"),
+        row("constituent:2", "c"),
+        dressed("silk"),
+      ],
+    ],
+    ["2", [row("petals", "x")]],
+    [
+      "3",
+      [
+        row("constituent:0", "a", "merge:2+1"),
+        row("constituent:1", "b", "merge:2+1"),
+      ],
+    ],
+  ]);
+
+  test("a merged arrangement wears its larger parent's look until the AI dresses it", () => {
+    expect(inheritedMeta("3", bySession)?.name).toBe("silk");
+  });
+
+  test("its own look wins once it has one", () => {
+    const own = new Map(bySession).set("3", [
+      ...bySession.get("3")!,
+      dressed("glass"),
+    ]);
+    expect(inheritedMeta("3", own)?.name).toBe("glass");
+  });
+
+  test("an arrangement with no dressed ancestor has no look", () => {
+    expect(inheritedMeta("2", bySession)).toBeNull();
   });
 });

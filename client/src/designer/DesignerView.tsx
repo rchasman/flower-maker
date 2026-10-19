@@ -220,13 +220,21 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
   const merge = useCallback(
     (sidA: number, sidB: number, at: [number, number] | null) => {
       const merging = mergingRef.current;
-      if (!conn || merging.has(sidA) || merging.has(sidB)) return;
+      if (!conn || merging.has(sidA) || merging.has(sidB)) {
+        simRef.current?.hold(BigInt(sidA), false);
+        return;
+      }
       merging.add(sidA);
       merging.add(sidB);
-      void handleMerge(conn, sidA, sidB, at).finally(() => {
-        merging.delete(sidA);
-        merging.delete(sidB);
-      });
+      void handleMerge(conn, sidA, sidB, at)
+        .then(merged => {
+          // A refused merge leaves the dropped plant where it was set down, solid again
+          if (!merged) simRef.current?.hold(BigInt(sidA), false);
+        })
+        .finally(() => {
+          merging.delete(sidA);
+          merging.delete(sidB);
+        });
     },
     [conn],
   );
@@ -246,6 +254,10 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
 
   const handleFlowerDrag = useCallback((sid: number, x: number, y: number) => {
     simRef.current?.set_body_position(BigInt(sid), x, y);
+  }, []);
+
+  const handleFlowerHold = useCallback((sid: number, held: boolean) => {
+    simRef.current?.hold(BigInt(sid), held);
   }, []);
 
   const handleFlowerDragEnd = useCallback(
@@ -427,6 +439,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
           selectedId={selectedId}
           onFlowerClick={setSelectedId}
           onFlowerDrag={handleFlowerDrag}
+          onFlowerHold={handleFlowerHold}
           onFlowerDragEnd={handleFlowerDragEnd}
           onMergeDrop={handleMergeDrop}
         />
