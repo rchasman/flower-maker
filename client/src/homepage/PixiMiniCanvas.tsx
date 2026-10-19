@@ -17,7 +17,8 @@ import {
   RenderTexture,
   GraphicsContextSystem,
 } from "pixi.js";
-import { drawBed } from "../canvas/garden.ts";
+import { BED_TOP, drawBed } from "../canvas/garden.ts";
+import { GOLDEN_ANGLE } from "../flower/util.ts";
 import { run } from "../lib/utils.ts";
 import {
   createFlowerPlan,
@@ -38,12 +39,11 @@ interface PixiMiniCanvasProps {
   arrangementMetaMap: Map<string, ArrangementMeta>;
 }
 
-const GOLDEN_ANGLE = 2.399963; // radians
 const SNAPSHOT_SIZE = 400; // render at 400x400, display scaled down
-/** the bed fills the tile below its top third: plants stand framed in it */
+/** the zone's patch of bed fills the tile as the bed fills the canvas */
 const SNAPSHOT_BED = {
   left: 0,
-  top: SNAPSHOT_SIZE * 0.3,
+  top: SNAPSHOT_SIZE * BED_TOP,
   right: SNAPSHOT_SIZE,
   bottom: SNAPSHOT_SIZE,
 };

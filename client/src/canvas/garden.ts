@@ -9,6 +9,9 @@ import { sidHash } from "../flower/util.ts";
 
 export type Bed = { left: number; top: number; right: number; bottom: number };
 
+/** The bed starts this far down the canvas: the soil above it is the far distance, too far to plant. */
+export const BED_TOP = 0.34;
+
 /** Far soil, the soil where planting starts, and the nearest soil. */
 const SOIL_FAR = 0x000000;
 const SOIL_TOP = 0x17120e;
