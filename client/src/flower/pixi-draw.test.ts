@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { Graphics } from "pixi.js";
+import { Container, Graphics } from "pixi.js";
 import type { DrawCmd } from "./geometry.ts";
 import { createFlowerPlan } from "./render.ts";
 import {
   DETAIL_RADIUS,
   SHADING_RADIUS,
+  canvasOn,
   drawFlowerFromPlan,
   fillCmds,
   petalPassesFor,
@@ -107,10 +108,19 @@ describe("petalPassesFor", () => {
       }),
       3,
     );
+    const instructions = (node: Container): number =>
+      node.children.reduce(
+        (sum, child) =>
+          sum +
+          (child instanceof Graphics
+            ? child.context.instructions.length
+            : instructions(child)),
+        0,
+      );
     const count = (r: number): number => {
-      const g = new Graphics();
-      drawFlowerFromPlan(g, plan, r);
-      return g.context.instructions.length;
+      const plant = new Container();
+      drawFlowerFromPlan(canvasOn(plant), plan, r);
+      return instructions(plant);
     };
     expect(count(DETAIL_RADIUS - 1)).toBeLessThan(count(DETAIL_RADIUS));
     expect(count(SHADING_RADIUS - 1)).toBeLessThan(count(SHADING_RADIUS));

@@ -6,6 +6,7 @@
  */
 
 import {
+  Container,
   FillGradient,
   Graphics,
   type FillInput,
@@ -34,6 +35,34 @@ import type {
 } from "./render.ts";
 import type { StalkPlan, StalkShading, StemPlan } from "./stem.ts";
 import { GOLDEN_ANGLE, LIGHT_ANGLE, unreachable } from "./util.ts";
+
+// ── Canvas ──
+
+/**
+ * Where a plant is drawn: a Container whose children, in draw order, are
+ * Graphics segments and the nested canvases of its heads. A head is its own
+ * Container that pixi places and turns, so anything added to it shares the
+ * transform of the Graphics around it.
+ */
+export type Canvas = {
+  /** the Graphics segment that draws on top of everything added so far */
+  g(): Graphics;
+  /** a canvas on top of everything so far, at (x, y) and turned by `angle` */
+  nest(x: number, y: number, angle: number): Canvas;
+};
+
+export function canvasOn(container: Container): Canvas {
+  return {
+    g: () => {
+      const last = container.children.at(-1);
+      return last instanceof Graphics
+        ? last
+        : container.addChild(new Graphics());
+    },
+    nest: (x, y, angle) =>
+      canvasOn(container.addChild(new Container({ x, y, rotation: angle }))),
+  };
+}
 
 // ── Low-level path helpers ──
 
@@ -945,22 +974,29 @@ function drawStem(g: Graphics, stem: StemPlan, scale: number) {
  * or an arrangement member is the same head moved, scaled and tilted.
  */
 function drawHead(
-  g: Graphics,
+  canvas: Canvas,
   head: HeadPlan,
   scale: number,
   passes: PetalPasses,
 ): void {
-  drawBlades(g, head.bracts, scale);
-  drawBlades(g, head.sepals, scale);
+  drawBlades(canvas.g(), head.bracts, scale);
+  drawBlades(canvas.g(), head.sepals, scale);
   if (head.closedCentre) {
-    drawPetals(g, head.layers.slice(0, -1), scale, passes);
-    drawStamens(g, head.center.stamens, scale);
-    drawCenterDisc(g, head.center, scale);
-    drawPetals(g, head.layers.slice(-1), scale, passes, head.layers.length - 1);
+    drawPetals(canvas.g(), head.layers.slice(0, -1), scale, passes);
+    drawStamens(canvas.g(), head.center.stamens, scale);
+    drawCenterDisc(canvas.g(), head.center, scale);
+    drawPetals(
+      canvas.g(),
+      head.layers.slice(-1),
+      scale,
+      passes,
+      head.layers.length - 1,
+    );
   } else {
-    drawPetals(g, head.layers, scale, passes);
+    drawPetals(canvas.g(), head.layers, scale, passes);
   }
 
+  const g = canvas.g();
   for (const dd of head.dewdrops) {
     const dx = dd.x * scale;
     const dy = dd.y * scale;
@@ -972,14 +1008,14 @@ function drawHead(
   }
 
   if (!head.closedCentre) {
-    drawStamens(g, head.center.stamens, scale);
-    drawCenterDisc(g, head.center, scale);
+    drawStamens(canvas.g(), head.center.stamens, scale);
+    drawCenterDisc(canvas.g(), head.center, scale);
   }
 }
 
-/** drawHead translated to (x, y) and rotated by `angle`, leaving the transform as it was. */
+/** drawHead on its own canvas at (x, y), turned by `angle`. */
 function drawHeadAt(
-  g: Graphics,
+  canvas: Canvas,
   head: HeadPlan,
   x: number,
   y: number,
@@ -987,13 +1023,7 @@ function drawHeadAt(
   scale: number,
   passes: PetalPasses,
 ): void {
-  // Pixi's rotateTransform turns the accumulated matrix about the graphics
-  // origin, so the rotation must come before the translation that places the head.
-  g.save();
-  g.rotateTransform(angle);
-  g.translateTransform(x, y);
-  drawHead(g, head, scale, passes);
-  g.restore();
+  drawHead(canvas.nest(x, y, angle), head, scale, passes);
 }
 
 /** The head plan a floret draws; every floret indexes a head by construction. */
@@ -1031,7 +1061,7 @@ export type DrawFlowerOptions = {
 
 /** Draw a flower from its pre-computed plan: stem, branches and pedicels, leaves, buds, then every head back to front. */
 export function drawFlowerFromPlan(
-  g: Graphics,
+  canvas: Canvas,
   plan: FlowerPlan,
   r: number,
   options: DrawFlowerOptions = { particles: true, layer: "all" },
@@ -1043,6 +1073,7 @@ export function drawFlowerFromPlan(
   );
   const plant = options.layer !== "back";
 
+  const g = canvas.g();
   if (plan.stem) {
     const stemColor = plan.stem.color;
     if (plant) {
@@ -1061,7 +1092,7 @@ export function drawFlowerFromPlan(
 
   for (const floret of ordered) {
     drawHeadAt(
-      g,
+      canvas,
       headOf(plan, floret),
       floret.offsetX * scale,
       floret.offsetY * scale,
@@ -1071,7 +1102,7 @@ export function drawFlowerFromPlan(
     );
   }
 
-  if (options.particles && plant) drawParticles(g, plan, r);
+  if (options.particles && plant) drawParticles(canvas.g(), plan, r);
 }
 
 /** The plan's particles at this moment, in front of the flower. */
@@ -1270,12 +1301,13 @@ export function drawNectaryPulse(
 
 /** Draw a multi-flower arrangement from its pre-computed plan. */
 export function drawArrangementFromPlan(
-  g: Graphics,
+  canvas: Canvas,
   plan: ArrangementPlan,
   r: number,
 ) {
   const scale = r;
   const passes = petalPassesFor(r);
+  const g = canvas.g();
 
   // Pass 1: All stems
   for (const member of plan.members) drawStem(g, member.stem, scale);
@@ -1310,7 +1342,7 @@ export function drawArrangementFromPlan(
   // Pass 4: Flower heads (back to front — hero last so it's on top)
   for (const member of plan.members.toReversed()) {
     drawHeadAt(
-      g,
+      canvas,
       member.flowerPlan.heads[0],
       member.offsetX * scale,
       member.offsetY * scale,
