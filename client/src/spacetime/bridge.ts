@@ -110,8 +110,6 @@ export type CanvasEvents = {
     flowers: ArrangementFlower[],
     meta: ArrangementMeta | null,
   ): void;
-  /** a merge produced this arrangement: it blooms in */
-  bloom(sid: number): void;
 };
 
 const isShown = (session: FlowerSession): boolean =>
@@ -161,10 +159,6 @@ export function wireToWasm(
     pushArrangement(session.id);
     const spec = specOf(session.id);
     if (spec) place(session, spec);
-    const merged = overridesOf(session.id).some(o =>
-      o.forkedFrom.startsWith("cross:"),
-    );
-    if (merged) canvas.bloom(Number(session.id));
   });
 
   conn.db.flowerSession.onUpdate(
