@@ -1,7 +1,13 @@
+import type { ArrangementMeta } from "../flower/render.ts";
 import { readStream, parseSpec } from "../lib/utils.ts";
 import type { GardenSim } from "../wasm/loader.ts";
 import type { DbConnection, FlowerSession, FlowerSpec } from "./types.ts";
 import { isVariant } from "./types.ts";
+import {
+  arrangementFlowers,
+  arrangementMeta,
+  type ArrangementFlower,
+} from "./arrangements.ts";
 import { getMyIdentity } from "./connection.ts";
 
 /** Normalize a SpacetimeDB identity to a comparable hex string. */
@@ -69,46 +75,88 @@ function resolvePosition(
   ];
 }
 
-/// Wire SpacetimeDB table callbacks to the WASM simulation.
-/// Seeds existing rows then listens for future changes.
-export function wireToWasm(conn: DbConnection, sim: GardenSim) {
+/** A canvas point in px as the server's 0–100 position: the inverse of resolvePosition. */
+export function toServerPosition(x: number, y: number): [number, number] {
+  const { w, h, pad } = getCanvasViewport();
+  return [
+    Math.max(0, Math.min(100, ((x - pad) / (w - pad * 2)) * 100)),
+    Math.max(0, Math.min(100, ((y - pad) / (h - pad * 2)) * 100)),
+  ];
+}
+
+/** What the garden canvas needs to hear from the database besides the simulation. */
+export type CanvasEvents = {
+  /** an arrangement's flowers or AI meta changed; empty flowers for a single flower */
+  setArrangement(
+    sid: number,
+    flowers: ArrangementFlower[],
+    meta: ArrangementMeta | null,
+  ): void;
+  /** a merge produced this arrangement: it blooms in */
+  bloom(sid: number): void;
+};
+
+const isShown = (session: FlowerSession): boolean =>
+  isVariant(session.status, "Designing") && isMySession(session);
+
+/// Wire SpacetimeDB table callbacks to the WASM simulation and the canvas.
+/// The SDK applies a whole transaction to its cache before any callback
+/// runs, so a merged arrangement's flowers are readable when its session row
+/// arrives and it is drawn as an arrangement from its first frame.
+export function wireToWasm(
+  conn: DbConnection,
+  sim: GardenSim,
+  canvas: CanvasEvents,
+) {
+  const specOf = (sid: bigint): string | undefined =>
+    conn.db.flowerSpec.sessionId.find(sid)?.spec;
+  const overridesOf = (sid: bigint) => overridesFor(conn, sid);
+  const pushArrangement = (sid: bigint) => {
+    const rows = overridesOf(sid);
+    canvas.setArrangement(
+      Number(sid),
+      arrangementFlowers(rows),
+      arrangementMeta(rows),
+    );
+  };
+  const place = (session: FlowerSession, spec: string) => {
+    const count = sim.flower_count() + 1;
+    const [x, y] = resolvePosition(session, count, count);
+    sim.upsert_flower(session.id, spec, x, y);
+  };
+
   // Seed existing sessions owned by the current user
-  const existing = [...conn.db.flowerSession.iter()].filter(
-    s => isVariant(s.status, "Designing") && isMySession(s),
-  );
-  const specLookup = [...conn.db.flowerSpec.iter()].reduce(
-    (acc, spec) => acc.set(spec.sessionId, spec.spec),
-    new Map<bigint, string>(),
-  );
+  const existing = [...conn.db.flowerSession.iter()].filter(isShown);
   existing.map((session, i) => {
+    pushArrangement(session.id);
+    const spec = specOf(session.id);
+    if (!spec) return session.id;
     const [x, y] = resolvePosition(session, i, existing.length);
-    sim.upsert_flower(session.id, specLookup.get(session.id) ?? "", x, y);
+    sim.upsert_flower(session.id, spec, x, y);
     return session.id;
   });
 
   conn.db.flowerSession.onInsert((_ctx, session: FlowerSession) => {
-    if (isVariant(session.status, "Designing") && isMySession(session)) {
-      const count = sim.flower_count() + 1;
-      const [x, y] = resolvePosition(session, count, count);
-      const spec = [...conn.db.flowerSpec.iter()].find(
-        s => s.sessionId === session.id,
-      );
-      sim.upsert_flower(session.id, spec?.spec ?? "", x, y);
-    }
+    if (!isShown(session)) return;
+    pushArrangement(session.id);
+    const spec = specOf(session.id);
+    if (spec) place(session, spec);
+    const merged = overridesOf(session.id).some(o =>
+      o.forkedFrom.startsWith("cross:"),
+    );
+    if (merged) canvas.bloom(Number(session.id));
   });
 
   conn.db.flowerSession.onUpdate(
-    (_ctx, _old: FlowerSession, next: FlowerSession) => {
+    (_ctx, old: FlowerSession, next: FlowerSession) => {
       if (isVariant(next.status, "Complete")) {
         sim.wilt_flower(next.id);
-      } else {
-        const count = sim.flower_count();
-        const [x, y] = resolvePosition(next, count, count);
-        const spec = [...conn.db.flowerSpec.iter()].find(
-          s => s.sessionId === next.id,
-        );
-        sim.upsert_flower(next.id, spec?.spec ?? "", x, y);
+        return;
       }
+      // Only a new server position moves a flower: physics owns it otherwise.
+      if (old.canvasX === next.canvasX && old.canvasY === next.canvasY) return;
+      const [x, y] = resolvePosition(next, 0, 1);
+      sim.set_body_position(next.id, x, y);
     },
   );
 
@@ -116,75 +164,62 @@ export function wireToWasm(conn: DbConnection, sim: GardenSim) {
     sim.remove_flower(session.id);
   });
 
-  conn.db.flowerSpec.onInsert((_ctx, spec: FlowerSpec) => {
-    const session = [...conn.db.flowerSession.iter()].find(
-      s => s.id === spec.sessionId && isVariant(s.status, "Designing"),
-    );
-    if (session) {
-      const count = sim.flower_count();
-      const [x, y] = resolvePosition(session, count, count);
-      sim.upsert_flower(session.id, spec.spec, x, y);
-    }
-  });
+  const onSpec = (spec: FlowerSpec) => {
+    const session = conn.db.flowerSession.id.find(spec.sessionId);
+    if (!session || !isShown(session)) return;
+    if (!sim.update_spec(session.id, spec.spec)) place(session, spec.spec);
+  };
+  conn.db.flowerSpec.onInsert((_ctx, spec: FlowerSpec) => onSpec(spec));
+  conn.db.flowerSpec.onUpdate((_ctx, _old, next: FlowerSpec) => onSpec(next));
 
-  conn.db.flowerSpec.onUpdate((_ctx, _old: FlowerSpec, next: FlowerSpec) => {
-    const session = [...conn.db.flowerSession.iter()].find(
-      s => s.id === next.sessionId && isVariant(s.status, "Designing"),
-    );
-    if (session) {
-      const count = sim.flower_count();
-      const [x, y] = resolvePosition(session, count, count);
-      sim.upsert_flower(session.id, next.spec, x, y);
-    }
-  });
+  const onOverride = (o: { sessionId: bigint }) => pushArrangement(o.sessionId);
+  conn.db.partOverride.onInsert((_ctx, o) => onOverride(o));
+  conn.db.partOverride.onUpdate((_ctx, _old, o) => onOverride(o));
+  conn.db.partOverride.onDelete((_ctx, o) => onOverride(o));
 
   console.log("[bridge] SpacetimeDB → WASM wired");
 }
 
-/// Handle a merge event from the WASM simulation.
-/// Calls the AI combine endpoint, then the SpacetimeDB merge_sessions reducer.
+/// Merge flower A into flower B at `at`, a 0–100 server position, or where B
+/// stands when null. The arrangement exists at once; the AI's name and
+/// container are asked for afterwards and fill it in when they arrive.
+/// False when the server refused the merge.
 export async function handleMerge(
   conn: DbConnection,
   sessionAId: number,
   sessionBId: number,
-): Promise<void> {
-  let specA: FlowerSpec | null = null;
-  let specB: FlowerSpec | null = null;
-  for (const spec of conn.db.flowerSpec.iter()) {
-    if (Number(spec.sessionId) === sessionAId) specA = spec;
-    if (Number(spec.sessionId) === sessionBId) specB = spec;
+  at: [number, number] | null,
+): Promise<boolean> {
+  const specA = conn.db.flowerSpec.sessionId.find(BigInt(sessionAId));
+  const specB = conn.db.flowerSpec.sessionId.find(BigInt(sessionBId));
+  const sessionA = conn.db.flowerSession.id.find(BigInt(sessionAId));
+  const sessionB = conn.db.flowerSession.id.find(BigInt(sessionBId));
+  if (!specA || !specB || !sessionA || !sessionB) {
+    console.warn("[merge] Missing session", sessionAId, "or", sessionBId);
+    return false;
   }
 
-  if (!specA || !specB) {
-    console.warn(
-      "[merge] Missing spec for session",
-      sessionAId,
-      "or",
-      sessionBId,
-    );
-    return;
-  }
-
-  let sessionA: FlowerSession | null = null;
-  let sessionB: FlowerSession | null = null;
-  for (const s of conn.db.flowerSession.iter()) {
-    if (Number(s.id) === sessionAId) sessionA = s;
-    if (Number(s.id) === sessionBId) sessionB = s;
+  const [x, y] = at ?? [sessionB.canvasX, sessionB.canvasY];
+  try {
+    await conn.reducers.mergeSessions({
+      sessionAId: BigInt(sessionAId),
+      sessionBId: BigInt(sessionBId),
+      x,
+      y,
+    });
+  } catch (err) {
+    console.error("[merge] Refused:", err);
+    return false;
   }
 
   const totalCount =
-    Number(sessionA?.flowerCount ?? 1) + Number(sessionB?.flowerCount ?? 1);
-  const level = levelForCount(totalCount);
-
-  // Look up existing arrangement overrides for parent adornment inheritance (single pass)
-  const targetSids = new Set([sessionAId, sessionBId]);
-  const parentAdornments: unknown[] = [];
-  for (const o of conn.db.partOverride.iter()) {
-    if (targetSids.has(Number(o.sessionId)) && o.partPath === "arrangement") {
-      const parsed = parseSpec(o.overrideJson);
-      if (parsed) parentAdornments.push(parsed);
-    }
-  }
+    Number(sessionA.flowerCount) + Number(sessionB.flowerCount);
+  const parentAdornments = [
+    ...overridesFor(conn, sessionA.id),
+    ...overridesFor(conn, sessionB.id),
+  ]
+    .filter(o => o.partPath === "arrangement")
+    .flatMap(o => parseSpec(o.overrideJson) ?? []);
 
   try {
     const res = await fetch("/api/flower/combine", {
@@ -194,33 +229,26 @@ export async function handleMerge(
         spec_a: parseSpec(specA.spec),
         spec_b: parseSpec(specB.spec),
         total_count: totalCount,
-        level,
+        level: levelForCount(totalCount),
         parent_adornments:
           parentAdornments.length > 0 ? parentAdornments : undefined,
       }),
     });
-
-    const arrangementJson = await readStream(res);
-
-    await conn.reducers.mergeSessions({
+    if (!res.ok) throw new Error(`combine answered ${res.status}`);
+    await conn.reducers.setMergeArrangement({
       sessionAId: BigInt(sessionAId),
       sessionBId: BigInt(sessionBId),
-      aiArrangementJson: arrangementJson,
+      aiArrangementJson: await readStream(res),
     });
-
-    console.log(
-      "[merge] Merged",
-      sessionAId,
-      "+",
-      sessionBId,
-      "→ total",
-      totalCount,
-      "flowers",
-    );
   } catch (err) {
-    console.error("[merge] Failed:", err);
+    // The arrangement stands without the AI's name and container.
+    console.error("[merge] Arrangement details failed:", err);
   }
+  return true;
 }
+
+const overridesFor = (conn: DbConnection, sid: bigint) =>
+  [...conn.db.partOverride.iter()].filter(o => o.sessionId === sid);
 
 function levelForCount(count: number): string {
   if (count <= 1) return "stem";

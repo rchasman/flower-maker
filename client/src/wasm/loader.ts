@@ -13,6 +13,8 @@ export interface GardenSim {
     x: number,
     y: number,
   ): void;
+  /** New spec where the flower stands; false when the flower is not in the simulation yet. */
+  update_spec(session_id: bigint, spec_yaml: string): boolean;
   wilt_flower(session_id: bigint): void;
   remove_flower(session_id: bigint): void;
   tick(dt: number): number;
@@ -57,6 +59,11 @@ function createStub(): GardenSim {
   return {
     upsert_flower(sid: bigint, spec: string, x: number, y: number) {
       flowers.set(Number(sid), { x, y, spec });
+    },
+    update_spec(sid: bigint, spec: string) {
+      const f = flowers.get(Number(sid));
+      if (f) f.spec = spec;
+      return f !== undefined;
     },
     wilt_flower(sid: bigint) {
       flowers.delete(Number(sid));

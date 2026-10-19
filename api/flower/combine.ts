@@ -1,5 +1,5 @@
 import { streamText, Output, gateway } from "ai";
-import { DEFAULT_MODEL } from "../config/models";
+import { ARRANGEMENT_MODEL } from "../config/models";
 import { z } from "zod";
 
 const COMBINE_SYSTEM_PROMPT = `You are an expert florist describing what happens when flowers are combined into arrangements. Given two flower specs and their counts, describe what the combination becomes.
@@ -102,7 +102,6 @@ export async function handleCombine(request: Request) {
     total_count: number;
     level: string;
     parent_adornments?: unknown[];
-    model?: string;
   };
 
   const inheritanceContext =
@@ -111,7 +110,7 @@ export async function handleCombine(request: Request) {
       : "";
 
   const result = streamText({
-    model: gateway(body.model ?? DEFAULT_MODEL),
+    model: gateway(ARRANGEMENT_MODEL),
     system: COMBINE_SYSTEM_PROMPT,
     output: Output.object({ schema: ArrangementSchema }),
     prompt: `Combine these flowers into a ${body.level} arrangement (${body.total_count} total flowers):

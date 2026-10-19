@@ -35,7 +35,7 @@ pub fn cross(parent_a: &FlowerSpec, parent_b: &FlowerSpec, seed: u64) -> FlowerS
     let symmetry_parent = if next() > 0.5 { parent_a } else { parent_b };
 
     FlowerSpec {
-        name: format!("{} × {}", parent_a.name, parent_b.name),
+        name: hybrid_name(&parent_a.name, &parent_b.name),
         species: if next() > 0.5 { parent_a.species.clone() } else { parent_b.species.clone() },
         taxonomy: petal_parent.taxonomy.clone(),
         petals: PetalSystem {
@@ -112,6 +112,15 @@ pub fn cross(parent_a: &FlowerSpec, parent_b: &FlowerSpec, seed: u64) -> FlowerS
     }
 }
 
+/// A hybrid is named for its two parents' own names. A parent that is itself
+/// a hybrid lends its seed parent's name, so a line of crosses stays two names
+/// long instead of chaining every ancestor.
+pub fn hybrid_name(a: &str, b: &str) -> String {
+    let own = |name: &str| name.split(" × ").next().unwrap_or(name).trim().to_string();
+    let (a, b) = (own(a), own(b));
+    if a == b { a } else { format!("{a} × {b}") }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -162,5 +171,16 @@ mod tests {
             assert!(matches!(child.petals.stage, LifeStage::Bloom));
             assert!((1..=7).contains(&child.inflorescence.head_count), "seed {seed}: {}", child.inflorescence.head_count);
         });
+    }
+
+    #[test]
+    fn a_line_of_crosses_keeps_a_two_part_name() {
+        let named = |name: &str| FlowerSpec { name: name.to_string(), ..parent(FlowerFamily::Rosaceae, 5, 1) };
+        let first = cross(&named("Wild Star"), &named("Velvet Orchid"), 1);
+        assert_eq!(first.name, "Wild Star × Velvet Orchid");
+        let second = cross(&first, &named("Garden Tulip"), 2);
+        assert_eq!(second.name, "Wild Star × Garden Tulip");
+        let selfed = cross(&named("Garden Tulip"), &named("Garden Tulip"), 3);
+        assert_eq!(selfed.name, "Garden Tulip");
     }
 }

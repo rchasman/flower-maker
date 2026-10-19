@@ -12,57 +12,31 @@
 import { Filter } from "pixi.js";
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 1. MERGE GLOW — soft radial glow on newly merged arrangements
+// 1. MERGE GLOW — a warm glow over the flower a merge lands on
 //    Apply on merge, animate intensity 1.0 → 0.0 over 2 seconds
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const MERGE_GLOW_FRAG = /* glsl */ `
+const MERGE_GLOW_FRAG = /* glsl */ `
 in vec2 vTextureCoord;
 out vec4 finalColor;
 
 uniform sampler2D uTexture;
 uniform float uIntensity;
 uniform vec3 uGlowColor;
-uniform float uRadius;
 
 void main() {
     vec4 color = texture(uTexture, vTextureCoord);
-
-    // Distance from center (0,0 at center, 1.0 at edge)
-    vec2 center = vec2(0.5, 0.5);
-    float dist = distance(vTextureCoord, center) * 2.0;
-
-    // Soft radial glow falloff
-    float glow = exp(-dist * dist / (uRadius * uRadius)) * uIntensity;
-
-    // Additive blend with glow color
-    vec3 glowContribution = uGlowColor * glow * 0.6;
-    color.rgb += glowContribution;
-
-    // Slight alpha boost near center for luminance feel
-    color.a = min(1.0, color.a + glow * 0.3);
-
+    // Colors are premultiplied: the glow lights the flower's own pixels in
+    // proportion to their coverage, so the empty frame around it stays clear.
+    color.rgb += uGlowColor * uIntensity * 0.6 * color.a;
     finalColor = color;
 }
 `;
 
-export interface MergeGlowUniforms {
-  uIntensity: number; // 0.0 - 1.0, animate from 1.0 to 0.0
-  uGlowColor: [number, number, number]; // RGB 0-1
-  uRadius: number; // glow spread, default 0.8
-}
-
-export const MERGE_GLOW_DEFAULTS: MergeGlowUniforms = {
-  uIntensity: 1.0,
-  uGlowColor: [1.0, 0.85, 0.4], // warm gold
-  uRadius: 0.8,
-};
+const MERGE_GLOW_COLOR: [number, number, number] = [1.0, 0.85, 0.4]; // warm gold
 
 /** Create a PixiJS v8 Filter for merge glow effect. */
-export function createMergeGlowFilter(
-  overrides?: Partial<MergeGlowUniforms>,
-): Filter {
-  const defaults = { ...MERGE_GLOW_DEFAULTS, ...overrides };
+export function createMergeGlowFilter(): Filter {
   return Filter.from({
     gl: {
       vertex: defaultFilterVert(),
@@ -70,12 +44,11 @@ export function createMergeGlowFilter(
     },
     resources: {
       mergeGlowUniforms: {
-        uIntensity: { value: defaults.uIntensity, type: "f32" },
+        uIntensity: { value: 1, type: "f32" },
         uGlowColor: {
-          value: new Float32Array(defaults.uGlowColor),
+          value: new Float32Array(MERGE_GLOW_COLOR),
           type: "vec3<f32>",
         },
-        uRadius: { value: defaults.uRadius, type: "f32" },
       },
     },
   });

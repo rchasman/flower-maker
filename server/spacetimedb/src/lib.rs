@@ -656,12 +656,44 @@ fn arrangement_level_for_count(count: u32) -> u32 {
     }
 }
 
+/// The most flowers one arrangement holds. A merge past it keeps an even share of each parent's flowers.
+const MAX_CONSTITUENTS: usize = 12;
+
+/// A session's flowers as spec YAML: its constituents when it is an arrangement, its own spec when it is one flower.
+fn flowers_of(ctx: &ReducerContext, session_id: u64) -> Vec<String> {
+    let mut constituents: Vec<(u32, String)> = ctx.db.part_override().idx_override_session().filter(session_id)
+        .filter_map(|o| {
+            let index = o.part_path.strip_prefix("constituent:")?.parse::<u32>().ok()?;
+            Some((index, o.override_json))
+        })
+        .collect();
+    constituents.sort_by_key(|(index, _)| *index);
+    if constituents.is_empty() {
+        ctx.db.flower_spec().session_id().find(session_id).map(|s| s.spec).into_iter().collect()
+    } else {
+        constituents.into_iter().map(|(_, spec)| spec).collect()
+    }
+}
+
+/// Both parents' flowers taken in turn, so each lineage shows when the cap cuts, with room left for the hybrid.
+fn merged_flowers(a: Vec<String>, b: Vec<String>) -> Vec<String> {
+    let longest = a.len().max(b.len());
+    (0..longest)
+        .flat_map(|i| [a.get(i).cloned(), b.get(i).cloned()])
+        .flatten()
+        .take(MAX_CONSTITUENTS - 1)
+        .collect()
+}
+
+/// Merge two flowers into an arrangement at (x, y) on the 0–100 canvas, where the player dropped them.
+/// The AI's name and container arrive later through `set_merge_arrangement`.
 #[spacetimedb::reducer]
 pub fn merge_sessions(
     ctx: &ReducerContext,
     session_a_id: u64,
     session_b_id: u64,
-    ai_arrangement_json: String,
+    x: f64,
+    y: f64,
 ) -> Result<(), String> {
     // Both sessions must be owned by the caller and in Designing status
     let session_a = require_session_owner(ctx, session_a_id)?;
@@ -690,29 +722,26 @@ pub fn merge_sessions(
     let child_yaml = serde_yaml::to_string(&child)
         .map_err(|e| format!("Failed to serialize child: {e}"))?;
 
-    // Combined stats
-    let total_flowers = session_a.flower_count + session_b.flower_count;
+    let flowers: Vec<(String, String)> = merged_flowers(flowers_of(ctx, session_a_id), flowers_of(ctx, session_b_id))
+        .into_iter()
+        .map(|spec| (spec, format!("merge:{}+{}", session_a_id, session_b_id)))
+        .chain(std::iter::once((child_yaml.clone(), format!("cross:{}+{}", session_a_id, session_b_id))))
+        .collect();
+    let total_flowers = flowers.len() as u32;
     let new_generation = session_a.generation.max(session_b.generation) + 1;
-    let new_level = arrangement_level_for_count(total_flowers);
-    let mid_x = (session_a.canvas_x + session_b.canvas_x) / 2.0;
-    let mid_y = (session_a.canvas_y + session_b.canvas_y) / 2.0;
 
-    // Create child session
     let child_session = ctx.db.flower_session().insert(FlowerSession {
         id: 0,
         owner: ctx.sender(),
         created_at: ctx.timestamp,
         status: SessionStatus::Designing,
-        prompt: format!("{} × {}", session_a.prompt, session_b.prompt),
-        canvas_x: mid_x,
-        canvas_y: mid_y,
-        arrangement_level: new_level,
+        prompt: child.name.clone(),
+        canvas_x: x.clamp(0.0, 100.0),
+        canvas_y: y.clamp(0.0, 100.0),
+        arrangement_level: arrangement_level_for_count(total_flowers),
         flower_count: total_flowers,
         generation: new_generation,
     });
-
-    // Clone child_yaml before moving into FlowerSpec — needed for constituent override below
-    let child_yaml_for_constituent = child_yaml.clone();
 
     ctx.db.flower_spec().insert(FlowerSpec {
         session_id: child_session.id,
@@ -721,68 +750,16 @@ pub fn merge_sessions(
         updated_at: ctx.timestamp,
     });
 
-    // Store AI arrangement as a part override on the child
-    if !ai_arrangement_json.is_empty() {
+    // The parents' flowers in turn, then the hybrid last, so a member keeps its slot as the arrangement grows.
+    for (index, (spec, forked_from)) in flowers.into_iter().enumerate() {
         ctx.db.part_override().insert(FlowerPartOverride {
             id: 0,
             session_id: child_session.id,
-            part_path: "arrangement".to_string(),
-            override_json: ai_arrangement_json,
-            forked_from: format!("merge:{}+{}", session_a_id, session_b_id),
+            part_path: format!("constituent:{index}"),
+            override_json: spec,
+            forked_from,
             created_at: ctx.timestamp,
         });
-    }
-
-    // Preserve constituent flower specs so arrangements render all flowers.
-    // constituent:0 = hero (crossed genetics child), then parent constituents follow.
-    let mut constituent_idx: u32 = 0;
-
-    // Hero flower is constituent:0
-    ctx.db.part_override().insert(FlowerPartOverride {
-        id: 0,
-        session_id: child_session.id,
-        part_path: format!("constituent:{constituent_idx}"),
-        override_json: child_yaml_for_constituent,
-        forked_from: format!("cross:{}+{}", session_a_id, session_b_id),
-        created_at: ctx.timestamp,
-    });
-    constituent_idx += 1;
-
-    // Collect constituents from each parent (propagate if parent is already an arrangement)
-    for parent_id in [session_a_id, session_b_id] {
-        let parent_constituents: Vec<String> = ctx.db.part_override().iter()
-            .filter(|o| o.session_id == parent_id && o.part_path.starts_with("constituent:"))
-            .map(|o| o.override_json.clone())
-            .collect();
-
-        if parent_constituents.is_empty() {
-            // Parent is a single flower — use its spec directly
-            let parent_spec = ctx.db.flower_spec().session_id().find(parent_id);
-            if let Some(ps) = parent_spec {
-                ctx.db.part_override().insert(FlowerPartOverride {
-                    id: 0,
-                    session_id: child_session.id,
-                    part_path: format!("constituent:{constituent_idx}"),
-                    override_json: ps.spec.clone(),
-                    forked_from: format!("parent:{parent_id}"),
-                    created_at: ctx.timestamp,
-                });
-                constituent_idx += 1;
-            }
-        } else {
-            // Parent is an arrangement — propagate all its constituents
-            for spec in parent_constituents {
-                ctx.db.part_override().insert(FlowerPartOverride {
-                    id: 0,
-                    session_id: child_session.id,
-                    part_path: format!("constituent:{constituent_idx}"),
-                    override_json: spec,
-                    forked_from: format!("parent:{parent_id}"),
-                    created_at: ctx.timestamp,
-                });
-                constituent_idx += 1;
-            }
-        }
     }
 
     // Archive parents
@@ -803,10 +780,43 @@ pub fn merge_sessions(
     }
 
     log::info!(
-        "Merged sessions {} + {} → {} (gen {}, {} flowers, level {})",
+        "Merged sessions {} + {} → {} (gen {}, {} flowers)",
         session_a_id, session_b_id, child_session.id,
-        new_generation, total_flowers, new_level
+        new_generation, total_flowers
     );
+    Ok(())
+}
+
+/// The AI's name, description and container for the arrangement merged from sessions a and b.
+#[spacetimedb::reducer]
+pub fn set_merge_arrangement(
+    ctx: &ReducerContext,
+    session_a_id: u64,
+    session_b_id: u64,
+    ai_arrangement_json: String,
+) -> Result<(), String> {
+    let hybrid = format!("cross:{}+{}", session_a_id, session_b_id);
+    let child_id = ctx.db.part_override().iter()
+        .find(|o| o.forked_from == hybrid)
+        .map(|o| o.session_id)
+        .ok_or_else(|| format!("No arrangement merged from {session_a_id} and {session_b_id}"))?;
+    require_session_owner(ctx, child_id)?;
+
+    let existing: Vec<u64> = ctx.db.part_override().idx_override_session().filter(child_id)
+        .filter(|o| o.part_path == "arrangement")
+        .map(|o| o.id)
+        .collect();
+    for id in existing {
+        ctx.db.part_override().id().delete(id);
+    }
+    ctx.db.part_override().insert(FlowerPartOverride {
+        id: 0,
+        session_id: child_id,
+        part_path: "arrangement".to_string(),
+        override_json: ai_arrangement_json,
+        forked_from: format!("merge:{}+{}", session_a_id, session_b_id),
+        created_at: ctx.timestamp,
+    });
     Ok(())
 }
 

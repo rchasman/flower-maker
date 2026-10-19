@@ -96,3 +96,6 @@ export const MODEL_MAP: Record<string, string> = Object.fromEntries(
 export const DEFAULT_MODEL = "typesafe-ai/jev";
 
 export const JEV_MODEL = "typesafe-ai/jev";
+
+/** Names and dresses a merged arrangement. It writes text, which Jev cannot, so it is not the default. */
+export const ARRANGEMENT_MODEL = "anthropic/claude-haiku-4.5";

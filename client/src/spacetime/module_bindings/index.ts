@@ -44,6 +44,7 @@ import MergeSessionsReducer from "./merge_sessions_reducer";
 import PlaceOrderReducer from "./place_order_reducer";
 import RemoveConstituentReducer from "./remove_constituent_reducer";
 import SendChatReducer from "./send_chat_reducer";
+import SetMergeArrangementReducer from "./set_merge_arrangement_reducer";
 import SetNameReducer from "./set_name_reducer";
 import SplitConstituentReducer from "./split_constituent_reducer";
 import UpdateFlowerSpecReducer from "./update_flower_spec_reducer";
@@ -150,6 +151,7 @@ const reducersSchema = __reducers(
   __reducerSchema("place_order", PlaceOrderReducer),
   __reducerSchema("remove_constituent", RemoveConstituentReducer),
   __reducerSchema("send_chat", SendChatReducer),
+  __reducerSchema("set_merge_arrangement", SetMergeArrangementReducer),
   __reducerSchema("set_name", SetNameReducer),
   __reducerSchema("split_constituent", SplitConstituentReducer),
   __reducerSchema("update_flower_spec", UpdateFlowerSpecReducer),

@@ -76,7 +76,20 @@ export class GardenSimulation {
         return ret;
     }
     /**
-     * Add or update a flower from SpacetimeDB data
+     * Give a flower a new spec where it stands; a spec update is not a move.
+     * False when there is no such flower yet, so the caller adds it instead.
+     * @param {bigint} session_id
+     * @param {string} spec_yaml
+     * @returns {boolean}
+     */
+    update_spec(session_id, spec_yaml) {
+        const ptr0 = passStringToWasm0(spec_yaml, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.gardensimulation_update_spec(this.__wbg_ptr, session_id, ptr0, len0);
+        return ret !== 0;
+    }
+    /**
+     * Add a flower at (x, y), or move an existing one there with its new spec.
      * @param {bigint} session_id
      * @param {string} spec_yaml
      * @param {number} x
@@ -88,7 +101,7 @@ export class GardenSimulation {
         wasm.gardensimulation_upsert_flower(this.__wbg_ptr, session_id, ptr0, len0, x, y);
     }
     /**
-     * Start wilt-out animation for a flower (it will be removed after animation completes)
+     * Start the wilt-out animation; a wilting flower no longer pushes the others.
      * @param {bigint} session_id
      */
     wilt_flower(session_id) {

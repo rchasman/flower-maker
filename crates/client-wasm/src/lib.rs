@@ -37,25 +37,14 @@ impl GardenSimulation {
         }
     }
 
-    /// Add or update a flower from SpacetimeDB data
+    /// Add a flower at (x, y), or move an existing one there with its new spec.
     pub fn upsert_flower(&mut self, session_id: u64, spec_yaml: &str, x: f32, y: f32) {
-        let spec = match serde_yaml::from_str::<FlowerSpec>(spec_yaml) {
-            Ok(s) => s,
-            Err(e) => {
-                web_sys::console::error_1(&format!("[wasm] spec parse failed for sid={session_id}: {e}").into());
-                return;
-            }
-        };
-        let (radius, mass) = body_params(&spec);
-        if let Some(flower) = self.flowers.iter_mut().find(|f| f.session_id == session_id) {
-            if self.world.body_matches(flower.body_handle, radius, mass) {
-                self.world.set_position(flower.body_handle, x, y);
-            } else {
-                self.world.remove_body(flower.body_handle);
-                flower.body_handle = self.world.add_body(x, y, radius, mass, session_id);
-            }
-            flower.spec = spec;
+        let Some(spec) = parse_spec(session_id, spec_yaml) else { return };
+        if self.flowers.iter().any(|f| f.session_id == session_id) {
+            self.apply_spec(session_id, spec);
+            self.set_body_position(session_id, x, y);
         } else {
+            let (radius, mass) = body_params(&spec);
             let handle = self.world.add_body(x, y, radius, mass, session_id);
             self.flowers.push(FlowerInstance {
                 session_id,
@@ -66,10 +55,23 @@ impl GardenSimulation {
         }
     }
 
-    /// Start wilt-out animation for a flower (it will be removed after animation completes)
+    /// Give a flower a new spec where it stands; a spec update is not a move.
+    /// False when there is no such flower yet, so the caller adds it instead.
+    pub fn update_spec(&mut self, session_id: u64, spec_yaml: &str) -> bool {
+        if !self.flowers.iter().any(|f| f.session_id == session_id) {
+            return false;
+        }
+        if let Some(spec) = parse_spec(session_id, spec_yaml) {
+            self.apply_spec(session_id, spec);
+        }
+        true
+    }
+
+    /// Start the wilt-out animation; a wilting flower no longer pushes the others.
     pub fn wilt_flower(&mut self, session_id: u64) {
         if let Some(flower) = self.flowers.iter_mut().find(|f| f.session_id == session_id) {
             flower.anim.start_wilt();
+            self.world.set_ghost(flower.body_handle);
         }
     }
 
@@ -79,6 +81,18 @@ impl GardenSimulation {
             let flower = self.flowers.remove(idx);
             self.world.remove_body(flower.body_handle);
         }
+    }
+
+    /// The new spec on an existing flower, rebuilding its body in place when its size changes.
+    fn apply_spec(&mut self, session_id: u64, spec: FlowerSpec) {
+        let (radius, mass) = body_params(&spec);
+        let Some(flower) = self.flowers.iter_mut().find(|f| f.session_id == session_id) else { return };
+        if !self.world.body_matches(flower.body_handle, radius, mass) {
+            let (x, y) = self.world.position(flower.body_handle);
+            self.world.remove_body(flower.body_handle);
+            flower.body_handle = self.world.add_body(x, y, radius, mass, session_id);
+        }
+        flower.spec = spec;
     }
 
     /// Advance physics + animations by dt seconds. Returns active flower count.
@@ -157,6 +171,14 @@ impl GardenSimulation {
     pub fn time_of_day(&self) -> f64 { self.physics.time_of_day }
 }
 
+fn parse_spec(session_id: u64, spec_yaml: &str) -> Option<FlowerSpec> {
+    serde_yaml::from_str::<FlowerSpec>(spec_yaml)
+        .map_err(|e| {
+            web_sys::console::error_1(&format!("[wasm] spec parse failed for sid={session_id}: {e}").into());
+        })
+        .ok()
+}
+
 /// Extract the dominant petal color from a FlowerSpec as (r, g, b) in 0.0–1.0.
 fn primary_petal_color(spec: &FlowerSpec) -> (f32, f32, f32) {
     spec.petals.layers.first()
@@ -205,5 +227,28 @@ mod tests {
         sim.upsert_flower(7, &spray_yaml(3), 5.0, 6.0);
         assert_eq!(sim.flowers[0].body_handle, handle);
         assert_eq!(sim.world.position(handle), (5.0, 6.0));
+    }
+
+    #[test]
+    fn a_spec_update_leaves_the_flower_where_it_stands() {
+        let mut sim = GardenSimulation::new();
+        sim.upsert_flower(7, &spray_yaml(1), 10.0, 20.0);
+        sim.set_body_position(7, 40.0, 50.0);
+        assert!(sim.update_spec(7, &spray_yaml(7)));
+        assert!(!sim.update_spec(8, &spray_yaml(7)));
+        assert_eq!(sim.world.position(sim.flowers[0].body_handle), (40.0, 50.0));
+    }
+
+    #[test]
+    fn a_wilting_flower_stops_pushing_its_neighbour() {
+        let mut sim = GardenSimulation::new();
+        sim.upsert_flower(1, &spray_yaml(1), 0.0, 0.0);
+        sim.upsert_flower(2, &spray_yaml(1), 1.0, 0.0);
+        sim.wilt_flower(1);
+        for _ in 0..30 {
+            sim.world.step(1.0 / 60.0);
+        }
+        let (x, _) = sim.world.position(sim.flowers[1].body_handle);
+        assert!((x - 1.0).abs() < 1e-3, "the neighbour moved to {x}");
     }
 }
