@@ -49,6 +49,7 @@ describe("petalPassesFor", () => {
     marks: true,
     gradient: true,
     depthShadow: true,
+    folds: true,
   };
 
   test("a flower at or above the detail radius gets every pass", () => {
@@ -71,13 +72,14 @@ describe("petalPassesFor", () => {
     });
   });
 
-  test("below the shading radius the gradient partials and depth shadows go too", () => {
+  test("below the shading radius the gradient partials, depth shadows and folds go too", () => {
     expect(petalPassesFor(SHADING_RADIUS - 1)).toEqual({
       texture: false,
       veins: false,
       marks: false,
       gradient: false,
       depthShadow: false,
+      folds: false,
     });
   });
 

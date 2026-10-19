@@ -39,6 +39,7 @@ import {
   type Floret,
   type InflorescenceLayout,
 } from "./inflorescence.ts";
+import { generatePetalFolds } from "./folds.ts";
 import { generatePetalMarks, type PetalMark } from "./patterns.ts";
 import {
   createPetalFrame,
@@ -216,6 +217,8 @@ export type PetalPlan = {
   angle: number;
   veinCmds: DrawCmd[];
   marks: readonly PetalMark[];
+  /** light and shade on the waves of a buckled margin, empty for a flat one */
+  folds: readonly PetalMark[];
   color: number;
   highlightColor: number;
   outlineColor: number;
@@ -1313,6 +1316,9 @@ const RACEME_ARCH = 0.02;
 const PETAL_FORESHORTEN = 0.85;
 /** back florets are drawn this much darker */
 const BACK_SHADE = 0.92;
+/** Strongest alpha of a fold lobe turned away from the light, and of one turned toward it. */
+const FOLD_SHADE_ALPHA = 0.6;
+const FOLD_LIGHT_ALPHA = 0.4;
 /** adjacent petals of a spiralled ring overlap by this share of their width */
 const SPIRAL_OVERLAP = 0.38;
 /** each inner ring of a spiralled bloom sits this much deeper in the cup */
@@ -1581,6 +1587,20 @@ function buildHead(src: HeadSource, stage: LifeStage, back: boolean): HeadPlan {
           },
           frame,
           sidHash(sid, 800 + layerIdx * 100 + i),
+        ),
+        folds: generatePetalFolds(frame, Math.cos(angle - LIGHT_ANGLE)).map(
+          fold =>
+            fold.shade < 0
+              ? {
+                  cmds: fold.cmds,
+                  color: darkenColor(lit, 0.55),
+                  alpha: -fold.shade * FOLD_SHADE_ALPHA,
+                }
+              : {
+                  cmds: fold.cmds,
+                  color: lightenColor(lit, 0.35),
+                  alpha: fold.shade * FOLD_LIGHT_ALPHA,
+                },
         ),
         color: lit,
         highlightColor: lightenColor(lit, 0.18),

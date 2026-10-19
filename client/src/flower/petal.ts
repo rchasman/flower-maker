@@ -5,6 +5,7 @@
 
 import type { EdgeStyle, PetalShape } from "../data/flower-enums.ts";
 import { assembleOutline, type DrawCmd, type Vec2 } from "./geometry.ts";
+import { lerp, sidHash, smoothstep, steps } from "./util.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Petal shape profiles — width at position t ∈ [0,1] (base→tip)
@@ -134,14 +135,15 @@ function shapeProfile(shape: PetalShape, t: number): number {
 // Edge modifiers — perturbation multiplied onto petal width
 // ═══════════════════════════════════════════════════════════════════════════
 
-const EDGE_MODIFIERS: Record<EdgeStyle, (t: number, seed: number) => number> = {
+/** Edges whose waves come from the margin buckling, not from cuts in the outline. */
+type BuckledEdge = "Undulate" | "Ruffled" | "Crisped";
+type CutEdge = Exclude<EdgeStyle, BuckledEdge>;
+
+const EDGE_MODIFIERS: Record<CutEdge, (t: number, seed: number) => number> = {
   Smooth: () => 1,
-  Ruffled: (t, seed) => 1 + Math.sin(t * 14 + seed * 7) * 0.18,
   Fringed: (t, seed) => 1 + (Math.sin(t * 24 + seed * 3) > 0.2 ? 0.14 : -0.07),
   Serrated: (t, seed) => 1 + ((t * 10 + seed * 0.1) % 1 < 0.5 ? 0.12 : -0.06),
   Rolled: t => 1 - t * 0.12,
-  Undulate: (t, seed) => 1 + Math.sin(t * 8 + seed * 5) * 0.12,
-  Crisped: (t, seed) => 1 + Math.sin(t * 20 + seed * 4) * 0.09,
   Lacerate: (t, seed) =>
     1 + Math.sin(t * 9 + seed * 3) * Math.cos(t * 13 + seed * 7) * 0.18,
   Lobed: (t, seed) =>
@@ -150,11 +152,113 @@ const EDGE_MODIFIERS: Record<EdgeStyle, (t: number, seed: number) => number> = {
   Revolute: t => (t > 0.3 ? 1 - (t - 0.3) * 0.18 : 1),
   Dentate: (t, seed) => 1 + ((t * 16 + seed * 0.1) % 1 < 0.4 ? 0.14 : -0.04),
   Erose: (t, seed) =>
-    1 + Math.sin(t * 31 + seed * 11) * Math.cos(t * 19 + seed * 5) * 0.13,
+    1 + Math.sin(t * 31 + seed * 11) * Math.cos(t * 13 + seed * 5) * 0.13,
 };
 
+/**
+ * A buckled margin grows longer than the blade inside it. A sheet whose edge
+ * carries excess length cannot lie flat, so the edge rises and falls in waves
+ * that hold the excess: a wave of amplitude A and wavelength λ adds a strain
+ * of (πA/λ)² to the edge, so A = λ√ε/π. `strain` is ε at the tip; it grows
+ * from zero at the base as t^1.5. `wavelength` is λ in local half widths, since
+ * the buckled band is about as deep as the blade is wide. Each further
+ * generation halves the strain, cuts λ by three and sits closer to the tip:
+ * the cascade that turns an undulate edge into a crisped one. `segments` is
+ * how many spine stations carry the finest generation; outline points are
+ * the cost of every redraw, so each edge gets only what it needs.
+ */
+type Buckling = {
+  strain: number;
+  wavelength: number;
+  generations: number;
+  segments: number;
+};
+
+const BUCKLING: Record<BuckledEdge, Buckling> = {
+  Undulate: { strain: 0.1, wavelength: 2.6, generations: 1, segments: 20 },
+  Ruffled: { strain: 0.25, wavelength: 1.5, generations: 2, segments: 24 },
+  Crisped: { strain: 0.4, wavelength: 1.1, generations: 3, segments: 36 },
+};
+
+const isBuckled = (edge: EdgeStyle): edge is BuckledEdge => edge in BUCKLING;
+
+/** Waves shorter than this many spine steps cannot be drawn and fade out. */
+const MIN_WAVE_STEPS = 4;
+/** How much of the margin's rise shows as sideways offset in the drawn outline. */
+const VIEW_TILT = 0.8;
+/** A whole strap rising toward the viewer shifts sideways less than a free edge does. */
+const STRAP_TILT = 0.5;
+/** The base of a blade is narrow, but its waves are not finer than this share of the widest point. */
+const WAVELENGTH_FLOOR = 0.35;
+/** A strap that bends as one sheet carries at most this many waves from base to tip. */
+const MAX_STRAP_WAVES = 1.75;
+
+/** Height and slope of one buckled margin at every spine station. */
+type MarginWave = { height: number; slope: number }[];
+
+/**
+ * 0 for a blade wide enough that each margin buckles on its own, rising to 1
+ * for a strap so narrow that it rises and falls as one sheet: a strap's
+ * waves are set by its length, a blade's by its width.
+ */
+const strapCoupling = (halfWidths: readonly number[], length: number) =>
+  1 - smoothstep(0.08, 0.25, Math.max(...halfWidths) / length);
+
+function buckledMargin(
+  buckling: Buckling,
+  halfWidths: readonly number[],
+  length: number,
+  coupling: number,
+  seed: number,
+): MarginWave {
+  const strapWave = (coupling * length) / MAX_STRAP_WAVES;
+  const widest = Math.max(...halfWidths);
+  const last = halfWidths.length - 1;
+  const step = length / last;
+  const generations = Array.from({ length: buckling.generations }, (_, k) => {
+    const wavelengths = halfWidths.map(
+      w =>
+        Math.max(
+          buckling.wavelength * Math.max(w, widest * WAVELENGTH_FLOOR),
+          strapWave,
+        ) / Math.pow(3, k),
+    );
+    const startPhase = sidHash(Math.floor(seed * 9973), 17 + k) * Math.PI * 2;
+    const phases = wavelengths.reduce<number[]>(
+      (acc, _, i) =>
+        i === 0
+          ? [startPhase]
+          : [...acc, acc[i - 1]! + (Math.PI * 2 * step) / wavelengths[i - 1]!],
+      [],
+    );
+    return wavelengths.map((wavelength, i) => {
+      const t = i / last;
+      const strain = buckling.strain * Math.pow(t, 1.5 + k) * Math.pow(0.5, k);
+      const drawable = smoothstep(
+        MIN_WAVE_STEPS * step,
+        1.5 * MIN_WAVE_STEPS * step,
+        wavelength,
+      );
+      const root = Math.sqrt(strain) * drawable;
+      return {
+        height: ((wavelength * root) / Math.PI) * Math.sin(phases[i]!),
+        slope: 2 * root * Math.cos(phases[i]!),
+      };
+    });
+  });
+  return halfWidths.map((_, i) =>
+    generations.reduce(
+      (sum, g) => ({
+        height: sum.height + g[i]!.height,
+        slope: sum.slope + g[i]!.slope,
+      }),
+      { height: 0, slope: 0 },
+    ),
+  );
+}
+
 /** Shapes with intrinsic edge effects baked into their identity. */
-const INTRINSIC_EDGES: Partial<Record<PetalShape, EdgeStyle>> = {
+const INTRINSIC_EDGES: Partial<Record<PetalShape, CutEdge>> = {
   Fimbriate: "Fringed",
   Laciniate: "Lacerate",
   Runcinate: "Serrated",
@@ -202,15 +306,19 @@ export type SpineSample = {
   bend: number;
   /** half width toward u = +1 */
   left: number;
-  /** half width toward u = -1; differs from left only for Falcate */
+  /** half width toward u = -1; differs from left for Falcate and buckled edges */
   right: number;
+  /** slope of the left margin out of the blade's plane, 0 for an unbuckled edge */
+  leftSlope: number;
+  /** slope of the right margin out of the blade's plane */
+  rightSlope: number;
 };
 
 /**
  * Petal-local frame: everything drawn on a petal (outline, veins, pattern
  * marks) maps through it. `t` runs base to tip in [0, 1]; `u` runs across the
  * width in [-1, 1] where u = 1 is the left edge and u = -1 the right edge.
- * Between the PETAL_SEGMENTS + 1 spine samples every field is interpolated
+ * Between the spine samples every field is interpolated
  * with the same uniform Catmull-Rom that smoothCmds draws the outline with,
  * so u = ±1 traces the drawn edges exactly and any |u| < 1 sits on the chord
  * between them, inside the outline wherever the outline does not fold.
@@ -250,36 +358,72 @@ export function createPetalFrame(params: PetalFrameParams): PetalFrame {
     params.edge !== "Smooth"
       ? params.edge
       : (INTRINSIC_EDGES[params.shape] ?? "Smooth");
-  const edgeModifier = EDGE_MODIFIERS[effectiveEdge];
+  const buckled = isBuckled(effectiveEdge);
+  const edgeModifier = buckled
+    ? EDGE_MODIFIERS.Smooth
+    : EDGE_MODIFIERS[effectiveEdge];
+  const segments = buckled ? BUCKLING[effectiveEdge].segments : PETAL_SEGMENTS;
 
-  const spine = Array.from(
-    { length: PETAL_SEGMENTS + 1 },
-    (_, i): SpineSample => {
-      const t = i / PETAL_SEGMENTS;
-      const curlDisp =
-        params.curl > 0 && t > 0.65
-          ? params.curl * Math.pow((t - 0.65) / 0.35, 2) * CURL_DISPLACEMENT
-          : 0;
-      // Cupped petals foreshorten — narrower toward the tip when viewed from above
-      const cupNarrow =
-        params.curvature > 0
-          ? Math.max(0.1, 1 - params.curvature * 0.35 * Math.pow(t, 1.5))
-          : 1;
-      const baseW =
-        petalW *
-        shapeProfile(params.shape, t) *
-        edgeModifier(t, params.seed) *
-        cupNarrow;
-      const asym = params.shape === "Falcate" ? 0.3 * Math.sin(Math.PI * t) : 0;
-      return {
-        along: baseOff + t * petalLen + curlDisp,
-        // +curvature = cupped, -curvature = recurved
-        bend: params.curvature * 0.15 * Math.sin(Math.PI * t),
-        left: baseW * (1 + asym),
-        right: baseW * (1 - asym),
-      };
-    },
-  );
+  const stations = steps(segments).map(t => {
+    const curlDisp =
+      params.curl > 0 && t > 0.65
+        ? params.curl * Math.pow((t - 0.65) / 0.35, 2) * CURL_DISPLACEMENT
+        : 0;
+    // Cupped petals foreshorten — narrower toward the tip when viewed from above
+    const cupNarrow =
+      params.curvature > 0
+        ? Math.max(0.1, 1 - params.curvature * 0.35 * Math.pow(t, 1.5))
+        : 1;
+    const halfWidth =
+      petalW *
+      shapeProfile(params.shape, t) *
+      edgeModifier(t, params.seed) *
+      cupNarrow;
+    return { t, curlDisp, halfWidth };
+  });
+
+  const halfWidths = stations.map(s => s.halfWidth);
+  // A wide blade's two margins buckle out of step; a strap rises and falls
+  // as one sheet, so it bends instead of changing width.
+  const coupling = strapCoupling(halfWidths, petalLen);
+  const margin = (seed: number): MarginWave =>
+    buckled
+      ? buckledMargin(
+          BUCKLING[effectiveEdge],
+          halfWidths,
+          petalLen,
+          coupling,
+          seed,
+        )
+      : stations.map(() => ({ height: 0, slope: 0 }));
+  const leftWave = margin(params.seed);
+  const rightWave = margin(params.seed + 0.37).map((free, i) => ({
+    height: lerp(free.height, leftWave[i]!.height, coupling),
+    slope: lerp(free.slope, leftWave[i]!.slope, coupling),
+  }));
+
+  const spine = stations.map(({ t, curlDisp, halfWidth }, i): SpineSample => {
+    const asym = params.shape === "Falcate" ? 0.3 * Math.sin(Math.PI * t) : 0;
+    const left = leftWave[i]!;
+    const right = rightWave[i]!;
+    return {
+      along: baseOff + t * petalLen + curlDisp,
+      // +curvature = cupped, -curvature = recurved
+      bend:
+        params.curvature * 0.15 * Math.sin(Math.PI * t) +
+        STRAP_TILT * coupling * left.height,
+      left: Math.max(
+        halfWidth * 0.2,
+        halfWidth * (1 + asym) + VIEW_TILT * (1 - coupling) * left.height,
+      ),
+      right: Math.max(
+        halfWidth * 0.2,
+        halfWidth * (1 - asym) + VIEW_TILT * (1 - coupling) * right.height,
+      ),
+      leftSlope: left.slope,
+      rightSlope: right.slope,
+    };
+  });
 
   return { cosA: Math.cos(params.angle), sinA: Math.sin(params.angle), spine };
 }
@@ -315,6 +459,8 @@ export function petalSpineAt(frame: PetalFrame, t: number): SpineSample {
     bend: hermite(p => p.bend),
     left: hermite(p => p.left),
     right: hermite(p => p.right),
+    leftSlope: hermite(p => p.leftSlope),
+    rightSlope: hermite(p => p.rightSlope),
   };
 }
 
@@ -341,15 +487,14 @@ export function petalLocalToFlower(
 
 /** Closed outline of the petal from grid index startIdx to the tip. */
 function generateOutlineFrom(frame: PetalFrame, startIdx: number): DrawCmd[] {
+  const segments = frame.spine.length - 1;
   const indices = Array.from(
-    { length: PETAL_SEGMENTS + 1 - startIdx },
+    { length: segments + 1 - startIdx },
     (_, i) => startIdx + i,
   );
-  const leftPts = indices.map(i =>
-    petalLocalToFlower(i / PETAL_SEGMENTS, 1, frame),
-  );
+  const leftPts = indices.map(i => petalLocalToFlower(i / segments, 1, frame));
   const rightPts = indices.map(i =>
-    petalLocalToFlower(i / PETAL_SEGMENTS, -1, frame),
+    petalLocalToFlower(i / segments, -1, frame),
   );
   return assembleOutline(leftPts, rightPts);
 }
@@ -384,6 +529,6 @@ export function generatePetalPartial(
 ): DrawCmd[] {
   return generateOutlineFrom(
     frame,
-    Math.max(0, Math.floor(startT * PETAL_SEGMENTS)),
+    Math.max(0, Math.floor(startT * (frame.spine.length - 1))),
   );
 }
