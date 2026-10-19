@@ -656,9 +656,6 @@ fn arrangement_level_for_count(count: u32) -> u32 {
     }
 }
 
-/// The most flowers one arrangement holds. A merge past it keeps an even share of each parent's flowers.
-const MAX_CONSTITUENTS: usize = 12;
-
 /// A session's flowers as spec YAML: its constituents when it is an arrangement, its own spec when it is one flower.
 fn flowers_of(ctx: &ReducerContext, session_id: u64) -> Vec<String> {
     let mut constituents: Vec<(u32, String)> = ctx.db.part_override().idx_override_session().filter(session_id)
@@ -675,18 +672,10 @@ fn flowers_of(ctx: &ReducerContext, session_id: u64) -> Vec<String> {
     }
 }
 
-/// Both parents' flowers taken in turn, so each lineage shows when the cap cuts, with room left for the hybrid.
-fn merged_flowers(a: Vec<String>, b: Vec<String>) -> Vec<String> {
-    let longest = a.len().max(b.len());
-    (0..longest)
-        .flat_map(|i| [a.get(i).cloned(), b.get(i).cloned()])
-        .flatten()
-        .take(MAX_CONSTITUENTS - 1)
-        .collect()
-}
-
 /// Merge two flowers into an arrangement at (x, y) on the 0–100 canvas, where the player dropped them.
-/// The AI's name and container arrive later through `set_merge_arrangement`.
+/// The arrangement holds exactly A's flowers then B's, nothing added and nothing dropped; the crossed
+/// spec is the arrangement's own record and name. The AI's name and container arrive later
+/// through `set_merge_arrangement`.
 #[spacetimedb::reducer]
 pub fn merge_sessions(
     ctx: &ReducerContext,
@@ -722,11 +711,11 @@ pub fn merge_sessions(
     let child_yaml = serde_yaml::to_string(&child)
         .map_err(|e| format!("Failed to serialize child: {e}"))?;
 
-    let flowers: Vec<(String, String)> = merged_flowers(flowers_of(ctx, session_a_id), flowers_of(ctx, session_b_id))
+    let flowers: Vec<String> = flowers_of(ctx, session_a_id)
         .into_iter()
-        .map(|spec| (spec, format!("merge:{}+{}", session_a_id, session_b_id)))
-        .chain(std::iter::once((child_yaml.clone(), format!("cross:{}+{}", session_a_id, session_b_id))))
+        .chain(flowers_of(ctx, session_b_id))
         .collect();
+    let merged_from = format!("merge:{}+{}", session_a_id, session_b_id);
     let total_flowers = flowers.len() as u32;
     let new_generation = session_a.generation.max(session_b.generation) + 1;
 
@@ -750,14 +739,13 @@ pub fn merge_sessions(
         updated_at: ctx.timestamp,
     });
 
-    // The parents' flowers in turn, then the hybrid last, so a member keeps its slot as the arrangement grows.
-    for (index, (spec, forked_from)) in flowers.into_iter().enumerate() {
+    for (index, spec) in flowers.into_iter().enumerate() {
         ctx.db.part_override().insert(FlowerPartOverride {
             id: 0,
             session_id: child_session.id,
             part_path: format!("constituent:{index}"),
             override_json: spec,
-            forked_from,
+            forked_from: merged_from.clone(),
             created_at: ctx.timestamp,
         });
     }
@@ -795,9 +783,9 @@ pub fn set_merge_arrangement(
     session_b_id: u64,
     ai_arrangement_json: String,
 ) -> Result<(), String> {
-    let hybrid = format!("cross:{}+{}", session_a_id, session_b_id);
+    let merged_from = format!("merge:{}+{}", session_a_id, session_b_id);
     let child_id = ctx.db.part_override().iter()
-        .find(|o| o.forked_from == hybrid)
+        .find(|o| o.forked_from == merged_from && o.part_path.starts_with("constituent:"))
         .map(|o| o.session_id)
         .ok_or_else(|| format!("No arrangement merged from {session_a_id} and {session_b_id}"))?;
     require_session_owner(ctx, child_id)?;
@@ -814,7 +802,7 @@ pub fn set_merge_arrangement(
         session_id: child_id,
         part_path: "arrangement".to_string(),
         override_json: ai_arrangement_json,
-        forked_from: format!("merge:{}+{}", session_a_id, session_b_id),
+        forked_from: merged_from,
         created_at: ctx.timestamp,
     });
     Ok(())
