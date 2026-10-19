@@ -13,9 +13,12 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Application,
   Container,
+  Graphics,
   RenderTexture,
   GraphicsContextSystem,
 } from "pixi.js";
+import { drawBed } from "../canvas/garden.ts";
+import { run } from "../lib/utils.ts";
 import {
   createFlowerPlan,
   createArrangementPlan,
@@ -37,6 +40,13 @@ interface PixiMiniCanvasProps {
 
 const GOLDEN_ANGLE = 2.399963; // radians
 const SNAPSHOT_SIZE = 400; // render at 400x400, display scaled down
+/** the bed fills the tile below its top third: plants stand framed in it */
+const SNAPSHOT_BED = {
+  left: 0,
+  top: SNAPSHOT_SIZE * 0.3,
+  right: SNAPSHOT_SIZE,
+  bottom: SNAPSHOT_SIZE,
+};
 
 // ── Shared offscreen renderer (singleton) ────────────────────────────────
 
@@ -113,29 +123,34 @@ function resolvePositions(
   return resolved;
 }
 
-/** One zone member's scene, drawn once with one frame of its moving layers; the caller refreshes its pictures. */
+/** One zone member's scene and where it meets the ground, drawn once with one frame of its moving layers; the caller refreshes its pictures. */
 function snapshotScene(
   p: { sid: number; sessionKey: string },
   constituentMap: Map<string, Array<{ spec: string; sid: number }>>,
   specBySessionId: Map<string, FlowerSpec>,
   arrangementMetaMap: Map<string, ArrangementMeta>,
   radius: number,
-): FlowerScene {
+): { scene: FlowerScene; base: readonly [number, number] } {
   const constituents = constituentMap.get(p.sessionKey);
-  const scene =
+  const placed =
     constituents && constituents.length > 1
-      ? createArrangementScene(
-          createArrangementPlan(
+      ? run(() => {
+          const plan = createArrangementPlan(
             constituents,
             arrangementMetaMap.get(p.sessionKey),
-          ),
-        )
-      : createFlowerScene(
-          createFlowerPlan(specBySessionId.get(p.sessionKey)?.spec, p.sid),
-        );
-  scene.draw(radius);
-  scene.tick(radius);
-  return scene;
+          );
+          return { scene: createArrangementScene(plan), base: plan.base };
+        })
+      : run(() => {
+          const plan = createFlowerPlan(
+            specBySessionId.get(p.sessionKey)?.spec,
+            p.sid,
+          );
+          return { scene: createFlowerScene(plan), base: plan.base };
+        });
+  placed.scene.draw(radius);
+  placed.scene.tick(radius);
+  return placed;
 }
 
 // ── Render a zone to a data URL ──────────────────────────────────────────
@@ -149,12 +164,18 @@ async function renderZoneSnapshot(
   const app = await getSharedApp();
   const size = SNAPSHOT_SIZE;
 
-  const container = new Container();
+  // The zone's own patch of the garden bed, with each plant standing on it
+  // at its position: nearer plants in front
+  const frame = new Container();
+  const bed = new Graphics();
+  drawBed(bed, SNAPSHOT_BED, size, size);
+  const container = new Container({ sortableChildren: true });
+  frame.addChild(bed, container);
   const radius = previewRadius(sessions.length);
   const resolved = resolvePositions(sessions, radius);
 
   const scenes = resolved.map(p => {
-    const scene = snapshotScene(
+    const { scene, base } = snapshotScene(
       p,
       constituentMap,
       specBySessionId,
@@ -162,38 +183,28 @@ async function renderZoneSnapshot(
       radius,
     );
     scene.refresh(app.renderer);
-    scene.root.position.set(p.x, p.y);
+    scene.root.position.set(p.x - base[0] * radius, p.y - base[1] * radius);
+    scene.root.zIndex = p.y;
     container.addChild(scene.root);
     return scene;
   });
 
-  const bounds = resolved.reduce(
-    (acc, p) => ({
-      minX: Math.min(acc.minX, p.x),
-      maxX: Math.max(acc.maxX, p.x),
-      minY: Math.min(acc.minY, p.y),
-      maxY: Math.max(acc.maxY, p.y),
-    }),
-    { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity },
+  // Frame what is drawn, plants and all, with room around it
+  const drawn = container.getLocalBounds();
+  const pad = radius;
+  const scale = Math.min(
+    size / (drawn.width + pad * 2),
+    size / (drawn.height + pad * 2),
   );
-  const { minX, maxX, minY, maxY } = bounds;
-
-  const pad = radius * 3.5;
-  const worldW = Math.max(maxX - minX, 1) + pad * 2;
-  const worldH = Math.max(maxY - minY, 1) + pad * 2;
-  const worldCenterX = (minX + maxX) / 2;
-  const worldCenterY = (minY + maxY) / 2;
-
-  const scale = Math.min(size / worldW, size / worldH);
   container.scale.set(scale);
   container.position.set(
-    size / 2 - worldCenterX * scale,
-    size / 2 - worldCenterY * scale,
+    size / 2 - (drawn.x + drawn.width / 2) * scale,
+    size / 2 - (drawn.y + drawn.height / 2) * scale,
   );
 
   // Render to texture and extract
   const renderTexture = RenderTexture.create({ width: size, height: size });
-  app.renderer.render({ container, target: renderTexture });
+  app.renderer.render({ container: frame, target: renderTexture });
 
   const canvas = app.renderer.texture.generateCanvas(renderTexture);
   if (!(canvas instanceof HTMLCanvasElement)) {
@@ -214,7 +225,7 @@ async function renderZoneSnapshot(
 
   renderTexture.destroy(true);
   scenes.map(scene => scene.destroy());
-  container.destroy();
+  frame.destroy({ children: true });
 
   return url;
 }

@@ -291,6 +291,8 @@ export type FlowerPlan = {
   branches: readonly StalkPlan[];
   /** box around everything drawn, plan units */
   bounds: Bounds;
+  /** where the plant meets the ground, plan units: the foot of its stem */
+  base: Vec2;
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1265,6 +1267,7 @@ const EMPTY_PLAN: FlowerPlan = {
   ],
   branches: [],
   bounds: circleBounds(0, 0, MIN_HEAD_REACH),
+  base: [0, MIN_HEAD_REACH],
 };
 
 /** Outlines of everything petal-like a layer draws. */
@@ -2039,6 +2042,7 @@ export function createFlowerPlan(
     florets,
     branches: layout.branches,
     bounds,
+    base: stem ? [stem.axis.fromX, stem.axis.fromY] : [0, bounds.maxY],
   };
 }
 
@@ -2070,6 +2074,8 @@ export type AdornmentPlan = {
 export type ArrangementPlan = {
   members: readonly ArrangementMember[];
   adornment: AdornmentPlan | null;
+  /** where the arrangement stands on the ground, plan units: under its container or its stems */
+  base: Vec2;
 };
 
 // ── AI-driven adornment types ──
@@ -3211,5 +3217,11 @@ export function createArrangementPlan(
     ? generateAdornmentFromSpec(baseY, meta.adornment_spec)
     : adornmentForLevel(level, baseY, extractAdornmentColors(meta));
 
-  return { members, adornment };
+  const lowest = [
+    ...members.map(m => cmdsBounds(m.stem.cmds)),
+    cmdsBounds(adornment?.cmds ?? []),
+    cmdsBounds(adornment?.accent?.cmds ?? []),
+  ].reduce<number>((y, b) => Math.max(y, b?.maxY ?? y), baseY);
+
+  return { members, adornment, base: [0, lowest] };
 }

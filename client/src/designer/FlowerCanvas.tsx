@@ -28,7 +28,12 @@ import {
   type FlowerScene,
 } from "../flower/scene.ts";
 import type { ArrangementFlower } from "../spacetime/arrangements.ts";
-import { setCanvasViewport, type CanvasEvents } from "../spacetime/bridge.ts";
+import {
+  gardenBed,
+  setCanvasViewport,
+  type CanvasEvents,
+} from "../spacetime/bridge.ts";
+import { depthScale, drawBed } from "../canvas/garden.ts";
 import {
   createMergeGlowFilter,
   createDarkFantasyDitherFilter,
@@ -77,6 +82,10 @@ const SELECTION_RING_PAD = 6;
 const HIT_PAD = 10;
 const MERGE_RANGE = FLOWER_BASE_RADIUS * 3;
 const DRAG_THRESHOLD = 8; // px movement before click becomes drag
+/** selection, merge ring and particles draw over every plant */
+const OVERLAY_Z = Number.MAX_SAFE_INTEGER;
+/** a ring on the bed seen at three quarters: its depth over its width */
+const GROUND_RING_TILT = 0.3;
 const BLOOM_DURATION = 500;
 const SHAKE_DURATION = 200;
 const CONNECTOR_SEGMENTS = 8;
@@ -188,7 +197,12 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
       started: boolean;
       originX: number;
       originY: number;
+      /** pointer minus the plant's foot when grabbed, so the plant does not jump to the pointer */
+      grabX: number;
+      grabY: number;
     } | null>(null);
+    /** each flower's foot on the bed this frame, canvas px */
+    const footRef = useRef<Map<number, { x: number; y: number }>>(new Map());
     const onFlowerClickRef = useRef(onFlowerClick);
     const onFlowerDragRef = useRef(onFlowerDrag);
     const onFlowerDragEndRef = useRef(onFlowerDragEnd);
@@ -311,11 +325,14 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         g.cursor = "grab";
         g.hitArea = footprintFor(cached, FLOWER_BASE_RADIUS).hitArea;
         g.on("pointerdown", e => {
+          const foot = footRef.current.get(sid) ?? e.global;
           dragRef.current = {
             sid,
             started: false,
             originX: e.global.x,
             originY: e.global.y,
+            grabX: e.global.x - foot.x,
+            grabY: e.global.y - foot.y,
           };
           e.stopPropagation();
         });
@@ -337,6 +354,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         const app = appRef.current;
         if (!stage || !app) return;
         const scenes = scenesRef.current;
+        const bed = gardenBed();
         const frameTime = performance.now();
         const dt = Math.min(
           MAX_FRAME_DT,
@@ -357,6 +375,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
 
         if (!selectionRingRef.current) {
           selectionRingRef.current = new Graphics();
+          selectionRingRef.current.zIndex = OVERLAY_Z;
           stage.addChild(selectionRingRef.current);
         }
         const selectionRing = selectionRingRef.current;
@@ -367,23 +386,31 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           const cached = getPlan(flower.sid);
           const { scene } = placeScene(app, stage, flower.sid, cached);
           if (!scene.root.parent) {
-            stage.addChildAt(scene.root, stage.getChildIndex(selectionRing));
+            stage.addChild(scene.root);
           }
 
           // The plant is drawn once at the base radius; the simulation's
           // bloom-in and wilt-out scale and alpha are transforms on the root.
+          // The simulation's position is the plant's foot on the bed: the
+          // root sits so the foot lands there, nearer plants larger and in front.
           scene.tick(FLOWER_BASE_RADIUS);
-          scene.root.position.set(flower.x, flower.y);
-          scene.root.rotation = flower.rotation;
-          scene.root.alpha = flower.alpha;
-          scene.root.scale.set(
-            flower.scale * mergeBloomScale(mergeBloomRef.current, flower.sid),
+          const scale =
+            flower.scale *
+            mergeBloomScale(mergeBloomRef.current, flower.sid) *
+            depthScale(bed, flower.y);
+          const [baseX, baseY] = cached.plan.base;
+          scene.root.position.set(
+            flower.x - baseX * FLOWER_BASE_RADIUS * scale,
+            flower.y - baseY * FLOWER_BASE_RADIUS * scale,
           );
+          scene.root.zIndex = flower.y;
+          scene.root.alpha = flower.alpha;
+          scene.root.scale.set(scale);
+          footRef.current.set(flower.sid, { x: flower.x, y: flower.y });
 
           if (selectedIdRef.current === flower.sid) {
-            const r = FLOWER_BASE_RADIUS * flower.scale;
-            selectionRing.position.set(flower.x, flower.y);
-            selectionRing.rotation = flower.rotation;
+            const r = FLOWER_BASE_RADIUS * scale;
+            selectionRing.position.copyFrom(scene.root.position);
             footprintFor(cached, r).drawRing(selectionRing);
             selectionRing.stroke({ color: 0xffffff, width: 2, alpha: 0.7 });
           }
@@ -443,6 +470,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
 
         if (!mergeOverlayRef.current && stage) {
           mergeOverlayRef.current = new Graphics();
+          mergeOverlayRef.current.zIndex = OVERLAY_Z;
           stage.addChild(mergeOverlayRef.current);
         }
         const overlay = mergeOverlayRef.current;
@@ -463,9 +491,20 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
               const baseAlpha = proximity * pulse;
               const alpha = baseAlpha * mergeOverlayOpacityRef.current;
               const ringR = FLOWER_BASE_RADIUS * targetFlower.scale * 0.6 + 12;
-              overlay.circle(targetFlower.x, targetFlower.y, ringR);
+              // A ring lying on the bed around the target's foot
+              overlay.ellipse(
+                targetFlower.x,
+                targetFlower.y,
+                ringR,
+                ringR * GROUND_RING_TILT,
+              );
               overlay.stroke({ color: 0xffffff, width: 2.5, alpha });
-              overlay.circle(targetFlower.x, targetFlower.y, ringR + 6);
+              overlay.ellipse(
+                targetFlower.x,
+                targetFlower.y,
+                ringR + 6,
+                (ringR + 6) * GROUND_RING_TILT,
+              );
               overlay.stroke({ color: 0xffffff, width: 1, alpha: alpha * 0.4 });
 
               if (draggedFlower) {
@@ -515,6 +554,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         // ── Merge particle burst rendering ──
         if (!mergeParticleGfxRef.current && stage) {
           mergeParticleGfxRef.current = new Graphics();
+          mergeParticleGfxRef.current.zIndex = OVERLAY_Z;
           stage.addChild(mergeParticleGfxRef.current);
         }
         const particleGfx = mergeParticleGfxRef.current;
@@ -581,7 +621,14 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           appRef.current = app;
           setCanvasViewport(el.clientWidth, el.clientHeight);
 
-          const flowerContainer = new Container();
+          // The bed sits under every plant, outside the dither that grades
+          // the plants; plants sort by how near they stand on it
+          const bedGfx = new Graphics();
+          bedGfx.eventMode = "none";
+          app.stage.addChild(bedGfx);
+          drawBed(bedGfx, gardenBed(), el.clientWidth, el.clientHeight);
+
+          const flowerContainer = new Container({ sortableChildren: true });
           app.stage.addChild(flowerContainer);
           stageContainerRef.current = flowerContainer;
 
@@ -599,6 +646,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
             if (width > 0 && height > 0) {
               setCanvasViewport(width, height);
               app.stage.hitArea = app.screen;
+              drawBed(bedGfx, gardenBed(), width, height);
             }
           });
           resizeObs.observe(el);
@@ -619,7 +667,11 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
               if (g) g.cursor = "grabbing";
             }
 
-            onFlowerDragRef.current?.(drag.sid, pos.x, pos.y);
+            onFlowerDragRef.current?.(
+              drag.sid,
+              pos.x - drag.grabX,
+              pos.y - drag.grabY,
+            );
           });
 
           const handlePointerUp = () => {
@@ -652,9 +704,10 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
                     startTime: performance.now(),
                   });
                 }
-                // The burst and the new arrangement both land on the target
+                // The burst lights the target; the arrangement is planted at its foot
                 const targetPos = target?.root.position;
-                if (targetPos) {
+                const targetFoot = footRef.current.get(mt.targetSid);
+                if (targetPos && targetFoot) {
                   mergeEffectsRef.current = [
                     ...mergeEffectsRef.current,
                     createMergeEffect(
@@ -667,8 +720,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
                   onMergeDropRef.current?.(
                     drag.sid,
                     mt.targetSid,
-                    targetPos.x,
-                    targetPos.y,
+                    targetFoot.x,
+                    targetFoot.y,
                   );
                 }
 
@@ -698,12 +751,10 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
                   };
                   requestAnimationFrame(shakeFrame);
                 }
-              } else if (scene) {
-                onFlowerDragEndRef.current?.(
-                  drag.sid,
-                  scene.root.position.x,
-                  scene.root.position.y,
-                );
+              } else {
+                const foot = footRef.current.get(drag.sid);
+                if (foot)
+                  onFlowerDragEndRef.current?.(drag.sid, foot.x, foot.y);
               }
 
               dragRef.current = null;

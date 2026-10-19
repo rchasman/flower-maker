@@ -42,11 +42,27 @@ export function setCanvasViewport(w: number, h: number) {
   viewportH = h;
 }
 
-export function getCanvasViewport(): { w: number; h: number; pad: number } {
-  return { w: viewportW, h: viewportH, pad: 60 };
+/** The bed starts this far down the canvas: the soil above it is the far distance, too far to plant. */
+const BED_TOP = 0.34;
+const BED_SIDE_PAD = 60;
+const BED_BOTTOM_PAD = 36;
+
+/** Where plants stand on the canvas, px: a plant's foot is always inside it. */
+export function gardenBed(): {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+} {
+  return {
+    left: BED_SIDE_PAD,
+    top: viewportH * BED_TOP,
+    right: viewportW - BED_SIDE_PAD,
+    bottom: viewportH - BED_BOTTOM_PAD,
+  };
 }
 
-/** Map server positions (0–100 range) to fill the canvas viewport with padding. */
+/** Map a server position (0–100 across the bed) to the canvas, px. */
 function resolvePosition(
   session: FlowerSession,
   index: number,
@@ -54,34 +70,29 @@ function resolvePosition(
 ): [number, number] {
   const cx = Number(session.canvasX);
   const cy = Number(session.canvasY);
+  const bed = gardenBed();
+  const across = (u: number, v: number): [number, number] => [
+    bed.left + u * (bed.right - bed.left),
+    bed.top + v * (bed.bottom - bed.top),
+  ];
 
-  const pad = 60;
-  const usableW = viewportW - pad * 2;
-  const usableH = viewportH - pad * 2;
-
-  if (cx !== 0 || cy !== 0) {
-    // Server stores 0–100, scale to fill canvas
-    return [pad + (cx / 100) * usableW, pad + (cy / 100) * usableH];
-  }
+  if (cx !== 0 || cy !== 0) return across(cx / 100, cy / 100);
 
   // Fallback grid when position is unset
   const cols = Math.max(1, Math.ceil(Math.sqrt(total)));
   const rows = Math.max(1, Math.ceil(total / cols));
-  const col = index % cols;
-  const row = Math.floor(index / cols);
-  return [
-    pad + (usableW / Math.max(1, cols)) * (col + 0.5),
-    pad + (usableH / Math.max(1, rows)) * (row + 0.5),
-  ];
+  return across(
+    ((index % cols) + 0.5) / cols,
+    (Math.floor(index / cols) + 0.5) / rows,
+  );
 }
 
-/** A canvas point in px as the server's 0–100 position: the inverse of resolvePosition. */
+/** A canvas point in px as the server's 0–100 bed position: the inverse of resolvePosition. */
 export function toServerPosition(x: number, y: number): [number, number] {
-  const { w, h, pad } = getCanvasViewport();
-  return [
-    Math.max(0, Math.min(100, ((x - pad) / (w - pad * 2)) * 100)),
-    Math.max(0, Math.min(100, ((y - pad) / (h - pad * 2)) * 100)),
-  ];
+  const bed = gardenBed();
+  const share = (v: number, from: number, to: number) =>
+    Math.max(0, Math.min(100, ((v - from) / (to - from)) * 100));
+  return [share(x, bed.left, bed.right), share(y, bed.top, bed.bottom)];
 }
 
 /** What the garden canvas needs to hear from the database besides the simulation. */
