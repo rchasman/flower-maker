@@ -5,7 +5,7 @@
 
 import type { EdgeStyle, PetalShape } from "../data/flower-enums.ts";
 import { assembleOutline, type DrawCmd, type Vec2 } from "./geometry.ts";
-import { lerp, sidHash, steps } from "./util.ts";
+import { lerp, sidHash, smoothstep, steps } from "./util.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Petal shape profiles — width at position t ∈ [0,1] (base→tip)
@@ -163,14 +163,21 @@ const EDGE_MODIFIERS: Record<CutEdge, (t: number, seed: number) => number> = {
  * from zero at the base as t^1.5. `wavelength` is λ in local half widths, since
  * the buckled band is about as deep as the blade is wide. Each further
  * generation halves the strain, cuts λ by three and sits closer to the tip:
- * the cascade that turns an undulate edge into a crisped one.
+ * the cascade that turns an undulate edge into a crisped one. `segments` is
+ * how many spine stations carry the finest generation; outline points are
+ * the cost of every redraw, so each edge gets only what it needs.
  */
-type Buckling = { strain: number; wavelength: number; generations: number };
+type Buckling = {
+  strain: number;
+  wavelength: number;
+  generations: number;
+  segments: number;
+};
 
 const BUCKLING: Record<BuckledEdge, Buckling> = {
-  Undulate: { strain: 0.1, wavelength: 2.6, generations: 1 },
-  Ruffled: { strain: 0.25, wavelength: 1.5, generations: 2 },
-  Crisped: { strain: 0.4, wavelength: 1.1, generations: 3 },
+  Undulate: { strain: 0.1, wavelength: 2.6, generations: 1, segments: 20 },
+  Ruffled: { strain: 0.25, wavelength: 1.5, generations: 2, segments: 24 },
+  Crisped: { strain: 0.4, wavelength: 1.1, generations: 3, segments: 36 },
 };
 
 const isBuckled = (edge: EdgeStyle): edge is BuckledEdge => edge in BUCKLING;
@@ -179,6 +186,8 @@ const isBuckled = (edge: EdgeStyle): edge is BuckledEdge => edge in BUCKLING;
 const MIN_WAVE_STEPS = 4;
 /** How much of the margin's rise shows as sideways offset in the drawn outline. */
 const VIEW_TILT = 0.8;
+/** A whole strap rising toward the viewer shifts sideways less than a free edge does. */
+const STRAP_TILT = 0.5;
 /** The base of a blade is narrow, but its waves are not finer than this share of the widest point. */
 const WAVELENGTH_FLOOR = 0.35;
 /** A strap that bends as one sheet carries at most this many waves from base to tip. */
@@ -199,10 +208,10 @@ function buckledMargin(
   buckling: Buckling,
   halfWidths: readonly number[],
   length: number,
+  coupling: number,
   seed: number,
 ): MarginWave {
-  const strapWave =
-    (strapCoupling(halfWidths, length) * length) / MAX_STRAP_WAVES;
+  const strapWave = (coupling * length) / MAX_STRAP_WAVES;
   const widest = Math.max(...halfWidths);
   const last = halfWidths.length - 1;
   const step = length / last;
@@ -248,11 +257,6 @@ function buckledMargin(
   );
 }
 
-const smoothstep = (edge0: number, edge1: number, x: number): number => {
-  const s = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
-  return s * s * (3 - 2 * s);
-};
-
 /** Shapes with intrinsic edge effects baked into their identity. */
 const INTRINSIC_EDGES: Partial<Record<PetalShape, CutEdge>> = {
   Fimbriate: "Fringed",
@@ -265,8 +269,6 @@ const INTRINSIC_EDGES: Partial<Record<PetalShape, CutEdge>> = {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const PETAL_SEGMENTS = 14;
-/** A buckled margin needs finer stations to carry its waves. */
-const BUCKLED_SEGMENTS = 48;
 const BASE_OFFSET = 0.08;
 const CURL_DISPLACEMENT = -0.3;
 
@@ -360,7 +362,7 @@ export function createPetalFrame(params: PetalFrameParams): PetalFrame {
   const edgeModifier = buckled
     ? EDGE_MODIFIERS.Smooth
     : EDGE_MODIFIERS[effectiveEdge];
-  const segments = buckled ? BUCKLED_SEGMENTS : PETAL_SEGMENTS;
+  const segments = buckled ? BUCKLING[effectiveEdge].segments : PETAL_SEGMENTS;
 
   const stations = steps(segments).map(t => {
     const curlDisp =
@@ -381,13 +383,19 @@ export function createPetalFrame(params: PetalFrameParams): PetalFrame {
   });
 
   const halfWidths = stations.map(s => s.halfWidth);
-  const margin = (seed: number): MarginWave =>
-    buckled
-      ? buckledMargin(BUCKLING[effectiveEdge], halfWidths, petalLen, seed)
-      : stations.map(() => ({ height: 0, slope: 0 }));
   // A wide blade's two margins buckle out of step; a strap rises and falls
   // as one sheet, so it bends instead of changing width.
   const coupling = strapCoupling(halfWidths, petalLen);
+  const margin = (seed: number): MarginWave =>
+    buckled
+      ? buckledMargin(
+          BUCKLING[effectiveEdge],
+          halfWidths,
+          petalLen,
+          coupling,
+          seed,
+        )
+      : stations.map(() => ({ height: 0, slope: 0 }));
   const leftWave = margin(params.seed);
   const rightWave = margin(params.seed + 0.37).map((free, i) => ({
     height: lerp(free.height, leftWave[i]!.height, coupling),
@@ -403,7 +411,7 @@ export function createPetalFrame(params: PetalFrameParams): PetalFrame {
       // +curvature = cupped, -curvature = recurved
       bend:
         params.curvature * 0.15 * Math.sin(Math.PI * t) +
-        VIEW_TILT * coupling * left.height,
+        STRAP_TILT * coupling * left.height,
       left: Math.max(
         halfWidth * 0.2,
         halfWidth * (1 + asym) + VIEW_TILT * (1 - coupling) * left.height,
