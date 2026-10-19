@@ -19,12 +19,11 @@ import { startLoop, stopLoop } from "../wasm/loop.ts";
 import {
   wireToWasm,
   handleMerge,
-  getCanvasViewport,
   isMySession,
+  toServerPosition,
 } from "../spacetime/bridge.ts";
 import type { FlowerSession, FlowerPartOverride } from "../spacetime/types.ts";
 import { isVariant } from "../spacetime/types.ts";
-import { parseArrangementMeta } from "../flower/render.ts";
 import { groupBy, setNestedValue, parseSpec } from "../lib/utils.ts";
 import { stringify } from "yaml";
 
@@ -194,40 +193,17 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     canvasRef.current?.setSpecMap(specMap);
   }, [specs, mySessions.length, partOverrides, conn]);
 
-  // Push constituent data and arrangement metadata to canvas
-  useEffect(() => {
-    const constituentMap = partOverrides
-      .filter(o => o.partPath.startsWith("constituent:"))
-      .reduce<Map<number, Array<{ spec: string; sid: number }>>>((acc, o) => {
-        const sid = Number(o.sessionId);
-        const idx = parseInt(o.partPath.split(":")[1] ?? "0", 10);
-        const existing = acc.get(sid) ?? [];
-        existing[idx] = { spec: o.overrideJson, sid: idx };
-        acc.set(sid, existing);
-        return acc;
-      }, new Map());
-    canvasRef.current?.setConstituentMap(constituentMap);
-
-    const arrangementMetaMap = partOverrides
-      .filter(o => o.partPath === "arrangement")
-      .reduce<Map<number, import("../flower/render.ts").ArrangementMeta>>(
-        (acc, o) => {
-          const meta = parseArrangementMeta(o.overrideJson);
-          if (meta) acc.set(Number(o.sessionId), meta);
-          return acc;
-        },
-        new Map(),
-      );
-    canvasRef.current?.setArrangementMetaMap(arrangementMetaMap);
-  }, [partOverrides]);
-
   useEffect(() => {
     if (!conn || wasmInitialized.current) return;
     wasmInitialized.current = true;
 
     void loadWasm().then(sim => {
       simRef.current = sim;
-      wireToWasm(conn, sim);
+      wireToWasm(conn, sim, {
+        setArrangement: (sid, flowers, meta) =>
+          canvasRef.current?.setArrangement(sid, flowers, meta),
+        bloom: sid => canvasRef.current?.bloom(sid),
+      });
       startLoop(sim, (pool, count) => {
         setFlowerCount(count);
         canvasRef.current?.updateFlowers(pool, count);
@@ -239,21 +215,34 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
     };
   }, [conn]);
 
-  const pendingMergesRef = useRef<Set<string>>(new Set());
+  /** flowers in a merge the server has not answered yet; neither can join another */
+  const mergingRef = useRef<Set<number>>(new Set());
 
-  const handleMergeDrop = useCallback(
-    (dragSid: number, targetSid: number) => {
-      const key = [
-        Math.min(dragSid, targetSid),
-        Math.max(dragSid, targetSid),
-      ].join("+");
-      if (pendingMergesRef.current.has(key)) return;
-      pendingMergesRef.current.add(key);
-      void handleMerge(conn!, dragSid, targetSid).finally(() => {
-        pendingMergesRef.current.delete(key);
+  const merge = useCallback(
+    (sidA: number, sidB: number, at: [number, number] | null) => {
+      const merging = mergingRef.current;
+      if (!conn || merging.has(sidA) || merging.has(sidB)) return;
+      merging.add(sidA);
+      merging.add(sidB);
+      void handleMerge(conn, sidA, sidB, at).finally(() => {
+        merging.delete(sidA);
+        merging.delete(sidB);
       });
     },
     [conn],
+  );
+
+  /** A flower dropped onto another on the canvas merges where it was dropped. */
+  const handleMergeDrop = useCallback(
+    (dragSid: number, targetSid: number, x: number, y: number) =>
+      merge(dragSid, targetSid, toServerPosition(x, y)),
+    [merge],
+  );
+
+  /** A merge picked in the feed lands where its target stands. */
+  const handleFeedMerge = useCallback(
+    (sidA: number, sidB: number) => merge(sidA, sidB, null),
+    [merge],
   );
 
   const handleFlowerDrag = useCallback((sid: number, x: number, y: number) => {
@@ -262,9 +251,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
 
   const handleFlowerDragEnd = useCallback(
     (sid: number, x: number, y: number) => {
-      const { w, h, pad } = getCanvasViewport();
-      const nx = Math.max(0, Math.min(100, ((x - pad) / (w - pad * 2)) * 100));
-      const ny = Math.max(0, Math.min(100, ((y - pad) / (h - pad * 2)) * 100));
+      const [nx, ny] = toServerPosition(x, y);
       void conn?.reducers.updatePosition({
         sessionId: BigInt(sid),
         x: nx,
@@ -484,7 +471,7 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
       >
         <div style={{ flex: "0 1 auto", maxHeight: "45%", overflow: "auto" }}>
           <ActivityFeed
-            onMerge={handleMergeDrop}
+            onMerge={handleFeedMerge}
             onSelect={setSelectedId}
             selectedId={selectedId}
           />

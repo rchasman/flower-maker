@@ -13,5 +13,6 @@ import {
 export default {
   sessionAId: __t.u64(),
   sessionBId: __t.u64(),
-  aiArrangementJson: __t.string(),
+  x: __t.f64(),
+  y: __t.f64(),
 };

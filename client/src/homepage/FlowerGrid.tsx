@@ -8,10 +8,12 @@ import {
 } from "../spacetime/hooks.ts";
 import type { FlowerSession, FlowerSpec, User } from "../spacetime/types.ts";
 import { isVariant } from "../spacetime/types.ts";
+import type { ArrangementMeta } from "../flower/render.ts";
 import {
-  parseArrangementMeta,
-  type ArrangementMeta,
-} from "../flower/render.ts";
+  arrangementFlowers,
+  arrangementMeta,
+  overridesBySession,
+} from "../spacetime/arrangements.ts";
 import { PixiMiniCanvas } from "./PixiMiniCanvas.tsx";
 
 interface FlowerGridProps {
@@ -35,33 +37,31 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
     [users],
   );
 
-  // Build constituent map for arrangement rendering
-  const constituentMap = useMemo(
-    () =>
-      partOverrides
-        .filter(o => o.partPath.startsWith("constituent:"))
-        .reduce<Map<string, Array<{ spec: string; sid: number }>>>((acc, o) => {
-          const key = String(o.sessionId);
-          const idx = parseInt(o.partPath.split(":")[1] ?? "0", 10);
-          const existing = acc.get(key) ?? [];
-          existing[idx] = { spec: o.overrideJson, sid: idx };
-          acc.set(key, existing);
-          return acc;
-        }, new Map()),
+  const overridesBySid = useMemo(
+    () => overridesBySession(partOverrides),
     [partOverrides],
   );
-
-  // Build arrangement meta map (AI-generated adornment hints)
+  const constituentMap = useMemo(
+    () =>
+      new Map(
+        [...overridesBySid].map(([sid, rows]) => [
+          sid,
+          arrangementFlowers(rows),
+        ]),
+      ),
+    [overridesBySid],
+  );
   const arrangementMetaMap = useMemo(
     () =>
-      partOverrides
-        .filter(o => o.partPath === "arrangement")
-        .reduce<Map<string, ArrangementMeta>>((acc, o) => {
-          const meta = parseArrangementMeta(o.overrideJson);
-          if (meta) acc.set(String(o.sessionId), meta);
-          return acc;
-        }, new Map()),
-    [partOverrides],
+      new Map(
+        [...overridesBySid].flatMap(
+          ([sid, rows]): [string, ArrangementMeta][] => {
+            const meta = arrangementMeta(rows);
+            return meta ? [[sid, meta]] : [];
+          },
+        ),
+      ),
+    [overridesBySid],
   );
 
   // Build a spec lookup by sessionId for O(1) access

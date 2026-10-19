@@ -3119,13 +3119,20 @@ function adornmentForLevel(
   };
 }
 
+/**
+ * The most flowers an arrangement draws: the server's MAX_CONSTITUENTS. Older
+ * arrangements merged before the cap draw their first ones.
+ */
+export const MAX_ARRANGEMENT_FLOWERS = 12;
+
 /** Create a complete arrangement plan from constituent flower specs. */
 export function createArrangementPlan(
-  constituents: ReadonlyArray<{ spec: string; sid: number }>,
-  level: number,
+  allConstituents: ReadonlyArray<{ spec: string; sid: number }>,
   meta?: ArrangementMeta,
 ): ArrangementPlan {
+  const constituents = allConstituents.slice(0, MAX_ARRANGEMENT_FLOWERS);
   const count = constituents.length;
+  const level = Math.min(7, Math.ceil(count / 3));
   const layoutSeed = constituents.reduce((sum, c) => sum + c.sid, 0);
   const slots = layoutForLevel(count, level, layoutSeed);
   const baseY = 0.9; // stems converge at this Y (below flower heads)

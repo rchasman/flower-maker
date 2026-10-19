@@ -64,7 +64,8 @@ Agent Loop (every ${TICK_INTERVAL_MS / 1000}s):
    call: create_session(randomPrompt())
 
 4. If 2+ sessions → merge the oldest two
-   call: merge_sessions(oldest.id, secondOldest.id, aiDescription)
+   call: merge_sessions(oldest.id, secondOldest.id, x, y)
+   call: set_merge_arrangement(oldest.id, secondOldest.id, aiDescription)
 
 5. After merge → check arrangement_level
    If level >= 5 (bouquet) → place order

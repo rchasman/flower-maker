@@ -183,14 +183,11 @@ describe("head lights", () => {
   });
 
   test("an arrangement lights every member's front head at its offset", () => {
-    const plan = createArrangementPlan(
-      [
-        { spec: spec(), sid: 1 },
-        { spec: spec({ texture: "Papery" }), sid: 2 },
-        { spec: spec(), sid: 3 },
-      ],
-      1,
-    );
+    const plan = createArrangementPlan([
+      { spec: spec(), sid: 1 },
+      { spec: spec({ texture: "Papery" }), sid: 2 },
+      { spec: spec(), sid: 3 },
+    ]);
     const lights = arrangementHeadLights(plan, 70);
     expect(lights).toHaveLength(plan.members.length);
     const byRadius = plan.members

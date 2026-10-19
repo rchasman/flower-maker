@@ -127,7 +127,6 @@ function snapshotScene(
       ? createArrangementScene(
           createArrangementPlan(
             constituents,
-            Math.min(7, Math.ceil(constituents.length / 3)),
             arrangementMetaMap.get(p.sessionKey),
           ),
         )

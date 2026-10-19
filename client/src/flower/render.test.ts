@@ -258,8 +258,8 @@ describe("createArrangementPlan", () => {
     }));
     const slots = (plan: ReturnType<typeof createArrangementPlan>) =>
       plan.members.map(m => [m.offsetX, m.offsetY, m.scale]);
-    expect(slots(createArrangementPlan(constituents, 3))).toEqual(
-      slots(createArrangementPlan(constituents, 3)),
+    expect(slots(createArrangementPlan(constituents))).toEqual(
+      slots(createArrangementPlan(constituents)),
     );
   });
 });
