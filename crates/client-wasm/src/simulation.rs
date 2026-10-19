@@ -16,6 +16,15 @@ pub struct PhysicsWorld {
     query_pipeline: QueryPipeline,
 }
 
+/// The rectangle a plant's foot stays in, canvas px.
+#[derive(Debug, Clone, Copy)]
+pub struct Bed {
+    pub left: f32,
+    pub top: f32,
+    pub right: f32,
+    pub bottom: f32,
+}
+
 impl PhysicsWorld {
     pub fn new() -> Self {
         Self {
@@ -88,6 +97,20 @@ impl PhysicsWorld {
                 c.set_sensor(true);
             }
         }
+    }
+
+    /// Hold the body inside the rectangle, stopping any motion that would carry it out.
+    pub fn keep_inside(&mut self, handle: RigidBodyHandle, bed: &Bed) {
+        let Some(body) = self.rigid_body_set.get_mut(handle) else { return };
+        let t = *body.translation();
+        let x = t.x.clamp(bed.left, bed.right);
+        let y = t.y.clamp(bed.top, bed.bottom);
+        if x == t.x && y == t.y {
+            return;
+        }
+        let v = *body.linvel();
+        body.set_translation(vector![x, y], true);
+        body.set_linvel(vector![if x == t.x { v.x } else { 0.0 }, if y == t.y { v.y } else { 0.0 }], true);
     }
 
     pub fn position(&self, handle: RigidBodyHandle) -> (f32, f32) {

@@ -19,6 +19,10 @@ export class GardenSimulation {
      */
     render_buffer_size(): number;
     /**
+     * The rectangle, canvas px, that every plant's foot stays inside from the next tick on.
+     */
+    set_bed(left: number, top: number, right: number, bottom: number): void;
+    /**
      * Set the physics body position for a flower (used for drag interaction).
      */
     set_body_position(session_id: bigint, x: number, y: number): void;
@@ -56,6 +60,7 @@ export interface InitOutput {
     readonly gardensimulation_new: () => number;
     readonly gardensimulation_remove_flower: (a: number, b: bigint) => void;
     readonly gardensimulation_render_buffer_size: (a: number) => number;
+    readonly gardensimulation_set_bed: (a: number, b: number, c: number, d: number, e: number) => void;
     readonly gardensimulation_set_body_position: (a: number, b: bigint, c: number, d: number) => void;
     readonly gardensimulation_tick: (a: number, b: number) => number;
     readonly gardensimulation_update_spec: (a: number, b: bigint, c: number, d: number) => number;

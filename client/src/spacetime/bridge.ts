@@ -1,4 +1,4 @@
-import { BED_TOP, type Bed } from "../canvas/garden.ts";
+import { BED_TOP, plantRadius, type Bed } from "../canvas/garden.ts";
 import type { ArrangementMeta } from "../flower/render.ts";
 import { readStream, parseSpec } from "../lib/utils.ts";
 import type { GardenSim } from "../wasm/loader.ts";
@@ -38,20 +38,31 @@ export function isMySession(session: FlowerSession): boolean {
 let viewportW = 800;
 let viewportH = 600;
 
+/** the simulation the bed is enforced in, once wired */
+let bedSim: GardenSim | null = null;
+
+const applyBed = () => {
+  const bed = gardenBed();
+  bedSim?.set_bed(bed.left, bed.top, bed.right, bed.bottom);
+};
+
 export function setCanvasViewport(w: number, h: number) {
   viewportW = w;
   viewportH = h;
+  applyBed();
 }
 
-const BED_SIDE_PAD = 60;
+/** a plant this many radii wide either side of its foot still fits on screen at the bed's edge */
+const BED_SIDE_REACH = 1;
 const BED_BOTTOM_PAD = 36;
 
 /** Where plants stand on the canvas, px: a plant's foot is always inside it. */
 export function gardenBed(): Bed {
+  const side = plantRadius(viewportH) * BED_SIDE_REACH;
   return {
-    left: BED_SIDE_PAD,
+    left: side,
     top: viewportH * BED_TOP,
-    right: viewportW - BED_SIDE_PAD,
+    right: viewportW - side,
     bottom: viewportH - BED_BOTTOM_PAD,
   };
 }
@@ -115,6 +126,8 @@ export function wireToWasm(
   sim: GardenSim,
   canvas: CanvasEvents,
 ) {
+  bedSim = sim;
+  applyBed();
   const specOf = (sid: bigint): string | undefined =>
     conn.db.flowerSpec.sessionId.find(sid)?.spec;
   const overridesOf = (sid: bigint) => overridesFor(conn, sid);
