@@ -26,6 +26,12 @@ export const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 export const clamp = (min: number, max: number, v: number): number =>
   Math.max(min, Math.min(max, v));
 
+/** 0 below edge0, 1 above edge1, an S-curve between. */
+export const smoothstep = (edge0: number, edge1: number, x: number): number => {
+  const s = clamp(0, 1, (x - edge0) / (edge1 - edge0));
+  return s * s * (3 - 2 * s);
+};
+
 export const lerp = (a: number, b: number, s: number): number =>
   a + (b - a) * s;
 

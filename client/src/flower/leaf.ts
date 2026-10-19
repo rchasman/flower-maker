@@ -23,7 +23,7 @@ import {
   stalkPlan,
   type StalkPlan,
 } from "./stem.ts";
-import { lerp, sidHash, unreachable } from "./util.ts";
+import { lerp, sidHash, smoothstep, unreachable } from "./util.ts";
 
 // ── Leaf shape profiles — width at t ∈ [0,1] (petiole → tip) ──
 
@@ -213,7 +213,7 @@ function createLeafFrame(pose: LeafPose, leaf: LeafParams): LeafFrame {
       const noise = leafNoise(t, side > 0 ? seed : seed + 5) * baseW * 0.1;
       const wider = side > 0 === t < 0.5;
       const bladeW = (baseW + noise) * (wider ? 1.04 : 0.96);
-      const flare = smoothstep(Math.min(1, t / BASE_FLARE));
+      const flare = smoothstep(0, BASE_FLARE, t);
       return lerp(stalkW, bladeW, flare);
     });
   const plus = edgeSamples(1);
@@ -239,8 +239,6 @@ function createLeafFrame(pose: LeafPose, leaf: LeafParams): LeafFrame {
 const GRAVITY_SAG = 0.4;
 /** The share of the blade over which its base widens out of the petiole. */
 const BASE_FLARE = 0.12;
-
-const smoothstep = (s: number): number => s * s * (3 - 2 * s);
 
 const leafPoint = (frame: LeafFrame, [t, u]: TU): Vec2 =>
   frame.toWorld(
