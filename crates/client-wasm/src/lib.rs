@@ -3,7 +3,7 @@ mod buffer;
 
 use flower_core::catalog::FlowerSpec;
 use flower_core::animation::FlowerAnimation;
-use flower_core::physics::{GardenPhysics, body_params};
+use flower_core::physics::body_params;
 use simulation::PhysicsWorld;
 use buffer::RenderBuffer;
 use wasm_bindgen::prelude::*;
@@ -19,7 +19,6 @@ struct FlowerInstance {
 /// Runs in the designer view for YOUR flowers only.
 #[wasm_bindgen]
 pub struct GardenSimulation {
-    physics: GardenPhysics,
     world: PhysicsWorld,
     flowers: Vec<FlowerInstance>,
     render_buf: RenderBuffer,
@@ -30,7 +29,6 @@ impl GardenSimulation {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
-            physics: GardenPhysics::new(),
             world: PhysicsWorld::new(),
             flowers: Vec::new(),
             render_buf: RenderBuffer::new(),
@@ -97,16 +95,10 @@ impl GardenSimulation {
 
     /// Advance physics + animations by dt seconds. Returns active flower count.
     pub fn tick(&mut self, dt: f32) -> u32 {
-        let dt64 = dt as f64;
-        self.physics.tick(dt64);
-        let wind = self.physics.wind_x;
-
-        // Step rapier2d physics
         self.world.step(dt);
 
-        // Tick animations
         for flower in &mut self.flowers {
-            flower.anim.tick(&flower.spec, dt64, wind);
+            flower.anim.tick(dt as f64);
         }
 
         // Remove flowers whose wilt animation completed (single pass)
@@ -127,23 +119,13 @@ impl GardenSimulation {
     /// Returns the number of flowers written.
     pub fn write_to_buffer(&mut self, buf: &mut [f32]) -> u32 {
         let flowers: Vec<_> = self.flowers.iter().map(|f| {
-            let pos = self.world.position(f.body_handle);
-            let rot = self.world.rotation(f.body_handle);
-            let (pr, pg, pb) = primary_petal_color(&f.spec);
-            let petal_count = f.spec.petals.layers.first()
-                .map(|l| l.count).unwrap_or(5);
+            let (x, y) = self.world.position(f.body_handle);
             buffer::FlowerData {
                 session_id: f.session_id,
-                x: pos.0, y: pos.1, rotation: rot,
+                x,
+                y,
                 scale: f.anim.scale() as f32,
                 alpha: f.anim.alpha() as f32,
-                has_aura: f.spec.aura.is_some(),
-                has_glow: f.spec.ornamentation.glow.is_some(),
-                particles: f.anim.particles.len(),
-                petal_color_r: pr,
-                petal_color_g: pg,
-                petal_color_b: pb,
-                petal_count,
             }
         }).collect();
         self.render_buf.write(buf, &flowers) as u32
@@ -165,10 +147,6 @@ impl GardenSimulation {
         }
     }
 
-    pub fn wind_x(&self) -> f64 { self.physics.wind_x }
-    pub fn wind_y(&self) -> f64 { self.physics.wind_y }
-    pub fn ambient_light(&self) -> f64 { self.physics.ambient_light }
-    pub fn time_of_day(&self) -> f64 { self.physics.time_of_day }
 }
 
 fn parse_spec(session_id: u64, spec_yaml: &str) -> Option<FlowerSpec> {
@@ -177,14 +155,6 @@ fn parse_spec(session_id: u64, spec_yaml: &str) -> Option<FlowerSpec> {
             web_sys::console::error_1(&format!("[wasm] spec parse failed for sid={session_id}: {e}").into());
         })
         .ok()
-}
-
-/// Extract the dominant petal color from a FlowerSpec as (r, g, b) in 0.0–1.0.
-fn primary_petal_color(spec: &FlowerSpec) -> (f32, f32, f32) {
-    spec.petals.layers.first()
-        .and_then(|layer| layer.color.stops.first())
-        .map(|stop| (stop.color.r as f32, stop.color.g as f32, stop.color.b as f32))
-        .unwrap_or((0.8, 0.4, 0.6)) // fallback pink
 }
 
 #[cfg(test)]

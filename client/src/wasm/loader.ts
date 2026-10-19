@@ -25,10 +25,6 @@ export interface GardenSim {
   /** Set the physics body position for a flower (drag interaction). */
   set_body_position(session_id: bigint, x: number, y: number): void;
   flower_count(): number;
-  wind_x(): number;
-  wind_y(): number;
-  ambient_light(): number;
-  time_of_day(): number;
 }
 
 export async function loadWasm(): Promise<GardenSim> {
@@ -90,24 +86,12 @@ function createStub(): GardenSim {
       buf[1] = (buf[1] ?? 0) + 1;
       for (const [i, [sid, f]] of visible.entries()) {
         const off = HEADER_FLOATS + i * FLOATS_PER_FLOWER;
-        buf.set([sid, f.x, f.y, 0, 1, 1, 0, 0, 0, 0.8, 0.4, 0.6, 5, 0], off);
+        buf.set([sid, f.x, f.y, 1, 1], off);
       }
       return visible.length;
     },
     flower_count() {
       return flowers.size;
-    },
-    wind_x() {
-      return 0;
-    },
-    wind_y() {
-      return 0;
-    },
-    ambient_light() {
-      return 1;
-    },
-    time_of_day() {
-      return 12;
     },
   };
 }
