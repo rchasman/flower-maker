@@ -101,13 +101,19 @@ export async function handleCombine(request: Request) {
     spec_b: unknown;
     total_count: number;
     level: string;
+    /** the container and base this many flowers stand in; the renderer keeps them */
+    rung?: { container: string; base: string } | null;
     parent_adornments?: unknown[];
   };
 
   const inheritanceContext =
     body.parent_adornments && body.parent_adornments.length > 0
-      ? `\n\nPrevious arrangement adornments (evolve, don't reset):\n${JSON.stringify(body.parent_adornments, null, 2)}\n\nRules for evolution:\n- A tie at a higher level might become a wrap or ribbon\n- Similar materials reinforce (two kraft parents → stay kraft but more elaborate)\n- Contrasting materials blend (kraft + silk → wicker or linen)\n- Container type should upgrade with level but the material lineage should persist\n- Accents can carry forward or evolve (twine → ribbon → bow)\n- Set evolved_from to describe what you evolved from`
+      ? `\n\nPrevious arrangement adornments (evolve, don't reset):\n${JSON.stringify(body.parent_adornments, null, 2)}\n\nRules for evolution:\n- Similar materials reinforce (two kraft parents → stay kraft but more elaborate)\n- Contrasting materials blend (kraft + silk → wicker or linen)\n- The material lineage should persist as the container steps up\n- Accents can carry forward or evolve (twine → ribbon → bow)\n- Set evolved_from to describe what you evolved from`
       : "";
+
+  const rungContext = body.rung
+    ? `\n\nThe container is a ${body.rung.container}${body.rung.base === "none" ? "" : ` on a ${body.rung.base}`}: set container.type to "${body.rung.container}"${body.rung.base === "none" ? "" : ` and base.type to "${body.rung.base}"`}. Choose its material, colors and accent.`
+    : "";
 
   const result = streamText({
     model: gateway(ARRANGEMENT_MODEL),
@@ -116,7 +122,7 @@ export async function handleCombine(request: Request) {
     prompt: `Combine these flowers into a ${body.level} arrangement (${body.total_count} total flowers):
 
 Flower A: ${JSON.stringify(body.spec_a)}
-Flower B: ${JSON.stringify(body.spec_b)}${inheritanceContext}`,
+Flower B: ${JSON.stringify(body.spec_b)}${rungContext}${inheritanceContext}`,
   });
 
   return result.toTextStreamResponse();

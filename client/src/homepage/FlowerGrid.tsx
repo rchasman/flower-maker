@@ -11,7 +11,7 @@ import { isVariant } from "../spacetime/types.ts";
 import type { ArrangementMeta } from "../flower/render.ts";
 import {
   arrangementFlowers,
-  arrangementMeta,
+  inheritedMeta,
   overridesBySession,
 } from "../spacetime/arrangements.ts";
 import { PixiMiniCanvas } from "./PixiMiniCanvas.tsx";
@@ -54,9 +54,9 @@ export function FlowerGrid({ onEnterDesigner }: FlowerGridProps) {
   const arrangementMetaMap = useMemo(
     () =>
       new Map(
-        [...overridesBySid].flatMap(
-          ([sid, rows]): [string, ArrangementMeta][] => {
-            const meta = arrangementMeta(rows);
+        [...overridesBySid.keys()].flatMap(
+          (sid): [string, ArrangementMeta][] => {
+            const meta = inheritedMeta(sid, overridesBySid);
             return meta ? [[sid, meta]] : [];
           },
         ),
