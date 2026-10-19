@@ -193,8 +193,8 @@ const WAVELENGTH_FLOOR = 0.35;
 /** A strap that bends as one sheet carries at most this many waves from base to tip. */
 const MAX_STRAP_WAVES = 1.75;
 
-/** Height and slope of one buckled margin at every spine station. */
-type MarginWave = { height: number; slope: number }[];
+/** Height of one buckled margin above the blade at every spine station. */
+type MarginWave = number[];
 
 /**
  * 0 for a blade wide enough that each margin buckles on its own, rising to 1
@@ -240,20 +240,11 @@ function buckledMargin(
         wavelength,
       );
       const root = Math.sqrt(strain) * drawable;
-      return {
-        height: ((wavelength * root) / Math.PI) * Math.sin(phases[i]!),
-        slope: 2 * root * Math.cos(phases[i]!),
-      };
+      return ((wavelength * root) / Math.PI) * Math.sin(phases[i]!);
     });
   });
   return halfWidths.map((_, i) =>
-    generations.reduce(
-      (sum, g) => ({
-        height: sum.height + g[i]!.height,
-        slope: sum.slope + g[i]!.slope,
-      }),
-      { height: 0, slope: 0 },
-    ),
+    generations.reduce((sum, g) => sum + g[i]!, 0),
   );
 }
 
@@ -271,6 +262,12 @@ const INTRINSIC_EDGES: Partial<Record<PetalShape, CutEdge>> = {
 const PETAL_SEGMENTS = 14;
 const BASE_OFFSET = 0.08;
 const CURL_DISPLACEMENT = -0.3;
+/** How far a fully cupped petal's tip rises, in petal lengths. */
+const CUP_RISE = 0.45;
+/** How far a fully cupped petal's margins rise above its midrib, in half widths. */
+const CUP_DEPTH = 0.9;
+/** How far a fully curled tip drops below the blade, in petal lengths. */
+const CURL_DROP = -0.35;
 
 /** Normalize spec-space petal dimensions to unit flower space. */
 function normalizePetalDims(length: number, width: number, radialOffset = 1.0) {
@@ -308,10 +305,14 @@ export type SpineSample = {
   left: number;
   /** half width toward u = -1; differs from left for Falcate and buckled edges */
   right: number;
-  /** slope of the left margin out of the blade's plane, 0 for an unbuckled edge */
-  leftSlope: number;
-  /** slope of the right margin out of the blade's plane */
-  rightSlope: number;
+  /** height of the midrib above the receptacle: up for a cupped petal, down for a recurved or curled one */
+  rise: number;
+  /** height of both margins above the midrib from cupping; below it for a recurved petal */
+  cup: number;
+  /** height of the left margin's buckling waves above the cupped blade */
+  leftLift: number;
+  /** height of the right margin's buckling waves */
+  rightLift: number;
 };
 
 /**
@@ -327,6 +328,8 @@ export type PetalFrame = {
   cosA: number;
   sinA: number;
   spine: readonly SpineSample[];
+  /** 0 when each margin buckles on its own, 1 when the whole blade rises and falls as one sheet */
+  coupling: number;
 };
 
 export type PetalFrameParams = {
@@ -395,12 +398,11 @@ export function createPetalFrame(params: PetalFrameParams): PetalFrame {
           coupling,
           seed,
         )
-      : stations.map(() => ({ height: 0, slope: 0 }));
+      : stations.map(() => 0);
   const leftWave = margin(params.seed);
-  const rightWave = margin(params.seed + 0.37).map((free, i) => ({
-    height: lerp(free.height, leftWave[i]!.height, coupling),
-    slope: lerp(free.slope, leftWave[i]!.slope, coupling),
-  }));
+  const rightWave = margin(params.seed + 0.37).map((free, i) =>
+    lerp(free, leftWave[i]!, coupling),
+  );
 
   const spine = stations.map(({ t, curlDisp, halfWidth }, i): SpineSample => {
     const asym = params.shape === "Falcate" ? 0.3 * Math.sin(Math.PI * t) : 0;
@@ -411,21 +413,30 @@ export function createPetalFrame(params: PetalFrameParams): PetalFrame {
       // +curvature = cupped, -curvature = recurved
       bend:
         params.curvature * 0.15 * Math.sin(Math.PI * t) +
-        STRAP_TILT * coupling * left.height,
+        STRAP_TILT * coupling * left,
       left: Math.max(
         halfWidth * 0.2,
-        halfWidth * (1 + asym) + VIEW_TILT * (1 - coupling) * left.height,
+        halfWidth * (1 + asym) + VIEW_TILT * (1 - coupling) * left,
       ),
       right: Math.max(
         halfWidth * 0.2,
-        halfWidth * (1 - asym) + VIEW_TILT * (1 - coupling) * right.height,
+        halfWidth * (1 - asym) + VIEW_TILT * (1 - coupling) * right,
       ),
-      leftSlope: left.slope,
-      rightSlope: right.slope,
+      rise:
+        params.curvature * CUP_RISE * petalLen * t * t +
+        (curlDisp / CURL_DISPLACEMENT) * CURL_DROP * petalLen,
+      cup: params.curvature * CUP_DEPTH * halfWidth,
+      leftLift: left,
+      rightLift: right,
     };
   });
 
-  return { cosA: Math.cos(params.angle), sinA: Math.sin(params.angle), spine };
+  return {
+    cosA: Math.cos(params.angle),
+    sinA: Math.sin(params.angle),
+    spine,
+    coupling,
+  };
 }
 
 /**
@@ -459,8 +470,10 @@ export function petalSpineAt(frame: PetalFrame, t: number): SpineSample {
     bend: hermite(p => p.bend),
     left: hermite(p => p.left),
     right: hermite(p => p.right),
-    leftSlope: hermite(p => p.leftSlope),
-    rightSlope: hermite(p => p.rightSlope),
+    rise: hermite(p => p.rise),
+    cup: hermite(p => p.cup),
+    leftLift: hermite(p => p.leftLift),
+    rightLift: hermite(p => p.rightLift),
   };
 }
 
@@ -516,19 +529,4 @@ export type PlacedPetal = {
 
 export function placePetal(frame: PetalFrame, angle: number): PlacedPetal {
   return { frame, angle, cmds: generatePetal(frame) };
-}
-
-/**
- * Generate a partial petal path covering [startT, 1.0] along the petal length.
- * Used for gradient overlays — each stop beyond the first gets rendered as a
- * sub-path from that stop's position to the tip, layered on top of the base fill.
- */
-export function generatePetalPartial(
-  frame: PetalFrame,
-  startT: number,
-): DrawCmd[] {
-  return generateOutlineFrom(
-    frame,
-    Math.max(0, Math.floor(startT * (frame.spine.length - 1))),
-  );
 }

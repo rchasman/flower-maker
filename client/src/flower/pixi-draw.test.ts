@@ -48,9 +48,7 @@ describe("petalPassesFor", () => {
     texture: true,
     veins: true,
     marks: true,
-    gradient: true,
     depthShadow: true,
-    folds: true,
   };
 
   test("a flower at or above the detail radius gets every pass", () => {
@@ -73,14 +71,12 @@ describe("petalPassesFor", () => {
     });
   });
 
-  test("below the shading radius the gradient partials, depth shadows and folds go too", () => {
+  test("below the shading radius the depth shadows go too", () => {
     expect(petalPassesFor(SHADING_RADIUS - 1)).toEqual({
       texture: false,
       veins: false,
       marks: false,
-      gradient: false,
       depthShadow: false,
-      folds: false,
     });
   });
 
@@ -93,7 +89,7 @@ describe("petalPassesFor", () => {
               count: 6,
               length: 1.2,
               width: 0.9,
-              texture: "Velvet",
+              texture: "Frosted",
               color: {
                 stops: [
                   { position: 0, color: { r: 0.9, g: 0.3, b: 0.4, a: 1 } },

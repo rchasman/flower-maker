@@ -21,8 +21,6 @@ export type HeadLight = {
   radius: number;
   /** 0 flat, 1 a deep cup */
   strength: number;
-  /** 0 opaque petals, 1 light pours through them */
-  translucency: number;
 };
 
 /** The shader holds this many heads; a plan with more keeps its largest. */
@@ -65,38 +63,48 @@ export function volumeStrength(head: HeadPlan): number {
   return head.back ? base * BACK_STRENGTH : base;
 }
 
-/** How much light a material of this texture lets through, before its opacity. */
-const TEXTURE_TRANSLUCENCY: Record<SurfaceTexture, number> = {
-  Papery: 1,
-  Silk: 1,
-  Glassy: 1,
-  Crystalline: 0.9,
-  Frosted: 0.85,
-  Pearlescent: 0.8,
-  Smooth: 0.6,
-  Powdery: 0.5,
-  Velvet: 0.4,
-  Hairy: 0.4,
-  Fuzzy: 0.4,
-  Rough: 0.35,
-  Scaled: 0.3,
-  Waxy: 0.2,
-  Leathery: 0.15,
-  Metallic: 0.1,
+/**
+ * How a petal's surface takes light. `translucency`: how much passes through
+ * a thin blade, before its opacity. `specular` and `shininess`: the strength
+ * and tightness of the highlight. `sheen`: how much a pile of fine hairs
+ * brightens the grazing rims and dulls the face, as velvet does.
+ */
+export type Material = {
+  translucency: number;
+  specular: number;
+  shininess: number;
+  sheen: number;
+};
+
+export const MATERIALS: Record<SurfaceTexture, Material> = {
+  Papery: { translucency: 1, specular: 0.04, shininess: 8, sheen: 0 },
+  Silk: { translucency: 1, specular: 0.22, shininess: 24, sheen: 0.15 },
+  Glassy: { translucency: 1, specular: 0.55, shininess: 64, sheen: 0 },
+  Crystalline: { translucency: 0.9, specular: 0.5, shininess: 80, sheen: 0 },
+  Frosted: { translucency: 0.85, specular: 0.08, shininess: 6, sheen: 0.12 },
+  Pearlescent: { translucency: 0.8, specular: 0.3, shininess: 20, sheen: 0.2 },
+  Smooth: { translucency: 0.6, specular: 0.14, shininess: 16, sheen: 0 },
+  Powdery: { translucency: 0.5, specular: 0.02, shininess: 4, sheen: 0.1 },
+  Velvet: { translucency: 0.4, specular: 0, shininess: 1, sheen: 0.6 },
+  Hairy: { translucency: 0.4, specular: 0.02, shininess: 4, sheen: 0.35 },
+  Fuzzy: { translucency: 0.4, specular: 0.02, shininess: 4, sheen: 0.4 },
+  Rough: { translucency: 0.35, specular: 0.03, shininess: 4, sheen: 0 },
+  Scaled: { translucency: 0.3, specular: 0.2, shininess: 30, sheen: 0 },
+  Waxy: { translucency: 0.2, specular: 0.4, shininess: 30, sheen: 0 },
+  Leathery: { translucency: 0.15, specular: 0.12, shininess: 10, sheen: 0 },
+  Metallic: { translucency: 0.1, specular: 0.65, shininess: 40, sheen: 0 },
 };
 
 /** the spec's opacity classes: 1 solid, 0.75 translucent, 0.5 glassy */
 const GLASSY_OPACITY = 0.5;
 
-/** Translucency of the head's petals: the outer layer's texture, opened up by the thinnest layer's opacity class. */
-export function translucencyOf(head: HeadPlan): number {
-  const outer = head.layers[0];
-  if (!outer) return 0;
-  const petal = outer.petals[0] ?? outer.corolla?.lobes[0];
-  const material = petal ? TEXTURE_TRANSLUCENCY[petal.texture] : 0;
-  const thinnest = Math.min(...head.layers.map(layer => layer.opacity));
-  const openness = clamp(0, 1, (1 - thinnest) / (1 - GLASSY_OPACITY));
-  return material * (0.35 + 0.65 * openness);
+/** How much light passes through a petal of this texture in a layer of this opacity class. */
+export function petalTranslucency(
+  texture: SurfaceTexture,
+  opacity: number,
+): number {
+  const openness = clamp(0, 1, (1 - opacity) / (1 - GLASSY_OPACITY));
+  return MATERIALS[texture].translucency * (0.35 + 0.65 * openness);
 }
 
 const headOf = (plan: FlowerPlan, floret: PlacedFloret): HeadPlan =>
@@ -122,7 +130,6 @@ export function headLights(
           y: floret.offsetY * r,
           radius: head.reach * floret.scale * r,
           strength: volumeStrength(head),
-          translucency: translucencyOf(head),
         };
       }),
   );
@@ -141,7 +148,6 @@ export function arrangementHeadLights(
         y: member.offsetY * r,
         radius: head.reach * member.scale * r,
         strength: volumeStrength(head),
-        translucency: translucencyOf(head),
       };
     }),
   );
