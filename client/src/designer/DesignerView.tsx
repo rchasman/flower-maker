@@ -202,7 +202,6 @@ export function DesignerView({ onBackToGrid }: DesignerViewProps) {
       wireToWasm(conn, sim, {
         setArrangement: (sid, flowers, meta) =>
           canvasRef.current?.setArrangement(sid, flowers, meta),
-        bloom: sid => canvasRef.current?.bloom(sid),
       });
       startLoop(sim, (pool, count) => {
         setFlowerCount(count);

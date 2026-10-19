@@ -79,14 +79,13 @@ const MAX_FRAME_DT = 0.1;
 const SELECTION_RING_PAD = 6;
 /** px around a flower's drawn bounds that still grabs it */
 const HIT_PAD = 10;
-/** how near, in plant radii, a dragged plant's foot must come to another's to merge */
-const MERGE_RANGE = 3;
+/** how near, in plant radii, a dragged plant's foot must come to another's to merge: onto it, not beside it */
+const MERGE_RANGE = 1.2;
 const DRAG_THRESHOLD = 8; // px movement before click becomes drag
 /** selection, merge ring and particles draw over every plant */
 const OVERLAY_Z = Number.MAX_SAFE_INTEGER;
 /** a ring on the bed seen at three quarters: its depth over its width */
 const GROUND_RING_TILT = 0.3;
-const BLOOM_DURATION = 500;
 const SHAKE_DURATION = 200;
 const CONNECTOR_SEGMENTS = 8;
 const CONNECTOR_DASH_INDICES = Array.from(
@@ -103,18 +102,6 @@ type CachedPlan =
 
 /** A scene on the stage and the plan it was drawn from; a new plan object means a new scene. */
 type PlacedScene = { scene: FlowerScene; plan: CachedPlan };
-
-/** The merge bloom's extra scale for a flower, 1 outside the pulse; a finished pulse is forgotten. */
-function mergeBloomScale(blooms: Map<number, number>, sid: number): number {
-  const bloomStart = blooms.get(sid);
-  if (bloomStart === undefined) return 1;
-  const progress = (performance.now() - bloomStart) / BLOOM_DURATION;
-  if (progress >= 1) {
-    blooms.delete(sid);
-    return 1;
-  }
-  return 1 + 0.15 * Math.sin(progress * Math.PI) * (1 - progress * 0.5);
-}
 
 /** The scene a plan draws into, or the plain arrangement scene. */
 function sceneFor(cached: CachedPlan): FlowerScene {
@@ -212,11 +199,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
     const mergeTargetRef = useRef<{
       dragSid: number;
       targetSid: number;
-      distance: number;
     } | null>(null);
     const mergeOverlayRef = useRef<Graphics | null>(null);
-    const mergeOverlayOpacityRef = useRef(0);
-    const mergeBloomRef = useRef<Map<number, number>>(new Map()); // sid → startTime
 
     // Shader filter refs
     const mergeGlowFiltersRef = useRef<
@@ -298,10 +282,6 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
       },
       [],
     );
-
-    const bloom = useCallback((sid: number) => {
-      mergeBloomRef.current.set(sid, performance.now());
-    }, []);
 
     /** The scene showing `cached` for `sid`: reused while the plan is the same object, rebuilt and drawn once when it changes. */
     const placeScene = useCallback(
@@ -397,10 +377,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           // The simulation's position is the plant's foot on the bed: the
           // root sits so the foot lands there, nearer plants larger and in front.
           scene.tick(radius);
-          const scale =
-            flower.scale *
-            mergeBloomScale(mergeBloomRef.current, flower.sid) *
-            depthScale(bed, flower.y);
+          const scale = flower.scale * depthScale(bed, flower.y);
           const [baseX, baseY] = cached.plan.base;
           scene.root.position.set(
             flower.x - baseX * radius * scale,
@@ -452,7 +429,6 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
               ? {
                   dragSid: draggedFlower.sid,
                   targetSid: nearestSid,
-                  distance: nearestDist,
                 }
               : null;
 
@@ -462,14 +438,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           mergeTargetRef.current = null;
         }
 
-        // ── Merge overlay ring (smooth opacity lerp) ──
-        const targetOpacity = mergeTargetRef.current ? 1 : 0;
-        const lerpSpeed = targetOpacity > 0 ? 8.0 : 12.0; // faster fade-out
-        mergeOverlayOpacityRef.current +=
-          (targetOpacity - mergeOverlayOpacityRef.current) *
-          Math.min(1, lerpSpeed * dt);
-        if (mergeOverlayOpacityRef.current < 0.01)
-          mergeOverlayOpacityRef.current = 0;
+        // ── Merge ring: shown at full strength exactly while a drop would merge ──
 
         if (!mergeOverlayRef.current && stage) {
           mergeOverlayRef.current = new Graphics();
@@ -480,7 +449,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         if (overlay) {
           overlay.clear();
           const mt = mergeTargetRef.current;
-          if (mt && mergeOverlayOpacityRef.current > 0) {
+          if (mt) {
             let targetFlower: FlowerRenderData | undefined;
             for (let i = 0; i < count; i++) {
               if (pool[i]!.sid === mt.targetSid) {
@@ -489,10 +458,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
               }
             }
             if (targetFlower) {
-              const proximity = 1 - mt.distance / (MERGE_RANGE * radius);
-              const pulse = 0.3 + 0.2 * Math.sin(performance.now() / 200);
-              const baseAlpha = proximity * pulse;
-              const alpha = baseAlpha * mergeOverlayOpacityRef.current;
+              const alpha = 0.8 + 0.2 * Math.sin(performance.now() / 200);
               const ringR = radius * targetFlower.scale * 0.6 + 12;
               // A ring lying on the bed around the target's foot
               overlay.ellipse(
@@ -591,9 +557,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         updateFlowers,
         setSpecMap,
         setArrangement,
-        bloom,
       }),
-      [updateFlowers, setSpecMap, setArrangement, bloom],
+      [updateFlowers, setSpecMap, setArrangement],
     );
 
     useEffect(() => {
@@ -787,7 +752,6 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         selectionRingRef.current = null;
         planCacheRef.current.clear();
         mergeOverlayRef.current = null;
-        mergeBloomRef.current.clear();
         mergeParticleGfxRef.current = null;
         mergeGlowFiltersRef.current.clear();
         mergeEffectsRef.current = [];
