@@ -236,7 +236,7 @@ structure:
       persistent: true
   receptacle:
     shape: Convex
-    size: 0.255
+    size: 0.178
     color:
       r: 0.659
       g: 0.333
