@@ -59,7 +59,7 @@ vec3 baseAt(float t) {
     if (float(i) >= uStopCount) break;
     float from = uStops[i - 1].a;
     float span = max(uStops[i].a - from, 1e-4);
-    float s = smoothstep(0.0, 1.0, (t - from) / span);
+    float s = clamp((t - from) / span, 0.0, 1.0);
     color = mix(color, toLinear(uStops[i].rgb), s);
   }
   return color;
@@ -163,6 +163,6 @@ export function createPetalMesh(
 
 /** A destroyed mesh leaves its geometry and shader behind; this frees them. */
 export function freePetalMesh(mesh: Mesh<MeshGeometry, Shader>): void {
-  mesh.geometry.destroy();
+  mesh.geometry.destroy(true);
   mesh.shader?.destroy();
 }
