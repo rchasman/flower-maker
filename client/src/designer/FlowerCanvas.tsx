@@ -33,7 +33,7 @@ import {
   setCanvasViewport,
   type CanvasEvents,
 } from "../spacetime/bridge.ts";
-import { depthScale, drawBed } from "../canvas/garden.ts";
+import { depthScale, drawBed, plantRadius } from "../canvas/garden.ts";
 import {
   createMergeGlowFilter,
   createDarkFantasyDitherFilter,
@@ -76,11 +76,11 @@ const MERGE_GLOW_DURATION = 2000;
 
 /** the longest step effects take, so a stalled tab does not jump them to the end */
 const MAX_FRAME_DT = 0.1;
-const FLOWER_BASE_RADIUS = 70;
 const SELECTION_RING_PAD = 6;
 /** px around a flower's drawn bounds that still grabs it */
 const HIT_PAD = 10;
-const MERGE_RANGE = FLOWER_BASE_RADIUS * 3;
+/** how near, in plant radii, a dragged plant's foot must come to another's to merge */
+const MERGE_RANGE = 3;
 const DRAG_THRESHOLD = 8; // px movement before click becomes drag
 /** selection, merge ring and particles draw over every plant */
 const OVERLAY_Z = Number.MAX_SAFE_INTEGER;
@@ -201,6 +201,8 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
       grabX: number;
       grabY: number;
     } | null>(null);
+    /** the radius plants are drawn at, px, set from the canvas height */
+    const radiusRef = useRef(plantRadius(0));
     /** each flower's foot on the bed this frame, canvas px */
     const footRef = useRef<Map<number, { x: number; y: number }>>(new Map());
     const onFlowerClickRef = useRef(onFlowerClick);
@@ -323,7 +325,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         const g = scene.flower;
         g.eventMode = "static";
         g.cursor = "grab";
-        g.hitArea = footprintFor(cached, FLOWER_BASE_RADIUS).hitArea;
+        g.hitArea = footprintFor(cached, radiusRef.current).hitArea;
         g.on("pointerdown", e => {
           const foot = footRef.current.get(sid) ?? e.global;
           dragRef.current = {
@@ -339,7 +341,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         g.on("pointerup", () => {
           g.cursor = "grab";
         });
-        scene.draw(FLOWER_BASE_RADIUS);
+        scene.draw(radiusRef.current);
         scene.refresh(app.renderer);
         const placed = { scene, plan: cached };
         scenes.set(sid, placed);
@@ -355,6 +357,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         if (!stage || !app) return;
         const scenes = scenesRef.current;
         const bed = gardenBed();
+        const radius = radiusRef.current;
         const frameTime = performance.now();
         const dt = Math.min(
           MAX_FRAME_DT,
@@ -393,15 +396,15 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           // bloom-in and wilt-out scale and alpha are transforms on the root.
           // The simulation's position is the plant's foot on the bed: the
           // root sits so the foot lands there, nearer plants larger and in front.
-          scene.tick(FLOWER_BASE_RADIUS);
+          scene.tick(radius);
           const scale =
             flower.scale *
             mergeBloomScale(mergeBloomRef.current, flower.sid) *
             depthScale(bed, flower.y);
           const [baseX, baseY] = cached.plan.base;
           scene.root.position.set(
-            flower.x - baseX * FLOWER_BASE_RADIUS * scale,
-            flower.y - baseY * FLOWER_BASE_RADIUS * scale,
+            flower.x - baseX * radius * scale,
+            flower.y - baseY * radius * scale,
           );
           scene.root.zIndex = flower.y;
           scene.root.alpha = flower.alpha;
@@ -409,7 +412,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           footRef.current.set(flower.sid, { x: flower.x, y: flower.y });
 
           if (selectedIdRef.current === flower.sid) {
-            const r = FLOWER_BASE_RADIUS * scale;
+            const r = radius * scale;
             selectionRing.position.copyFrom(scene.root.position);
             footprintFor(cached, r).drawRing(selectionRing);
             selectionRing.stroke({ color: 0xffffff, width: 2, alpha: 0.7 });
@@ -430,7 +433,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
         if (drag?.started && draggedFlower) {
           // Single pass nearest-neighbor — no intermediate arrays
           let nearestSid = -1;
-          let nearestDist = MERGE_RANGE;
+          let nearestDist = MERGE_RANGE * radius;
           for (let i = 0; i < count; i++) {
             const f = pool[i]!;
             if (f.sid === draggedFlower.sid) continue;
@@ -486,11 +489,11 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
               }
             }
             if (targetFlower) {
-              const proximity = 1 - mt.distance / MERGE_RANGE;
+              const proximity = 1 - mt.distance / (MERGE_RANGE * radius);
               const pulse = 0.3 + 0.2 * Math.sin(performance.now() / 200);
               const baseAlpha = proximity * pulse;
               const alpha = baseAlpha * mergeOverlayOpacityRef.current;
-              const ringR = FLOWER_BASE_RADIUS * targetFlower.scale * 0.6 + 12;
+              const ringR = radius * targetFlower.scale * 0.6 + 12;
               // A ring lying on the bed around the target's foot
               overlay.ellipse(
                 targetFlower.x,
@@ -627,6 +630,7 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
           bedGfx.eventMode = "none";
           app.stage.addChild(bedGfx);
           drawBed(bedGfx, gardenBed(), el.clientWidth, el.clientHeight);
+          radiusRef.current = plantRadius(el.clientHeight);
 
           const flowerContainer = new Container({ sortableChildren: true });
           app.stage.addChild(flowerContainer);
@@ -647,6 +651,13 @@ export const FlowerCanvas = forwardRef<FlowerCanvasHandle, FlowerCanvasProps>(
               setCanvasViewport(width, height);
               app.stage.hitArea = app.screen;
               drawBed(bedGfx, gardenBed(), width, height);
+              // Plants are pictures drawn at one radius: a new size redraws them
+              const radius = plantRadius(height);
+              if (radius !== radiusRef.current) {
+                radiusRef.current = radius;
+                scenesRef.current.forEach(({ scene }) => scene.destroy());
+                scenesRef.current.clear();
+              }
             }
           });
           resizeObs.observe(el);

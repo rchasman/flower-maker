@@ -26,6 +26,11 @@ const TUFTS = 36;
 /** How much nearer plants are drawn than far ones: a plant's scale at the far and near edges of the bed. */
 const DEPTH_SCALE = [0.8, 1.06] as const;
 
+/** A plant's drawn radius, px, for a canvas h px tall: big enough to read, never crowding the bed. */
+export function plantRadius(h: number): number {
+  return Math.max(56, Math.min(120, h * 0.13));
+}
+
 /** The scale a plant standing at canvas y is drawn at: smaller toward the back of the bed. */
 export function depthScale(bed: Bed, y: number): number {
   const t = Math.max(0, Math.min(1, (y - bed.top) / (bed.bottom - bed.top)));
