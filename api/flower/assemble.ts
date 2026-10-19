@@ -974,9 +974,15 @@ function resolveAnswers(
 
 const palette = (name: PaletteName): Rgba => hexToRgba(PALETTE[name]);
 
-// The same name for base and tip still gives a visible gradient.
+/**
+ * The same name for base and tip is a one-color petal. Its tip is a shade
+ * deeper, as a real petal is, but no more: the renderer draws the gradient
+ * in full, so a deeper tip reads as a second, brownish color.
+ */
+const SAME_COLOR_TIP_SHADE = 0.93;
+
 const tipColor = (base: PaletteName, tip: PaletteName): Rgba =>
-  base === tip ? darken(palette(base), 0.8) : palette(tip);
+  base === tip ? darken(palette(base), SAME_COLOR_TIP_SHADE) : palette(tip);
 
 function gradient(
   base: Rgba,
