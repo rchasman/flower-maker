@@ -488,7 +488,15 @@ export function petalLocalToFlower(
   u: number,
   frame: PetalFrame,
 ): Vec2 {
-  const station = petalSpineAt(frame, t);
+  return stationToFlower(petalSpineAt(frame, t), u, frame);
+}
+
+/** Map u across one sampled station to unit flower space. */
+export function stationToFlower(
+  station: SpineSample,
+  u: number,
+  frame: PetalFrame,
+): Vec2 {
   const halfWidth = u >= 0 ? station.left : station.right;
   const localX = station.along;
   const localY = station.bend + u * halfWidth;

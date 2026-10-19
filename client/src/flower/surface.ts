@@ -2,7 +2,7 @@
  * A petal as a lit surface: a grid over the petal frame's (t, u) whose
  * vertices carry the blade's height, so each one has a normal the light can
  * fall on. The drawn outline and this grid trace the same curve, because both
- * map through petalLocalToFlower.
+ * map the same interpolated stations through stationToFlower.
  *
  * Height above the receptacle, in unit flower space:
  *   z(t, u) = rise(t) + cup(t)·u² + lift(t)·band(u)
@@ -10,7 +10,12 @@
  * or spreads it across the blade when the blade rises as one sheet.
  */
 
-import { petalLocalToFlower, petalSpineAt, type PetalFrame } from "./petal.ts";
+import {
+  petalSpineAt,
+  stationToFlower,
+  type PetalFrame,
+  type SpineSample,
+} from "./petal.ts";
 import { lerp, smoothstep, steps } from "./util.ts";
 
 export type PetalSurface = {
@@ -24,16 +29,15 @@ export type PetalSurface = {
 };
 
 /** Grid rows per spine segment: the rim follows the outline's curve between stations. */
-const ROWS_PER_STATION = 3;
+const ROWS_PER_STATION = 2;
 /** Grid columns across the blade, an odd count so the midrib is a column. */
-export const COLUMNS = 9;
+export const COLUMNS = 7;
 /** The buckled band reaches this far in from the margin, in half widths. */
 const BAND = 0.55;
 
 type Point3 = readonly [number, number, number];
 
-function heightAt(frame: PetalFrame, t: number, u: number): number {
-  const s = petalSpineAt(frame, t);
+function heightAt(s: SpineSample, u: number, frame: PetalFrame): number {
   const lift = u >= 0 ? s.leftLift : s.rightLift;
   const band = lerp(smoothstep(1 - BAND, 1, Math.abs(u)), 1, frame.coupling);
   return s.rise + s.cup * u * u + lift * band;
@@ -66,11 +70,13 @@ function facingNormal(n: Point3): Point3 | null {
 export function petalSurface(frame: PetalFrame): PetalSurface {
   const ts = steps((frame.spine.length - 1) * ROWS_PER_STATION);
   const us = steps(COLUMNS - 1).map(k => k * 2 - 1);
-  const point = (t: number, u: number): Point3 => {
-    const [x, y] = petalLocalToFlower(t, u, frame);
-    return [x, y, heightAt(frame, t, u)];
-  };
-  const grid = ts.map(t => us.map(u => point(t, u)));
+  const grid = ts.map(t => {
+    const station = petalSpineAt(frame, t);
+    return us.map((u): Point3 => {
+      const [x, y] = stationToFlower(station, u, frame);
+      return [x, y, heightAt(station, u, frame)];
+    });
+  });
   const at = (i: number, j: number): Point3 =>
     grid[Math.max(0, Math.min(ts.length - 1, i))]![
       Math.max(0, Math.min(us.length - 1, j))
@@ -84,34 +90,36 @@ export function petalSurface(frame: PetalFrame): PetalSurface {
       cross(sub(at(i, j + 1), at(i, j - 1)), sub(at(i + 1, j), at(i - 1, j))),
     ) ?? (i === middle ? [0, 0, 1] : normalAt(i + Math.sign(middle - i), j));
 
-  const vertices = ts.flatMap((t, i) =>
-    us.map((u, j) => {
-      const [x, y] = at(i, j);
-      return {
-        x,
-        y,
-        normal: normalAt(i, j),
-        t,
-        thin: Math.min(1, 0.75 * u * u + 0.35 * t * t),
-      };
-    }),
-  );
-
   const columns = us.length;
-  const indices = ts.slice(1).flatMap((_, i) =>
-    us.slice(1).flatMap((_, j) => {
-      const a = i * columns + j;
-      const b = a + 1;
-      const c = a + columns;
-      const d = c + 1;
-      return [a, c, b, b, c, d];
-    }),
+  const count = ts.length * columns;
+  const rowOf = (v: number) => Math.floor(v / columns);
+  const normals = Array.from({ length: count }, (_, v) =>
+    normalAt(rowOf(v), v % columns),
   );
+  /** the six corners of the two triangles in grid cell `cell`, as offsets from its first vertex */
+  const CELL = [0, columns, 1, 1, columns, columns + 1];
+  const cells = (ts.length - 1) * (columns - 1);
 
   return {
-    positions: Float32Array.from(vertices.flatMap(v => [v.x, v.y])),
-    normals: Float32Array.from(vertices.flatMap(v => v.normal)),
-    surface: Float32Array.from(vertices.flatMap(v => [v.t, v.thin])),
-    indices: Uint32Array.from(indices),
+    positions: Float32Array.from({ length: count * 2 }, (_, k) => {
+      const v = k >> 1;
+      return at(rowOf(v), v % columns)[k & 1]!;
+    }),
+    normals: Float32Array.from(
+      { length: count * 3 },
+      (_, k) => normals[Math.floor(k / 3)]![k % 3]!,
+    ),
+    surface: Float32Array.from({ length: count * 2 }, (_, k) => {
+      const v = k >> 1;
+      const t = ts[rowOf(v)]!;
+      const u = us[v % columns]!;
+      return k & 1 ? Math.min(1, 0.75 * u * u + 0.35 * t * t) : t;
+    }),
+    indices: Uint32Array.from({ length: cells * 6 }, (_, k) => {
+      const cell = Math.floor(k / 6);
+      const first =
+        Math.floor(cell / (columns - 1)) * columns + (cell % (columns - 1));
+      return first + CELL[k % 6]!;
+    }),
   };
 }
